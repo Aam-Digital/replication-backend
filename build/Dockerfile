@@ -26,7 +26,7 @@ COPY . .
 
 RUN if [ "$RUN_TESTS" = true ] || [ "$UPLOAD_COVERAGE" = true ] ; then \
     npm run lint &&\
-    npm test ; fi
+    npm run test:cov ; fi
 
 # The following arguments need to be provided for the code climate test reporter to work correctly
 # The commit sha
