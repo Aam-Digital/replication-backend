@@ -1,0 +1,36 @@
+name: Master Update
+on:
+  push:
+    branches:
+      - master
+jobs:
+  run-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v1
+      - name: Login to DockerHub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Set up Docker Buildx
+        id: buildx
+        uses: docker/setup-buildx-action@master
+      - name: Get time of commit
+        run: echo "TIME=$(git log -1 --pretty=format:%ct)" >> $GITHUB_ENV
+      - name: Run tests and upload coverage
+        uses: docker/build-push-action@v2
+        with:
+          context: ./
+          file: ./build/Dockerfile
+          builder: ${{ steps.buildx.outputs.name }}
+          push: true
+          tags: aamdigital/replication-ms:latest
+          build-args: |
+            UPLOAD_COVERAGE=${{ true }}
+            GIT_COMMIT_SHA=${{ github.sha }}
+            GIT_BRANCH=master
+            GIT_COMMITTED_AT=${{ env.TIME }}
+            CC_TEST_REPORTER_ID=${{ secrets.CODE_CLIMATE_ID }}
+          cache-from: type=registry,ref=aamdigital/replication-ms:cache
+          cache-to: type=registry,ref=aamdigital/replication-ms:cache,mode=max
