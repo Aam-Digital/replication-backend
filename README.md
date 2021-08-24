@@ -1,5 +1,5 @@
-[![Code Climate](https://codeclimate.com/github/Aam-Digital/ndb-core/badges/gpa.svg)](https://codeclimate.com/github/Aam-Digital/replication-backend)
-[![Test Coverage](https://api.codeclimate.com/v1/badges/4e4a7a6301064019b2c9/test_coverage)](https://codeclimate.com/github/Aam-Digital/replication-backend/test_coverage)
+[![Maintainability](https://api.codeclimate.com/v1/badges/f64d334dac765d672119/maintainability)](https://codeclimate.com/github/Aam-Digital/replication-backend/maintainability)
+[![Test Coverage](https://api.codeclimate.com/v1/badges/f64d334dac765d672119/test_coverage)](https://codeclimate.com/github/Aam-Digital/replication-backend/test_coverage)
 
 # Replication Backend
 
