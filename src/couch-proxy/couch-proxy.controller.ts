@@ -73,6 +73,8 @@ export class CouchProxyController {
    * This may return a 404 Object Not Found error in case no previous replication was done.
    * In this case a full replication is started.
    *
+   * TODO when permissions change, edit/remove sequenceID of local doc to restart sync
+   *
    * @param db name of the database
    * @param id replication id
    */
