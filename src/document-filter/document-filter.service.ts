@@ -2,7 +2,10 @@ import { Injectable } from '@nestjs/common';
 import { BulkGetResponse } from '../couch-proxy/couch-interfaces/bulk-get';
 import { AccessControlEntry } from './access-control-entry';
 import { AllDocsResponse } from '../couch-proxy/couch-interfaces/all-docs';
-import { DatabaseDocument } from '../couch-proxy/couch-interfaces/bulk-docs';
+import {
+  BulkDocsRequest,
+  DatabaseDocument,
+} from '../couch-proxy/couch-interfaces/bulk-docs';
 
 @Injectable()
 export class DocumentFilterService {
@@ -35,6 +38,16 @@ export class DocumentFilterService {
     return response;
   }
 
+  filterBulkDocsRequest(
+    request: BulkDocsRequest,
+    userRoles: string[],
+  ): BulkDocsRequest {
+    return {
+      new_edits: request.new_edits,
+      docs: request.docs.filter((doc) => this.hasPermissions(doc, userRoles)),
+    };
+  }
+
   private applyPermissionsToDoc(
     doc: DatabaseDocument,
     userRoles: string[],
@@ -43,17 +56,7 @@ export class DocumentFilterService {
       // Always pass deleted documents
       return doc;
     }
-    const matchingACLEntries = this.accessControlList.filter((entry) =>
-      doc._id.toLowerCase().startsWith(entry.entity.toLowerCase() + ':'),
-    );
-    if (matchingACLEntries.length === 0) {
-      // No permissions defined for entity
-      return doc;
-    }
-    const hasPermissions = matchingACLEntries.some((entry) =>
-      entry.roles.some((role) => userRoles.includes(role)),
-    );
-    if (hasPermissions) {
+    if (this.hasPermissions(doc, userRoles)) {
       return doc;
     } else {
       // Send deleted response so local elements are deleted
@@ -64,5 +67,18 @@ export class DocumentFilterService {
         _deleted: true,
       };
     }
+  }
+
+  private hasPermissions(doc: DatabaseDocument, userRoles: string[]): boolean {
+    const matchingACLEntries = this.accessControlList.filter((entry) =>
+      doc._id.toLowerCase().startsWith(entry.entity.toLowerCase() + ':'),
+    );
+    if (matchingACLEntries.length === 0) {
+      // No permissions every user has permission
+      return true;
+    }
+    return matchingACLEntries.some((entry) =>
+      entry.roles.some((role) => userRoles.includes(role)),
+    );
   }
 }

@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentFilterService } from './document-filter.service';
 import { BulkGetResponse } from '../couch-proxy/couch-interfaces/bulk-get';
 import { AllDocsResponse } from '../couch-proxy/couch-interfaces/all-docs';
+import { BulkDocsRequest } from '../couch-proxy/couch-interfaces/bulk-docs';
 
 describe('DocumentFilterService', () => {
   let service: DocumentFilterService;
@@ -143,6 +144,41 @@ describe('DocumentFilterService', () => {
             _revisions: { start: 1, ids: ['anotherRev'] },
             _deleted: true,
           },
+        },
+      ],
+    });
+  });
+
+  it('should filter documents in BulkDocs request', () => {
+    const request: BulkDocsRequest = {
+      new_edits: false,
+      docs: [
+        {
+          _id: 'Child:1',
+          _rev: 'someRev',
+          _revisions: { start: 1, ids: ['someRev'] },
+          someProperty: 'someValue',
+        },
+        {
+          _id: 'School:1',
+          _rev: 'anotherRev',
+          _revisions: { start: 1, ids: ['anotherRev'] },
+          anotherProperty: 'anotherProperty',
+        },
+      ],
+    };
+    service.accessControlList = [{ entity: 'School', roles: ['admin'] }];
+
+    const result = service.filterBulkDocsRequest(request, ['user']);
+
+    expect(result).toEqual({
+      new_edits: false,
+      docs: [
+        {
+          _id: 'Child:1',
+          _rev: 'someRev',
+          _revisions: { start: 1, ids: ['someRev'] },
+          someProperty: 'someValue',
         },
       ],
     });
