@@ -163,8 +163,12 @@ export class CouchProxyController {
     @Param('db') db: string,
     @Body() body: BulkDocsRequest,
   ): Observable<BulkDocsResponse> {
+    const filteredBody = this.documentFilter.filterBulkDocsRequest(
+      body,
+      this.userRoles,
+    );
     return this.httpService
-      .post(`${this.couchDB}/${db}/_bulk_docs`, body, {
+      .post(`${this.couchDB}/${db}/_bulk_docs`, filteredBody, {
         auth: { username: this.username, password: this.password },
       })
       .pipe(map((response) => response.data));
