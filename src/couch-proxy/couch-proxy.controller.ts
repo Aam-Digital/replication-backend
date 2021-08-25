@@ -22,14 +22,19 @@ import {
 } from './couch-interfaces/bulk-docs';
 import { BulkGetRequest, BulkGetResponse } from './couch-interfaces/bulk-get';
 import { AllDocsRequest, AllDocsResponse } from './couch-interfaces/all-docs';
+import { DocumentFilterService } from '../document-filter/document-filter.service';
 
 @Controller('couchdb/db')
 export class CouchProxyController {
   readonly couchDB = 'https://dev.aam-digital.com/db';
   private username: string;
   private password: string;
+  public userRoles: string[];
 
-  constructor(private httpService: HttpService) {}
+  constructor(
+    private httpService: HttpService,
+    private documentFilter: DocumentFilterService,
+  ) {}
 
   /**
    * Login endpoint.
@@ -185,7 +190,12 @@ export class CouchProxyController {
         params: queryParams,
         auth: { username: this.username, password: this.password },
       })
-      .pipe(map((response) => response.data));
+      .pipe(
+        map((response) => response.data),
+        map((response: BulkGetResponse) =>
+          this.documentFilter.filterBulkGetDocuments(response, this.userRoles),
+        ),
+      );
   }
 
   /**
@@ -204,11 +214,16 @@ export class CouchProxyController {
     @Body() body: AllDocsRequest,
   ): Observable<AllDocsResponse> {
     return this.httpService
-      .post(`${this.couchDB}/${db}/_all_docs`, body, {
+      .post<AllDocsResponse>(`${this.couchDB}/${db}/_all_docs`, body, {
         params: queryParams,
         auth: { username: this.username, password: this.password },
       })
-      .pipe(map((response) => response.data));
+      .pipe(
+        map((response) => response.data),
+        map((response) =>
+          this.documentFilter.filterAllDocsDocuments(response, this.userRoles),
+        ),
+      );
   }
 
   /**
