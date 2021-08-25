@@ -193,7 +193,10 @@ export class CouchProxyController {
       .pipe(
         map((response) => response.data),
         map((response: BulkGetResponse) =>
-          this.documentFilter.filterBulkGetDocuments(response, this.userRoles),
+          this.documentFilter.transformBulkGetResponse(
+            response,
+            this.userRoles,
+          ),
         ),
       );
   }
@@ -221,7 +224,10 @@ export class CouchProxyController {
       .pipe(
         map((response) => response.data),
         map((response) =>
-          this.documentFilter.filterAllDocsDocuments(response, this.userRoles),
+          this.documentFilter.transformAllDocsResponse(
+            response,
+            this.userRoles,
+          ),
         ),
       );
   }

@@ -1,3 +1,5 @@
+import { DatabaseDocument } from './bulk-docs';
+
 export interface AllDocsRequest {
   keys: string[];
 }
@@ -9,10 +11,6 @@ export interface AllDocsResponse {
     id: string;
     key: string;
     value: { rev: string };
-    doc: {
-      _id: string;
-      _rev: string;
-      [key: string]: any;
-    };
+    doc: DatabaseDocument;
   }[];
 }

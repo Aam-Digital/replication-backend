@@ -18,65 +18,131 @@ describe('DocumentFilterService', () => {
     expect(service).toBeDefined();
   });
 
-  it('should filter documents of bulkGet response by their entity', () => {
+  it('should set deleted flag and remove additional properties on docs without permissions in BulkGet', () => {
     const bulkGetResponse: BulkGetResponse = {
       results: [
         {
           id: 'Child:1',
-          docs: [],
+          docs: [
+            {
+              ok: {
+                _id: 'Child:1',
+                _rev: 'someRev',
+                _revisions: { start: 1, ids: ['someRev'] },
+                someProperty: 'someValue',
+              },
+            },
+          ],
         },
         {
           id: 'School:1',
-          docs: [],
+          docs: [
+            {
+              ok: {
+                _id: 'School:1',
+                _rev: 'anotherRev',
+                _revisions: { start: 1, ids: ['anotherRev'] },
+                anotherProperty: 'anotherValue',
+              },
+            },
+          ],
         },
       ],
     };
     service.accessControlList = [{ entity: 'Child', roles: ['admin'] }];
 
-    const result = service.filterBulkGetDocuments(bulkGetResponse, ['user']);
+    const result = service.transformBulkGetResponse(bulkGetResponse, ['user']);
 
     expect(result).toEqual({
       results: [
         {
+          id: 'Child:1',
+          docs: [
+            {
+              ok: {
+                _id: 'Child:1',
+                _rev: 'someRev',
+                _revisions: { start: 1, ids: ['someRev'] },
+                _deleted: true,
+              },
+            },
+          ],
+        },
+        {
           id: 'School:1',
-          docs: [],
+          docs: [
+            {
+              ok: {
+                _id: 'School:1',
+                _rev: 'anotherRev',
+                _revisions: { start: 1, ids: ['anotherRev'] },
+                anotherProperty: 'anotherValue',
+              },
+            },
+          ],
         },
       ],
     });
   });
 
-  it('should filter documents of _bulk_docs by their entity', () => {
+  it('should set deleted flag and remove additional properties on docs without permissions in AllDocs', () => {
     const allDocsResponse: AllDocsResponse = {
-      total_rows: 0,
+      total_rows: 2,
       offset: 0,
       rows: [
         {
           id: 'Child:1',
-          key: '',
-          value: { rev: '' },
-          doc: null,
+          key: 'someKey',
+          value: { rev: 'someRev' },
+          doc: {
+            _id: 'Child:1',
+            _rev: 'someRev',
+            _revisions: { start: 1, ids: ['someRev'] },
+            someProperty: 'someValue',
+          },
         },
         {
           id: 'School:1',
-          key: '',
-          value: { rev: '' },
-          doc: null,
+          key: 'anotherKey',
+          value: { rev: 'anotherRev' },
+          doc: {
+            _id: 'School:1',
+            _rev: 'anotherRev',
+            _revisions: { start: 1, ids: ['anotherRev'] },
+            anotherProperty: 'anotherValue',
+          },
         },
       ],
     };
     service.accessControlList = [{ entity: 'School', roles: ['admin'] }];
 
-    const result = service.filterAllDocsDocuments(allDocsResponse, ['user']);
+    const result = service.transformAllDocsResponse(allDocsResponse, ['user']);
 
     expect(result).toEqual({
-      total_rows: 0,
+      total_rows: 2,
       offset: 0,
       rows: [
         {
           id: 'Child:1',
-          key: '',
-          value: { rev: '' },
-          doc: null,
+          key: 'someKey',
+          value: { rev: 'someRev' },
+          doc: {
+            _id: 'Child:1',
+            _rev: 'someRev',
+            _revisions: { start: 1, ids: ['someRev'] },
+            someProperty: 'someValue',
+          },
+        },
+        {
+          id: 'School:1',
+          key: 'anotherKey',
+          value: { rev: 'anotherRev' },
+          doc: {
+            _id: 'School:1',
+            _rev: 'anotherRev',
+            _revisions: { start: 1, ids: ['anotherRev'] },
+            _deleted: true,
+          },
         },
       ],
     });

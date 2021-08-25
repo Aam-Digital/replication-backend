@@ -1,4 +1,4 @@
-import { DocError, DocWithRevisions } from './bulk-docs';
+import { DocError, DatabaseDocument } from './bulk-docs';
 
 export interface BulkGetRequest {
   docs: { id: string; rev?: string }[];
@@ -7,10 +7,6 @@ export interface BulkGetRequest {
 export interface BulkGetResponse {
   results: {
     id: string;
-    docs: (DocWithRevisions | ErrorDocResponse)[];
+    docs: ({ ok: DatabaseDocument } | { error: DocError })[];
   }[];
-}
-
-export interface ErrorDocResponse {
-  error: DocError;
 }
