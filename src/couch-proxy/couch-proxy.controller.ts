@@ -21,6 +21,7 @@ import {
   BulkDocsResponse,
 } from './couch-interfaces/bulk-docs';
 import { BulkGetRequest, BulkGetResponse } from './couch-interfaces/bulk-get';
+import { AllDocsRequest, AllDocsResponse } from './couch-interfaces/all-docs';
 
 @Controller('couchdb/db')
 export class CouchProxyController {
@@ -200,8 +201,8 @@ export class CouchProxyController {
   allDocs(
     @Param('db') db: string,
     @Query() queryParams: any,
-    @Body() body: any,
-  ): Observable<any> {
+    @Body() body: AllDocsRequest,
+  ): Observable<AllDocsResponse> {
     return this.httpService
       .post(`${this.couchDB}/${db}/_all_docs`, body, {
         params: queryParams,
