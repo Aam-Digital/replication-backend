@@ -52,7 +52,7 @@ describe('CouchProxyController', () => {
       .spyOn(mockHttpService, 'post')
       .mockReturnValue(of(httpServiceResponse as any));
     const filteredResponse: BulkGetResponse = {
-      results: [{ id: 'someID', doc: [] }],
+      results: [{ id: 'someID', docs: [] }],
     };
     jest
       .spyOn(documentFilter, 'filterBulkGetDocuments')

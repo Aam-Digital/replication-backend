@@ -29,7 +29,7 @@ export class CouchProxyController {
   readonly couchDB = 'https://dev.aam-digital.com/db';
   private username: string;
   private password: string;
-  public userRoles: string[];
+  public userRoles: string[] = ['user'];
 
   constructor(
     private httpService: HttpService,

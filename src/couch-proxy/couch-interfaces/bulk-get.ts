@@ -7,7 +7,7 @@ export interface BulkGetRequest {
 export interface BulkGetResponse {
   results: {
     id: string;
-    doc: (DocWithRevisions | ErrorDocResponse)[];
+    docs: (DocWithRevisions | ErrorDocResponse)[];
   }[];
 }
 

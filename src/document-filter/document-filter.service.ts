@@ -5,7 +5,9 @@ import { AllDocsResponse } from '../couch-proxy/couch-interfaces/all-docs';
 
 @Injectable()
 export class DocumentFilterService {
-  public accessControlList: AccessControlEntry[];
+  public accessControlList: AccessControlEntry[] = [
+    { entity: 'Aser', roles: ['admin'] },
+  ];
 
   filterBulkGetDocuments(
     response: BulkGetResponse,

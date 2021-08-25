@@ -23,11 +23,11 @@ describe('DocumentFilterService', () => {
       results: [
         {
           id: 'Child:1',
-          doc: [],
+          docs: [],
         },
         {
           id: 'School:1',
-          doc: [],
+          docs: [],
         },
       ],
     };
@@ -39,7 +39,7 @@ describe('DocumentFilterService', () => {
       results: [
         {
           id: 'School:1',
-          doc: [],
+          docs: [],
         },
       ],
     });
