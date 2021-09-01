@@ -1,14 +1,15 @@
 export interface BulkDocsRequest {
   new_edits: boolean;
-  docs: DocWithRevisions[];
+  docs: DatabaseDocument[];
 }
 
-export interface DocWithRevisions {
+export interface DatabaseDocument {
   _id: string;
   _rev: string;
-  _revisions: {
-    ids: string[];
+  _deleted?: boolean;
+  _revisions?: {
     start: number;
+    ids: string[];
   };
   [key: string]: any;
 }

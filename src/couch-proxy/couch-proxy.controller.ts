@@ -21,14 +21,20 @@ import {
   BulkDocsResponse,
 } from './couch-interfaces/bulk-docs';
 import { BulkGetRequest, BulkGetResponse } from './couch-interfaces/bulk-get';
+import { AllDocsRequest, AllDocsResponse } from './couch-interfaces/all-docs';
+import { DocumentFilterService } from '../document-filter/document-filter.service';
 
 @Controller('couchdb/db')
 export class CouchProxyController {
   readonly couchDB = 'https://dev.aam-digital.com/db';
   private username: string;
   private password: string;
+  public userRoles: string[] = ['user'];
 
-  constructor(private httpService: HttpService) {}
+  constructor(
+    private httpService: HttpService,
+    private documentFilter: DocumentFilterService,
+  ) {}
 
   /**
    * Login endpoint.
@@ -61,11 +67,13 @@ export class CouchProxyController {
   }
 
   /**
-   * Retrieves the replication logs from the server.
+   * Retrieves the replication logs from the remote database.
    * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#retrieve-replication-logs-from-source-and-target}
    *
    * This may return a 404 Object Not Found error in case no previous replication was done.
    * In this case a full replication is started.
+   *
+   * TODO when permissions change, edit/remove sequenceID of local doc to restart sync
    *
    * @param db name of the database
    * @param id replication id
@@ -84,13 +92,20 @@ export class CouchProxyController {
       );
   }
 
+  /**
+   * Store new replication log on the remote database.
+   * See {@link https://docs.couchdb.org/en/stable/api/local.html#put--db-_local-docid}
+   *
+   * @param db name of the database
+   * @param id identifier of the replication log
+   * @param body replication log
+   */
   @Put('/:db/_local/:id')
   putLocal(
     @Param('db') db: string,
     @Param('id') id: string,
     @Body() body: any,
   ): Observable<any> {
-    console.log('put local called', db, id, body);
     return this.httpService
       .put(`${this.couchDB}/${db}/_local/${id}`, body, {
         auth: { username: this.username, password: this.password },
@@ -150,8 +165,12 @@ export class CouchProxyController {
     @Param('db') db: string,
     @Body() body: BulkDocsRequest,
   ): Observable<BulkDocsResponse> {
+    const filteredBody = this.documentFilter.filterBulkDocsRequest(
+      body,
+      this.userRoles,
+    );
     return this.httpService
-      .post(`${this.couchDB}/${db}/_bulk_docs`, body, {
+      .post(`${this.couchDB}/${db}/_bulk_docs`, filteredBody, {
         auth: { username: this.username, password: this.password },
       })
       .pipe(map((response) => response.data));
@@ -177,29 +196,58 @@ export class CouchProxyController {
         params: queryParams,
         auth: { username: this.username, password: this.password },
       })
-      .pipe(map((response) => response.data));
+      .pipe(
+        map((response) => response.data),
+        map((response: BulkGetResponse) =>
+          this.documentFilter.transformBulkGetResponse(
+            response,
+            this.userRoles,
+          ),
+        ),
+      );
   }
 
+  /**
+   * Fetch a bulk of documents specified by the ID's in the body.
+   * See {@link https://docs.couchdb.org/en/stable/api/database/bulk-api.html?highlight=all_docs#post--db-_all_docs}
+   *
+   * @param db remote database
+   * @param queryParams
+   * @param body a object containing document ID's to be fetched
+   * @returns list of documents
+   */
+  @Post('/:db/_all_docs')
+  allDocs(
+    @Param('db') db: string,
+    @Query() queryParams: any,
+    @Body() body: AllDocsRequest,
+  ): Observable<AllDocsResponse> {
+    return this.httpService
+      .post<AllDocsResponse>(`${this.couchDB}/${db}/_all_docs`, body, {
+        params: queryParams,
+        auth: { username: this.username, password: this.password },
+      })
+      .pipe(
+        map((response) => response.data),
+        map((response) =>
+          this.documentFilter.transformAllDocsResponse(
+            response,
+            this.userRoles,
+          ),
+        ),
+      );
+  }
+
+  /**
+   * Unused?
+   * @param db
+   * @param queryParams
+   */
   @Get('/:db/_bulk_get')
   bulkGet(@Param('db') db: string, @Query() queryParams: any): Observable<any> {
     console.log('GET bulk doc called', db, queryParams);
     return this.httpService
       .get(`${this.couchDB}/${db}/_bulk_get`, {
-        params: queryParams,
-        auth: { username: this.username, password: this.password },
-      })
-      .pipe(map((response) => response.data));
-  }
-
-  @Post('/:db/_all_docs')
-  allDocs(
-    @Param('db') db: string,
-    @Query() queryParams: any,
-    @Body() body: any,
-  ): Observable<any> {
-    console.log('post all docs called', db, queryParams, body);
-    return this.httpService
-      .post(`${this.couchDB}/${db}/_all_docs`, body, {
         params: queryParams,
         auth: { username: this.username, password: this.password },
       })
