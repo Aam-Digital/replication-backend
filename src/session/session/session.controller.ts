@@ -1,28 +1,20 @@
-import { Body, Controller, Post } from '@nestjs/common';
-import { UserCredentials, User } from './user-auth.dto';
-import { map, Observable, tap } from 'rxjs';
-import { HttpService } from '@nestjs/axios';
-import { COUCH_ENDPOINT } from '../../app.module';
-import { SessionService } from './session.service';
+import { Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { User, UserCredentials } from './user-auth.dto';
+import { CouchAuthGuard } from '../auth/couch-auth.guard';
+import { ApiBody } from '@nestjs/swagger';
 
 @Controller()
 export class SessionController {
-  constructor(
-    private httpService: HttpService,
-    private sessionService: SessionService,
-  ) {}
+  constructor() {}
   /**
    * Login endpoint.
-   * Saves username and password and authenticates against the database.
-   * @param credentials
+   * Authenticates using the CouchAuthGuard.
+   * @param req
    */
+  @ApiBody({ type: UserCredentials })
+  @UseGuards(CouchAuthGuard)
   @Post('/_session')
-  session(@Body() credentials: UserCredentials): Observable<User> {
-    return this.httpService
-      .post(`${COUCH_ENDPOINT}/_session`, credentials)
-      .pipe(
-        map((response) => response.data),
-        tap((user) => this.sessionService.login(user)),
-      );
+  session(@Req() req): User {
+    return req.user;
   }
 }
