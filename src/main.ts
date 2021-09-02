@@ -4,6 +4,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('couchdb/db');
 
   // SwaggerUI setup see https://docs.nestjs.com/openapi/introduction#bootstrap
   const config = new DocumentBuilder()
