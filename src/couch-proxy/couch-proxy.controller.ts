@@ -7,6 +7,7 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { catchError, map, Observable } from 'rxjs';
@@ -23,7 +24,9 @@ import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
 import { COUCH_ENDPOINT } from '../app.module';
+import { JwtGuard } from '../session/jwt/jwt.guard';
 
+@UseGuards(JwtGuard)
 @Controller()
 export class CouchProxyController {
   private username: string = 'demo';
