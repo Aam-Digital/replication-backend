@@ -1,9 +1,9 @@
-export interface UserCredentials {
+export class UserCredentials {
   name: string;
   password: string;
 }
 
-export interface UserResponse {
+export class UserResponse {
   name: string;
   roles: string[];
 }

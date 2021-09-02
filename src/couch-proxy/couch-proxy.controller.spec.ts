@@ -3,9 +3,9 @@ import { CouchProxyController } from './couch-proxy.controller';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom, of } from 'rxjs';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
-import { BulkGetResponse } from './couch-interfaces/bulk-get';
-import { AllDocsResponse } from './couch-interfaces/all-docs';
-import { BulkDocsRequest } from './couch-interfaces/bulk-docs';
+import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
+import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
+import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
 
 describe('CouchProxyController', () => {
   let controller: CouchProxyController;
