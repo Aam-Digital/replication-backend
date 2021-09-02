@@ -3,7 +3,7 @@ export class UserCredentials {
   password: string;
 }
 
-export class UserResponse {
+export class User {
   name: string;
   roles: string[];
 }

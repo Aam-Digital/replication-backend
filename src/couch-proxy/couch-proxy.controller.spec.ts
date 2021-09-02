@@ -60,13 +60,11 @@ describe('CouchProxyController', () => {
     jest
       .spyOn(documentFilter, 'transformBulkGetResponse')
       .mockReturnValue(filteredResponse);
-    controller.userRoles = ['user'];
 
     const result = await firstValueFrom(controller.bulkPost(null, null, null));
 
     expect(documentFilter.transformBulkGetResponse).toHaveBeenCalledWith(
       httpServiceResponse.data,
-      ['user'],
     );
     expect(result).toEqual(filteredResponse);
   });
@@ -110,13 +108,11 @@ describe('CouchProxyController', () => {
     jest
       .spyOn(documentFilter, 'transformAllDocsResponse')
       .mockReturnValue(filteredResponse);
-    controller.userRoles = ['user'];
 
     const result = await firstValueFrom(controller.allDocs(null, null, null));
 
     expect(documentFilter.transformAllDocsResponse).toHaveBeenCalledWith(
       httpServiceResponse.data,
-      ['user'],
     );
     expect(result).toEqual(filteredResponse);
   });
@@ -154,17 +150,14 @@ describe('CouchProxyController', () => {
     jest
       .spyOn(documentFilter, 'filterBulkDocsRequest')
       .mockReturnValue(filteredRequest);
-    controller.userRoles = ['admin'];
 
     await firstValueFrom(controller.bulkDocs('db', request));
 
-    expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(request, [
-      'admin',
-    ]);
+    expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(request);
     expect(mockHttpService.post).toHaveBeenCalledWith(
       `${COUCH_ENDPOINT}/db/_bulk_docs`,
       filteredRequest,
-      { auth: { password: undefined, username: undefined } },
+      { auth: { password: 'pass', username: 'demo' } },
     );
   });
 });

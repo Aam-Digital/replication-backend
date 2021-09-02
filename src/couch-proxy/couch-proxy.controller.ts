@@ -28,7 +28,6 @@ import { COUCH_ENDPOINT } from '../app.module';
 export class CouchProxyController {
   private username: string = 'demo';
   private password: string = 'pass';
-  public userRoles: string[] = ['user'];
 
   constructor(
     private httpService: HttpService,
@@ -147,10 +146,7 @@ export class CouchProxyController {
     @Param('db') db: string,
     @Body() body: BulkDocsRequest,
   ): Observable<BulkDocsResponse> {
-    const filteredBody = this.documentFilter.filterBulkDocsRequest(
-      body,
-      this.userRoles,
-    );
+    const filteredBody = this.documentFilter.filterBulkDocsRequest(body);
     return this.httpService
       .post(`${COUCH_ENDPOINT}/${db}/_bulk_docs`, filteredBody, {
         auth: { username: this.username, password: this.password },
@@ -181,10 +177,7 @@ export class CouchProxyController {
       .pipe(
         map((response) => response.data),
         map((response: BulkGetResponse) =>
-          this.documentFilter.transformBulkGetResponse(
-            response,
-            this.userRoles,
-          ),
+          this.documentFilter.transformBulkGetResponse(response),
         ),
       );
   }
@@ -212,10 +205,7 @@ export class CouchProxyController {
       .pipe(
         map((response) => response.data),
         map((response) =>
-          this.documentFilter.transformAllDocsResponse(
-            response,
-            this.userRoles,
-          ),
+          this.documentFilter.transformAllDocsResponse(response),
         ),
       );
   }
