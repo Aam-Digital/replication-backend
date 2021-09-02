@@ -7,6 +7,7 @@ import {
   Post,
   Put,
   Query,
+  Req,
   UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
@@ -25,6 +26,7 @@ import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
 import { COUCH_ENDPOINT } from '../app.module';
 import { JwtGuard } from '../session/jwt/jwt.guard';
+import { User } from '../session/session/user-auth.dto';
 
 @UseGuards(JwtGuard)
 @Controller()
@@ -142,14 +144,20 @@ export class CouchProxyController {
    *
    * @param db name of the database
    * @param body list of documents to be saved in the remote database
+   * @param request holding information about the current user
    * @params BulkDocsResponse list of success or error messages regarding the to-be-saved documents
    */
   @Post('/:db/_bulk_docs')
   bulkDocs(
     @Param('db') db: string,
     @Body() body: BulkDocsRequest,
+    @Req() request: any,
   ): Observable<BulkDocsResponse> {
-    const filteredBody = this.documentFilter.filterBulkDocsRequest(body);
+    const user: User = request.user;
+    const filteredBody = this.documentFilter.filterBulkDocsRequest(
+      body,
+      user.roles,
+    );
     return this.httpService
       .post(`${COUCH_ENDPOINT}/${db}/_bulk_docs`, filteredBody, {
         auth: { username: this.username, password: this.password },
@@ -164,6 +172,7 @@ export class CouchProxyController {
    * @param db name of database
    * @param queryParams
    * @param body list of document IDs which should be fetched from the remote database
+   * @param request holding information about the current user
    * @returns BulkGetResponse list of documents or error messages
    */
   @Post('/:db/_bulk_get')
@@ -171,7 +180,9 @@ export class CouchProxyController {
     @Param('db') db: string,
     @Query() queryParams: any,
     @Body() body: BulkGetRequest,
+    @Req() request: any,
   ): Observable<BulkGetResponse> {
+    const user: User = request.user;
     return this.httpService
       .post(`${COUCH_ENDPOINT}/${db}/_bulk_get`, body, {
         params: queryParams,
@@ -180,7 +191,7 @@ export class CouchProxyController {
       .pipe(
         map((response) => response.data),
         map((response: BulkGetResponse) =>
-          this.documentFilter.transformBulkGetResponse(response),
+          this.documentFilter.transformBulkGetResponse(response, user.roles),
         ),
       );
   }
@@ -192,6 +203,7 @@ export class CouchProxyController {
    * @param db remote database
    * @param queryParams
    * @param body a object containing document ID's to be fetched
+   * @param request holding information about the current user
    * @returns list of documents
    */
   @Post('/:db/_all_docs')
@@ -199,7 +211,9 @@ export class CouchProxyController {
     @Param('db') db: string,
     @Query() queryParams: any,
     @Body() body: AllDocsRequest,
+    @Req() request: any,
   ): Observable<AllDocsResponse> {
+    const user: User = request.user;
     return this.httpService
       .post<AllDocsResponse>(`${COUCH_ENDPOINT}/${db}/_all_docs`, body, {
         params: queryParams,
@@ -208,7 +222,7 @@ export class CouchProxyController {
       .pipe(
         map((response) => response.data),
         map((response) =>
-          this.documentFilter.transformAllDocsResponse(response),
+          this.documentFilter.transformAllDocsResponse(response, user.roles),
         ),
       );
   }

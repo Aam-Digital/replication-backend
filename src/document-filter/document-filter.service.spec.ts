@@ -3,22 +3,13 @@ import { DocumentFilterService } from './document-filter.service';
 import { BulkGetResponse } from '../couch-proxy/couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from '../couch-proxy/couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
-import { SessionService } from '../session/session/session.service';
 
 describe('DocumentFilterService', () => {
   let service: DocumentFilterService;
-  let mockSessionService: SessionService;
 
   beforeEach(async () => {
-    mockSessionService = {
-      getRoles: () => undefined,
-    } as any;
-
     const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        DocumentFilterService,
-        { provide: SessionService, useValue: mockSessionService },
-      ],
+      providers: [DocumentFilterService],
     }).compile();
 
     service = module.get<DocumentFilterService>(DocumentFilterService);
@@ -60,9 +51,8 @@ describe('DocumentFilterService', () => {
       ],
     };
     service.accessControlList = [{ entity: 'Child', roles: ['admin'] }];
-    jest.spyOn(mockSessionService, 'getRoles').mockReturnValue(['user']);
 
-    const result = service.transformBulkGetResponse(bulkGetResponse);
+    const result = service.transformBulkGetResponse(bulkGetResponse, ['user']);
 
     expect(result).toEqual({
       results: [
@@ -126,9 +116,8 @@ describe('DocumentFilterService', () => {
       ],
     };
     service.accessControlList = [{ entity: 'School', roles: ['admin'] }];
-    jest.spyOn(mockSessionService, 'getRoles').mockReturnValue(['user']);
 
-    const result = service.transformAllDocsResponse(allDocsResponse);
+    const result = service.transformAllDocsResponse(allDocsResponse, ['user']);
 
     expect(result).toEqual({
       total_rows: 2,
@@ -179,9 +168,8 @@ describe('DocumentFilterService', () => {
       ],
     };
     service.accessControlList = [{ entity: 'School', roles: ['admin'] }];
-    jest.spyOn(mockSessionService, 'getRoles').mockReturnValue(['user']);
 
-    const result = service.filterBulkDocsRequest(request);
+    const result = service.filterBulkDocsRequest(request, ['user']);
 
     expect(result).toEqual({
       new_edits: false,

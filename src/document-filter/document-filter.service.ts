@@ -6,7 +6,6 @@ import {
   BulkDocsRequest,
   DatabaseDocument,
 } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
-import { SessionService } from '../session/session/session.service';
 
 @Injectable()
 export class DocumentFilterService {
@@ -14,40 +13,50 @@ export class DocumentFilterService {
     { entity: 'Aser', roles: ['admin'] },
   ];
 
-  constructor(private sessionService: SessionService) {}
-
-  transformBulkGetResponse(response: BulkGetResponse): BulkGetResponse {
+  transformBulkGetResponse(
+    response: BulkGetResponse,
+    userRoles: string[],
+  ): BulkGetResponse {
     response.results.forEach((result) =>
       result.docs
         .filter((doc) => (doc as { ok: DatabaseDocument }).ok)
         .forEach(
           (doc: { ok: DatabaseDocument }) =>
-            (doc.ok = this.applyPermissionsToDoc(doc.ok)),
+            (doc.ok = this.applyPermissionsToDoc(doc.ok, userRoles)),
         ),
     );
     return response;
   }
 
-  transformAllDocsResponse(response: AllDocsResponse): AllDocsResponse {
+  transformAllDocsResponse(
+    response: AllDocsResponse,
+    userRoles: string[],
+  ): AllDocsResponse {
     response.rows.forEach(
-      (row) => (row.doc = this.applyPermissionsToDoc(row.doc)),
+      (row) => (row.doc = this.applyPermissionsToDoc(row.doc, userRoles)),
     );
     return response;
   }
 
-  filterBulkDocsRequest(request: BulkDocsRequest): BulkDocsRequest {
+  filterBulkDocsRequest(
+    request: BulkDocsRequest,
+    userRoles: string[],
+  ): BulkDocsRequest {
     return {
       new_edits: request.new_edits,
-      docs: request.docs.filter((doc) => this.hasPermissions(doc)),
+      docs: request.docs.filter((doc) => this.hasPermissions(doc, userRoles)),
     };
   }
 
-  private applyPermissionsToDoc(doc: DatabaseDocument): DatabaseDocument {
+  private applyPermissionsToDoc(
+    doc: DatabaseDocument,
+    userRoles: string[],
+  ): DatabaseDocument {
     if (doc._deleted) {
       // Always pass deleted documents
       return doc;
     }
-    if (this.hasPermissions(doc)) {
+    if (this.hasPermissions(doc, userRoles)) {
       return doc;
     } else {
       // Send deleted response so local elements are deleted
@@ -60,8 +69,7 @@ export class DocumentFilterService {
     }
   }
 
-  private hasPermissions(doc: DatabaseDocument): boolean {
-    const userRoles = this.sessionService.getRoles();
+  private hasPermissions(doc: DatabaseDocument, userRoles: string[]): boolean {
     const matchingACLEntries = this.accessControlList.filter((entry) =>
       doc._id.toLowerCase().startsWith(entry.entity.toLowerCase() + ':'),
     );
