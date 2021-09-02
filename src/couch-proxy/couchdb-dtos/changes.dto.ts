@@ -1,11 +1,15 @@
-export interface ChangesFeed {
+export class ChangesFeed {
   last_seq: string;
   pending: number;
   results: ChangeDoc[];
 }
 
-export interface ChangeDoc {
-  changes: { rev: string }[];
+export class Change {
+  rev: string;
+}
+
+export class ChangeDoc {
+  changes: Change[];
   id: string;
   seq: string;
   deleted?: boolean;

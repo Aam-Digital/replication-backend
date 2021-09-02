@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentFilterService } from './document-filter.service';
-import { BulkGetResponse } from '../couch-proxy/couch-interfaces/bulk-get';
-import { AllDocsResponse } from '../couch-proxy/couch-interfaces/all-docs';
-import { BulkDocsRequest } from '../couch-proxy/couch-interfaces/bulk-docs';
+import { BulkGetResponse } from '../couch-proxy/couchdb-dtos/bulk-get.dto';
+import { AllDocsResponse } from '../couch-proxy/couchdb-dtos/all-docs.dto';
+import { BulkDocsRequest } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 
 describe('DocumentFilterService', () => {
   let service: DocumentFilterService;

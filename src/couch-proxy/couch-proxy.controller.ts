@@ -10,18 +10,18 @@ import {
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { catchError, map, Observable } from 'rxjs';
-import { UserCredentials, UserResponse } from './couch-interfaces/user-auth';
-import { ChangesFeed } from './couch-interfaces/changes';
+import { UserCredentials, UserResponse } from './couchdb-dtos/user-auth.dto';
+import { ChangesFeed } from './couchdb-dtos/changes.dto';
 import {
   RevisionDiffRequest,
   RevisionDiffResponse,
-} from './couch-interfaces/revision-diff';
+} from './couchdb-dtos/revision-diff.dto';
 import {
   BulkDocsRequest,
   BulkDocsResponse,
-} from './couch-interfaces/bulk-docs';
-import { BulkGetRequest, BulkGetResponse } from './couch-interfaces/bulk-get';
-import { AllDocsRequest, AllDocsResponse } from './couch-interfaces/all-docs';
+} from './couchdb-dtos/bulk-docs.dto';
+import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
+import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
 
 @Controller('couchdb/db')

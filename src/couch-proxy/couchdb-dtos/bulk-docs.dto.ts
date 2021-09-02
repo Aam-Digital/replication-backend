@@ -1,9 +1,9 @@
-export interface BulkDocsRequest {
+export class BulkDocsRequest {
   new_edits: boolean;
   docs: DatabaseDocument[];
 }
 
-export interface DatabaseDocument {
+export class DatabaseDocument {
   _id: string;
   _rev: string;
   _deleted?: boolean;
@@ -16,13 +16,13 @@ export interface DatabaseDocument {
 
 export type BulkDocsResponse = (DocSuccess | DocError)[];
 
-export interface DocSuccess {
+export class DocSuccess {
   ok: boolean;
   id: string;
   rev: string;
 }
 
-export interface DocError {
+export class DocError {
   error: string;
   id: string;
   reason: string;

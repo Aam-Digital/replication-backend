@@ -1,4 +1,4 @@
-export interface AccessControlEntry {
+export class AccessControlEntry {
   entity: string;
   roles: string[];
 }

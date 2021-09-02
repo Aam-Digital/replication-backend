@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { BulkGetResponse } from '../couch-proxy/couch-interfaces/bulk-get';
+import { BulkGetResponse } from '../couch-proxy/couchdb-dtos/bulk-get.dto';
 import { AccessControlEntry } from './access-control-entry';
-import { AllDocsResponse } from '../couch-proxy/couch-interfaces/all-docs';
+import { AllDocsResponse } from '../couch-proxy/couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
   DatabaseDocument,
-} from '../couch-proxy/couch-interfaces/bulk-docs';
+} from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 
 @Injectable()
 export class DocumentFilterService {
