@@ -6,6 +6,7 @@ import { DocumentFilterService } from '../document-filter/document-filter.servic
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
+import { COUCH_ENDPOINT } from '../app.module';
 
 describe('CouchProxyController', () => {
   let controller: CouchProxyController;
@@ -161,7 +162,7 @@ describe('CouchProxyController', () => {
       'admin',
     ]);
     expect(mockHttpService.post).toHaveBeenCalledWith(
-      `${controller.couchDB}/db/_bulk_docs`,
+      `${COUCH_ENDPOINT}/db/_bulk_docs`,
       filteredRequest,
       { auth: { password: undefined, username: undefined } },
     );
