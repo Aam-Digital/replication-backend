@@ -31,6 +31,7 @@ import { User } from '../session/session/user-auth.dto';
 @UseGuards(JwtGuard)
 @Controller()
 export class CouchProxyController {
+  //TODO move to environment variables
   private username: string = 'demo';
   private password: string = 'pass';
 
