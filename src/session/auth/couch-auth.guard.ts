@@ -11,6 +11,7 @@ export class CouchAuthGuard extends AuthGuard('local') {
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const canActivate = await (super.canActivate(context) as Promise<boolean>);
 
+    // Set the cookie after successful authentication
     const request = context.switchToHttp().getRequest();
     const user = request.user;
     const response = context.switchToHttp().getResponse();
