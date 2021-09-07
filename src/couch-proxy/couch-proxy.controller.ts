@@ -7,10 +7,11 @@ import {
   Post,
   Put,
   Query,
+  Req,
+  UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { catchError, map, Observable } from 'rxjs';
-import { UserCredentials, UserResponse } from './couchdb-dtos/user-auth.dto';
 import { ChangesFeed } from './couchdb-dtos/changes.dto';
 import {
   RevisionDiffRequest,
@@ -23,35 +24,22 @@ import {
 import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
+import { COUCH_ENDPOINT } from '../app.module';
+import { JwtGuard } from '../session/jwt/jwt.guard';
+import { User } from '../session/session/user-auth.dto';
+import { Request } from 'express';
 
-@Controller('couchdb/db')
+@UseGuards(JwtGuard)
+@Controller()
 export class CouchProxyController {
-  readonly couchDB = 'https://dev.aam-digital.com/db';
-  private username: string;
-  private password: string;
-  public userRoles: string[] = ['user'];
+  //TODO move to environment variables
+  private username: string = 'demo';
+  private password: string = 'pass';
 
   constructor(
     private httpService: HttpService,
     private documentFilter: DocumentFilterService,
   ) {}
-
-  /**
-   * Login endpoint.
-   * Saves username and password and authenticates against the database.
-   * @param credentials
-   */
-  @Post('/_session')
-  session(@Body() credentials: UserCredentials): Observable<UserResponse> {
-    this.username = credentials.name;
-    this.password = credentials.password;
-    return this.httpService
-      .post(`${this.couchDB}/_session`, {
-        name: this.username,
-        password: this.password,
-      })
-      .pipe(map((response) => response.data));
-  }
 
   /**
    * Checks whether the database exists and the user has access to it.
@@ -60,7 +48,7 @@ export class CouchProxyController {
   @Get('/')
   getDB(): Observable<any> {
     return this.httpService
-      .get(`${this.couchDB}/`, {
+      .get(`${COUCH_ENDPOINT}/`, {
         auth: { username: this.username, password: this.password },
       })
       .pipe(map((response) => response.data));
@@ -81,7 +69,7 @@ export class CouchProxyController {
   @Get('/:db/_local/:id')
   getLocal(@Param('db') db: string, @Param('id') id: string): Observable<any> {
     return this.httpService
-      .get(`${this.couchDB}/${db}/_local/${id}`, {
+      .get(`${COUCH_ENDPOINT}/${db}/_local/${id}`, {
         auth: { username: this.username, password: this.password },
       })
       .pipe(
@@ -107,7 +95,7 @@ export class CouchProxyController {
     @Body() body: any,
   ): Observable<any> {
     return this.httpService
-      .put(`${this.couchDB}/${db}/_local/${id}`, body, {
+      .put(`${COUCH_ENDPOINT}/${db}/_local/${id}`, body, {
         auth: { username: this.username, password: this.password },
       })
       .pipe(map((response) => response.data));
@@ -126,7 +114,7 @@ export class CouchProxyController {
     @Query() queryParams: any,
   ): Observable<ChangesFeed> {
     return this.httpService
-      .get(`${this.couchDB}/${db}/_changes`, {
+      .get(`${COUCH_ENDPOINT}/${db}/_changes`, {
         params: queryParams,
         auth: { username: this.username, password: this.password },
       })
@@ -146,7 +134,7 @@ export class CouchProxyController {
     @Body() body: RevisionDiffRequest,
   ): Observable<RevisionDiffResponse> {
     return this.httpService
-      .post(`${this.couchDB}/${db}/_revs_diff`, body, {
+      .post(`${COUCH_ENDPOINT}/${db}/_revs_diff`, body, {
         auth: { username: this.username, password: this.password },
       })
       .pipe(map((response) => response.data));
@@ -158,19 +146,22 @@ export class CouchProxyController {
    *
    * @param db name of the database
    * @param body list of documents to be saved in the remote database
+   * @param request holding information about the current user
    * @params BulkDocsResponse list of success or error messages regarding the to-be-saved documents
    */
   @Post('/:db/_bulk_docs')
   bulkDocs(
     @Param('db') db: string,
     @Body() body: BulkDocsRequest,
+    @Req() request: Request,
   ): Observable<BulkDocsResponse> {
+    const user = request.user as User;
     const filteredBody = this.documentFilter.filterBulkDocsRequest(
       body,
-      this.userRoles,
+      user.roles,
     );
     return this.httpService
-      .post(`${this.couchDB}/${db}/_bulk_docs`, filteredBody, {
+      .post(`${COUCH_ENDPOINT}/${db}/_bulk_docs`, filteredBody, {
         auth: { username: this.username, password: this.password },
       })
       .pipe(map((response) => response.data));
@@ -183,6 +174,7 @@ export class CouchProxyController {
    * @param db name of database
    * @param queryParams
    * @param body list of document IDs which should be fetched from the remote database
+   * @param request holding information about the current user
    * @returns BulkGetResponse list of documents or error messages
    */
   @Post('/:db/_bulk_get')
@@ -190,19 +182,18 @@ export class CouchProxyController {
     @Param('db') db: string,
     @Query() queryParams: any,
     @Body() body: BulkGetRequest,
+    @Req() request: Request,
   ): Observable<BulkGetResponse> {
+    const user = request.user as User;
     return this.httpService
-      .post(`${this.couchDB}/${db}/_bulk_get`, body, {
+      .post(`${COUCH_ENDPOINT}/${db}/_bulk_get`, body, {
         params: queryParams,
         auth: { username: this.username, password: this.password },
       })
       .pipe(
         map((response) => response.data),
         map((response: BulkGetResponse) =>
-          this.documentFilter.transformBulkGetResponse(
-            response,
-            this.userRoles,
-          ),
+          this.documentFilter.transformBulkGetResponse(response, user.roles),
         ),
       );
   }
@@ -214,6 +205,7 @@ export class CouchProxyController {
    * @param db remote database
    * @param queryParams
    * @param body a object containing document ID's to be fetched
+   * @param request holding information about the current user
    * @returns list of documents
    */
   @Post('/:db/_all_docs')
@@ -221,19 +213,18 @@ export class CouchProxyController {
     @Param('db') db: string,
     @Query() queryParams: any,
     @Body() body: AllDocsRequest,
+    @Req() request: Request,
   ): Observable<AllDocsResponse> {
+    const user = request.user as User;
     return this.httpService
-      .post<AllDocsResponse>(`${this.couchDB}/${db}/_all_docs`, body, {
+      .post<AllDocsResponse>(`${COUCH_ENDPOINT}/${db}/_all_docs`, body, {
         params: queryParams,
         auth: { username: this.username, password: this.password },
       })
       .pipe(
         map((response) => response.data),
         map((response) =>
-          this.documentFilter.transformAllDocsResponse(
-            response,
-            this.userRoles,
-          ),
+          this.documentFilter.transformAllDocsResponse(response, user.roles),
         ),
       );
   }
@@ -247,7 +238,7 @@ export class CouchProxyController {
   bulkGet(@Param('db') db: string, @Query() queryParams: any): Observable<any> {
     console.log('GET bulk doc called', db, queryParams);
     return this.httpService
-      .get(`${this.couchDB}/${db}/_bulk_get`, {
+      .get(`${COUCH_ENDPOINT}/${db}/_bulk_get`, {
         params: queryParams,
         auth: { username: this.username, password: this.password },
       })

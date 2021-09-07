@@ -6,6 +6,8 @@ import { DocumentFilterService } from '../document-filter/document-filter.servic
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
+import { COUCH_ENDPOINT } from '../app.module';
+import { User } from '../session/session/user-auth.dto';
 
 describe('CouchProxyController', () => {
   let controller: CouchProxyController;
@@ -59,9 +61,11 @@ describe('CouchProxyController', () => {
     jest
       .spyOn(documentFilter, 'transformBulkGetResponse')
       .mockReturnValue(filteredResponse);
-    controller.userRoles = ['user'];
+    const user: User = { name: 'username', roles: ['user'] };
 
-    const result = await firstValueFrom(controller.bulkPost(null, null, null));
+    const result = await firstValueFrom(
+      controller.bulkPost(null, null, null, { user: user } as any),
+    );
 
     expect(documentFilter.transformBulkGetResponse).toHaveBeenCalledWith(
       httpServiceResponse.data,
@@ -109,9 +113,11 @@ describe('CouchProxyController', () => {
     jest
       .spyOn(documentFilter, 'transformAllDocsResponse')
       .mockReturnValue(filteredResponse);
-    controller.userRoles = ['user'];
+    const user: User = { name: 'username', roles: ['user'] };
 
-    const result = await firstValueFrom(controller.allDocs(null, null, null));
+    const result = await firstValueFrom(
+      controller.allDocs(null, null, null, { user: user } as any),
+    );
 
     expect(documentFilter.transformAllDocsResponse).toHaveBeenCalledWith(
       httpServiceResponse.data,
@@ -153,17 +159,19 @@ describe('CouchProxyController', () => {
     jest
       .spyOn(documentFilter, 'filterBulkDocsRequest')
       .mockReturnValue(filteredRequest);
-    controller.userRoles = ['admin'];
+    const user: User = { name: 'username', roles: ['admin'] };
 
-    await firstValueFrom(controller.bulkDocs('db', request));
+    await firstValueFrom(
+      controller.bulkDocs('db', request, { user: user } as any),
+    );
 
     expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(request, [
       'admin',
     ]);
     expect(mockHttpService.post).toHaveBeenCalledWith(
-      `${controller.couchDB}/db/_bulk_docs`,
+      `${COUCH_ENDPOINT}/db/_bulk_docs`,
       filteredRequest,
-      { auth: { password: undefined, username: undefined } },
+      { auth: { password: 'pass', username: 'demo' } },
     );
   });
 });
