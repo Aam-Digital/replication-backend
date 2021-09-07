@@ -64,7 +64,7 @@ describe('CouchProxyController', () => {
     const user: User = { name: 'username', roles: ['user'] };
 
     const result = await firstValueFrom(
-      controller.bulkPost(null, null, null, { user: user }),
+      controller.bulkPost(null, null, null, { user: user } as any),
     );
 
     expect(documentFilter.transformBulkGetResponse).toHaveBeenCalledWith(
@@ -116,7 +116,7 @@ describe('CouchProxyController', () => {
     const user: User = { name: 'username', roles: ['user'] };
 
     const result = await firstValueFrom(
-      controller.allDocs(null, null, null, { user: user }),
+      controller.allDocs(null, null, null, { user: user } as any),
     );
 
     expect(documentFilter.transformAllDocsResponse).toHaveBeenCalledWith(
@@ -161,7 +161,9 @@ describe('CouchProxyController', () => {
       .mockReturnValue(filteredRequest);
     const user: User = { name: 'username', roles: ['admin'] };
 
-    await firstValueFrom(controller.bulkDocs('db', request, { user: user }));
+    await firstValueFrom(
+      controller.bulkDocs('db', request, { user: user } as any),
+    );
 
     expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(request, [
       'admin',
