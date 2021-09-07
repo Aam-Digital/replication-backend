@@ -3,8 +3,7 @@ import { Strategy } from 'passport-jwt';
 import { Injectable } from '@nestjs/common';
 import { JWT_SECRET } from '../session.module';
 import { User } from '../session/user-auth.dto';
-
-export const TOKEN_KEY = 'access_token';
+import { TOKEN_KEY } from '../cookie/cookie.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
