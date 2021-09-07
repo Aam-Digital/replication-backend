@@ -1,8 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CouchAuthStrategy } from './couch-auth.strategy';
 import { HttpService } from '@nestjs/axios';
-import { of } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { COUCH_ENDPOINT } from '../../app.module';
+import { HttpException, UnauthorizedException } from '@nestjs/common';
 
 describe('CouchAuthStrategy', () => {
   let strategy: CouchAuthStrategy;
@@ -45,5 +46,15 @@ describe('CouchAuthStrategy', () => {
       credentials,
     );
     expect(response).toEqual({ name: 'username', roles: ['user_app'] });
+  });
+
+  it('should throw unauthorized exception when the requests fails', () => {
+    jest
+      .spyOn(mockHttpService, 'post')
+      .mockReturnValue(throwError(() => new HttpException('error', 400)));
+
+    return expect(strategy.validate('user', 'wrong_pw')).rejects.toBeInstanceOf(
+      UnauthorizedException,
+    );
   });
 });

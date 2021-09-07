@@ -27,6 +27,7 @@ import { DocumentFilterService } from '../document-filter/document-filter.servic
 import { COUCH_ENDPOINT } from '../app.module';
 import { JwtGuard } from '../session/jwt/jwt.guard';
 import { User } from '../session/session/user-auth.dto';
+import { Request } from 'express';
 
 @UseGuards(JwtGuard)
 @Controller()
@@ -152,9 +153,9 @@ export class CouchProxyController {
   bulkDocs(
     @Param('db') db: string,
     @Body() body: BulkDocsRequest,
-    @Req() request: any,
+    @Req() request: Request,
   ): Observable<BulkDocsResponse> {
-    const user: User = request.user;
+    const user = request.user as User;
     const filteredBody = this.documentFilter.filterBulkDocsRequest(
       body,
       user.roles,
@@ -181,9 +182,9 @@ export class CouchProxyController {
     @Param('db') db: string,
     @Query() queryParams: any,
     @Body() body: BulkGetRequest,
-    @Req() request: any,
+    @Req() request: Request,
   ): Observable<BulkGetResponse> {
-    const user: User = request.user;
+    const user = request.user as User;
     return this.httpService
       .post(`${COUCH_ENDPOINT}/${db}/_bulk_get`, body, {
         params: queryParams,
@@ -212,9 +213,9 @@ export class CouchProxyController {
     @Param('db') db: string,
     @Query() queryParams: any,
     @Body() body: AllDocsRequest,
-    @Req() request: any,
+    @Req() request: Request,
   ): Observable<AllDocsResponse> {
-    const user: User = request.user;
+    const user = request.user as User;
     return this.httpService
       .post<AllDocsResponse>(`${COUCH_ENDPOINT}/${db}/_all_docs`, body, {
         params: queryParams,

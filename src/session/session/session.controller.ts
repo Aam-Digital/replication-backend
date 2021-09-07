@@ -1,5 +1,5 @@
 import { Controller, Post, Req, UseGuards } from '@nestjs/common';
-import { UserCredentials } from './user-auth.dto';
+import { User, UserCredentials } from './user-auth.dto';
 import { CouchAuthGuard } from '../auth/couch-auth.guard';
 import { ApiBody } from '@nestjs/swagger';
 import { Request } from 'express';
@@ -13,7 +13,7 @@ export class SessionController {
   @ApiBody({ type: UserCredentials })
   @UseGuards(CouchAuthGuard)
   @Post('/_session')
-  session(@Req() request: Request) {
-    return request.user;
+  session(@Req() request: Request): User {
+    return request.user as any;
   }
 }
