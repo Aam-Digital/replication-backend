@@ -11,4 +11,5 @@ import { SessionModule } from './session/session.module';
 })
 export class AppModule {}
 
+// TODO move to env
 export const COUCH_ENDPOINT = 'https://dev.aam-digital.com/db';

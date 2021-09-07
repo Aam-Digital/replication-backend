@@ -23,5 +23,6 @@ export const JWT_SECRET = 'someSecret';
   ],
   controllers: [SessionController],
   providers: [CouchAuthStrategy, JwtStrategy, CookieService],
+  exports: [CookieService],
 })
 export class SessionModule {}
