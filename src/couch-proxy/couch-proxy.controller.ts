@@ -28,18 +28,29 @@ import { COUCH_ENDPOINT } from '../app.module';
 import { JwtGuard } from '../session/jwt/jwt.guard';
 import { User } from '../session/session/user-auth.dto';
 import { Request } from 'express';
+import { ConfigService } from '@nestjs/config';
 
 @UseGuards(JwtGuard)
 @Controller()
 export class CouchProxyController {
+  static readonly DATABASE_USER_ENV = 'DATABASE_USER';
+  static readonly DATABASE_PASSWORD_ENV = 'DATABASE_PASSWORD';
   //TODO move to environment variables
-  private username: string = 'demo';
-  private password: string = 'pass';
+  username: string;
+  password: string;
 
   constructor(
     private httpService: HttpService,
     private documentFilter: DocumentFilterService,
-  ) {}
+    private configService: ConfigService,
+  ) {
+    this.username = this.configService.get<string>(
+      CouchProxyController.DATABASE_USER_ENV,
+    );
+    this.password = this.configService.get<string>(
+      CouchProxyController.DATABASE_PASSWORD_ENV,
+    );
+  }
 
   /**
    * Checks whether the database exists and the user has access to it.
