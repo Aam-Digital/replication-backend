@@ -35,7 +35,7 @@ import { ConfigService } from '@nestjs/config';
 export class CouchProxyController {
   static readonly DATABASE_USER_ENV = 'DATABASE_USER';
   static readonly DATABASE_PASSWORD_ENV = 'DATABASE_PASSWORD';
-  //TODO move to environment variables
+
   username: string;
   password: string;
 
