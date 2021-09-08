@@ -15,6 +15,3 @@ import { ConfigModule } from '@nestjs/config';
   providers: [DocumentFilterService],
 })
 export class AppModule {}
-
-// TODO move to env
-export const COUCH_ENDPOINT = 'https://dev.aam-digital.com/db';

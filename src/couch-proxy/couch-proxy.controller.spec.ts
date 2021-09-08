@@ -6,7 +6,6 @@ import { DocumentFilterService } from '../document-filter/document-filter.servic
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
-import { COUCH_ENDPOINT } from '../app.module';
 import { User } from '../session/session/user-auth.dto';
 import { ConfigService } from '@nestjs/config';
 
@@ -15,6 +14,9 @@ describe('CouchProxyController', () => {
   let mockHttpService: HttpService;
   let documentFilter: DocumentFilterService;
   let mockConfigService: ConfigService;
+  const DATABASE_URL = 'database.url';
+  const USERNAME = 'demo';
+  const PASSWORD = 'pass';
 
   beforeEach(async () => {
     mockHttpService = {
@@ -31,8 +33,9 @@ describe('CouchProxyController', () => {
     } as any;
 
     const config = {};
-    config[CouchProxyController.DATABASE_USER_ENV] = 'demo';
-    config[CouchProxyController.DATABASE_PASSWORD_ENV] = 'pass';
+    config[CouchProxyController.DATABASE_USER_ENV] = USERNAME;
+    config[CouchProxyController.DATABASE_PASSWORD_ENV] = PASSWORD;
+    config[CouchProxyController.DATABASE_URL_ENV] = DATABASE_URL;
     mockConfigService = {
       get: jest.fn((key) => config[key]),
     } as any;
@@ -59,6 +62,9 @@ describe('CouchProxyController', () => {
     );
     expect(mockConfigService.get).toHaveBeenCalledWith(
       CouchProxyController.DATABASE_PASSWORD_ENV,
+    );
+    expect(mockConfigService.get).toHaveBeenCalledWith(
+      CouchProxyController.DATABASE_URL_ENV,
     );
   });
 
@@ -188,9 +194,9 @@ describe('CouchProxyController', () => {
       'admin',
     ]);
     expect(mockHttpService.post).toHaveBeenCalledWith(
-      `${COUCH_ENDPOINT}/db/_bulk_docs`,
+      `${DATABASE_URL}/db/_bulk_docs`,
       filteredRequest,
-      { auth: { password: 'pass', username: 'demo' } },
+      { auth: { username: USERNAME, password: PASSWORD } },
     );
   });
 });
