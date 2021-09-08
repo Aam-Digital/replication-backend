@@ -1,21 +1,18 @@
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';
 import { Injectable } from '@nestjs/common';
-import { JWT_SECRET } from '../session.module';
+import { SessionModule } from '../session.module';
 import { User } from '../session/user-auth.dto';
 import { TOKEN_KEY } from '../cookie/cookie.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(configService: ConfigService) {
     super({
-      jwtFromRequest: (req) => {
-        if (req && req.cookies) {
-          return req.cookies[TOKEN_KEY];
-        }
-      },
+      jwtFromRequest: (req) => req?.cookies[TOKEN_KEY],
       ignoreExpiration: false,
-      secretOrKey: JWT_SECRET,
+      secretOrKey: configService.get<string>(SessionModule.JWT_SECRET_ENV),
     });
   }
 

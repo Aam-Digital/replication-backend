@@ -8,8 +8,8 @@ import { ConfigModule } from '@nestjs/config';
 @Module({
   imports: [
     HttpModule,
-    SessionModule,
     ConfigModule.forRoot({ isGlobal: true }),
+    SessionModule,
   ],
   controllers: [CouchProxyController],
   providers: [DocumentFilterService],
