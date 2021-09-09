@@ -2,22 +2,32 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CouchAuthStrategy } from './couch-auth.strategy';
 import { HttpService } from '@nestjs/axios';
 import { of, throwError } from 'rxjs';
-import { COUCH_ENDPOINT } from '../../app.module';
 import { HttpException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { CouchProxyController } from '../../couch-proxy/couch-proxy.controller';
 
 describe('CouchAuthStrategy', () => {
   let strategy: CouchAuthStrategy;
   let mockHttpService: HttpService;
+  let mockConfigService: ConfigService;
+  const DATABASE_URL = 'some.url';
 
   beforeEach(async () => {
     mockHttpService = {
       post: () => of({}),
     } as any;
 
+    const config = {};
+    config[CouchProxyController.DATABASE_URL_ENV] = DATABASE_URL;
+    mockConfigService = {
+      get: jest.fn((key) => config[key]),
+    } as any;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CouchAuthStrategy,
         { provide: HttpService, useValue: mockHttpService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
@@ -26,6 +36,12 @@ describe('CouchAuthStrategy', () => {
 
   it('should be defined', () => {
     expect(strategy).toBeDefined();
+  });
+
+  it('should read the url for the auth server from the config', () => {
+    expect(mockConfigService.get).toHaveBeenCalledWith(
+      CouchProxyController.DATABASE_URL_ENV,
+    );
   });
 
   it('should return the user after receiving success response', async () => {
@@ -42,7 +58,7 @@ describe('CouchAuthStrategy', () => {
     );
 
     expect(mockHttpService.post).toHaveBeenCalledWith(
-      `${COUCH_ENDPOINT}/_session`,
+      `${DATABASE_URL}/_session`,
       credentials,
     );
     expect(response).toEqual({ name: 'username', roles: ['user_app'] });
