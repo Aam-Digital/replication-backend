@@ -5,7 +5,7 @@ import { User } from '../session/user-auth.dto';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-local';
 import { ConfigService } from '@nestjs/config';
-import { CouchProxyController } from '../../couch-proxy/couch-proxy.controller';
+import { CouchProxyController } from '../../replication/couch-proxy/couch-proxy.controller';
 
 @Injectable()
 export class CouchAuthStrategy extends PassportStrategy(Strategy) {

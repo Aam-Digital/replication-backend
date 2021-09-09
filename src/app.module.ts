@@ -1,17 +1,8 @@
 import { Module } from '@nestjs/common';
-import { CouchProxyController } from './couch-proxy/couch-proxy.controller';
-import { HttpModule } from '@nestjs/axios';
-import { DocumentFilterService } from './document-filter/document-filter.service';
-import { SessionModule } from './session/session.module';
 import { ConfigModule } from '@nestjs/config';
+import { ReplicationModule } from './replication/replication.module';
 
 @Module({
-  imports: [
-    HttpModule,
-    ConfigModule.forRoot({ isGlobal: true }),
-    SessionModule,
-  ],
-  controllers: [CouchProxyController],
-  providers: [DocumentFilterService],
+  imports: [ConfigModule.forRoot({ isGlobal: true }), ReplicationModule],
 })
 export class AppModule {}

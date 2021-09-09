@@ -6,7 +6,7 @@ import { DocumentFilterService } from '../document-filter/document-filter.servic
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
-import { User } from '../session/session/user-auth.dto';
+import { User } from '../../session/session/user-auth.dto';
 import { ConfigService } from '@nestjs/config';
 
 describe('CouchProxyController', () => {
