@@ -3,11 +3,15 @@
 # Run the following commands from the root folder to build, run and kill the application
 # >> docker build -f build/Dockerfile -t replication-ms:latest .
 # >> docker run -p=80:80 replication-ms:latest
-FROM node:16.7.0-alpine3.14
+FROM node:16.8.0-alpine3.13 as builder
 WORKDIR /app
 
 COPY package*.json ./
 RUN npm ci --no-progress
+
+COPY . .
+
+RUN npm run build
 
 # When set to true, tests are run and coverage will be uploaded to CodeClimate
 ARG UPLOAD_COVERAGE=false
@@ -20,9 +24,7 @@ RUN if [ "$UPLOAD_COVERAGE" = true ] ; then \
 # If set to true, tests are exectued
 ARG RUN_TESTS=false
 
-COPY . .
-
-# Install lint code and run tests
+# Lint code and run tests
 RUN if [ "$RUN_TESTS" = true ] || [ "$UPLOAD_COVERAGE" = true ] ; then \
     npm run lint &&\
     npm run test:cov ; fi
@@ -38,5 +40,23 @@ ARG GIT_COMMITTED_AT
 ARG CC_TEST_REPORTER_ID
 RUN if [ "$UPLOAD_COVERAGE" = true ] ; then ./cc-test-reporter after-build --debug ; fi
 
-CMD npm start
+FROM node:16.8.0-alpine3.13
+WORKDIR /app
+# Some packages enable optimization when this is set
+ENV NODE_ENV="production"
+
+COPY package*.json ./
+RUN npm ci --no-progress --only=production
+
+COPY --from=builder /app/dist ./dist
+
+# The url of the CouchDB database
+ENV DATABASE_URL="https://dev.aam-digital.com/db"
+# The user credentials which can access ALL data on the database
+ENV DATABASE_USER="demo"
+ENV DATABASE_PASSWORD="pass"
+# A secret which is used to generate the cookies for user authentication
+ENV JWT_SECRET="jwtSecret"
+
+CMD ["node", "dist/main"]
 
