@@ -10,12 +10,8 @@ export class JwtGuard extends AuthGuard('jwt') {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const res = await (super.canActivate(context) as Promise<boolean>);
-
-    const request = context.switchToHttp().getRequest();
-    const user = request.user;
-    const response = context.switchToHttp().getResponse();
-    this.cookieService.addResponseCookie(user, response);
-
+    // Renew cookie after every request (too often?)
+    this.cookieService.addResponseCookie(context);
     return res;
   }
 }
