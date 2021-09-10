@@ -26,6 +26,7 @@ describe('CouchProxyController', () => {
       get: () => of({}),
       put: () => of({}),
       delete: () => of({}),
+      axiosRef: { defaults: { auth: undefined } },
     } as any;
 
     documentFilter = {
@@ -70,6 +71,16 @@ describe('CouchProxyController', () => {
     expect(mockConfigService.get).toHaveBeenCalledWith(
       CouchProxyController.DATABASE_URL_ENV,
     );
+    expect(mockConfigService.get).toHaveBeenCalledWith(
+      CouchProxyController.DATABASE_NAME_ENV,
+    );
+  });
+
+  it('should set the default auth header', () => {
+    expect(mockHttpService.axiosRef.defaults.auth).toEqual({
+      username: USERNAME,
+      password: PASSWORD,
+    });
   });
 
   it('should use the document filter service in bulkGet', async () => {
@@ -198,7 +209,6 @@ describe('CouchProxyController', () => {
     expect(mockHttpService.post).toHaveBeenCalledWith(
       `${DATABASE_URL}/${DATABASE_NAME}/_bulk_docs`,
       filteredRequest,
-      { auth: { username: USERNAME, password: PASSWORD } },
     );
   });
 
@@ -219,12 +229,10 @@ describe('CouchProxyController', () => {
 
     expect(mockHttpService.get).toHaveBeenCalledWith(
       `${DATABASE_URL}/${DATABASE_NAME}/_local_docs`,
-      { auth: { username: USERNAME, password: PASSWORD } },
     );
     mockAllDocsResponse.rows.forEach((row) => {
       expect(mockHttpService.delete).toHaveBeenCalledWith(
         `${DATABASE_URL}/${DATABASE_NAME}/${row.id}`,
-        { auth: { username: USERNAME, password: PASSWORD } },
       );
     });
     expect(result).toBe(true);
@@ -240,7 +248,6 @@ describe('CouchProxyController', () => {
     await expect(result).rejects.toThrow(NotFoundException);
     expect(mockHttpService.get).toHaveBeenCalledWith(
       `${DATABASE_URL}/${DATABASE_NAME}/_local/someId`,
-      { auth: { username: USERNAME, password: PASSWORD } },
     );
   });
 });

@@ -53,6 +53,12 @@ export class CouchProxyController {
     this.password = this.configService.get<string>(
       CouchProxyController.DATABASE_PASSWORD_ENV,
     );
+    // Send the basic auth header with every request
+    this.httpService.axiosRef.defaults.auth = {
+      username: this.username,
+      password: this.password,
+    };
+
     this.databaseUrl = this.configService.get<string>(
       CouchProxyController.DATABASE_URL_ENV,
     );
@@ -68,9 +74,7 @@ export class CouchProxyController {
   @Get('/')
   getDB(): Observable<any> {
     return this.httpService
-      .get(`${this.databaseUrl}/`, {
-        auth: { username: this.username, password: this.password },
-      })
+      .get(`${this.databaseUrl}/`)
       .pipe(map((response) => response.data));
   }
 
@@ -86,9 +90,7 @@ export class CouchProxyController {
   @Get('/:db/_local/:id')
   getLocal(@Param('id') id: string): Observable<any> {
     return this.httpService
-      .get(`${this.databaseUrl}/${this.databaseName}/_local/${id}`, {
-        auth: { username: this.username, password: this.password },
-      })
+      .get(`${this.databaseUrl}/${this.databaseName}/_local/${id}`)
       .pipe(
         catchError((err) => {
           throw new NotFoundException(err.request.data);
@@ -107,9 +109,7 @@ export class CouchProxyController {
   @Put('/:db/_local/:id')
   putLocal(@Param('id') id: string, @Body() body: any): Observable<any> {
     return this.httpService
-      .put(`${this.databaseUrl}/${this.databaseName}/_local/${id}`, body, {
-        auth: { username: this.username, password: this.password },
-      })
+      .put(`${this.databaseUrl}/${this.databaseName}/_local/${id}`, body)
       .pipe(map((response) => response.data));
   }
 
@@ -124,7 +124,6 @@ export class CouchProxyController {
     return this.httpService
       .get(`${this.databaseUrl}/${this.databaseName}/_changes`, {
         params: queryParams,
-        auth: { username: this.username, password: this.password },
       })
       .pipe(map((response) => response.data));
   }
@@ -140,9 +139,7 @@ export class CouchProxyController {
     @Body() body: RevisionDiffRequest,
   ): Observable<RevisionDiffResponse> {
     return this.httpService
-      .post(`${this.databaseUrl}/${this.databaseName}/_revs_diff`, body, {
-        auth: { username: this.username, password: this.password },
-      })
+      .post(`${this.databaseUrl}/${this.databaseName}/_revs_diff`, body)
       .pipe(map((response) => response.data));
   }
 
@@ -165,13 +162,7 @@ export class CouchProxyController {
       user.roles,
     );
     return this.httpService
-      .post(
-        `${this.databaseUrl}/${this.databaseName}/_bulk_docs`,
-        filteredBody,
-        {
-          auth: { username: this.username, password: this.password },
-        },
-      )
+      .post(`${this.databaseUrl}/${this.databaseName}/_bulk_docs`, filteredBody)
       .pipe(map((response) => response.data));
   }
 
@@ -195,10 +186,7 @@ export class CouchProxyController {
       .post<BulkGetResponse>(
         `${this.databaseUrl}/${this.databaseName}/_bulk_get`,
         body,
-        {
-          params: queryParams,
-          auth: { username: this.username, password: this.password },
-        },
+        { params: queryParams },
       )
       .pipe(
         map((response) => response.data),
@@ -229,10 +217,7 @@ export class CouchProxyController {
       .post<AllDocsResponse>(
         `${this.databaseUrl}/${this.databaseName}/_all_docs`,
         body,
-        {
-          params: queryParams,
-          auth: { username: this.username, password: this.password },
-        },
+        { params: queryParams },
       )
       .pipe(
         map((response) => response.data),
@@ -253,7 +238,6 @@ export class CouchProxyController {
     return this.httpService
       .get(`${this.databaseUrl}/${this.databaseName}/_bulk_get`, {
         params: queryParams,
-        auth: { username: this.username, password: this.password },
       })
       .pipe(map((response) => response.data));
   }
@@ -273,9 +257,6 @@ export class CouchProxyController {
       this.httpService
         .get<AllDocsResponse>(
           `${this.databaseUrl}/${this.databaseName}/_local_docs`,
-          {
-            auth: { username: this.username, password: this.password },
-          },
         )
         .pipe(map((response) => response.data)),
     );
@@ -284,9 +265,6 @@ export class CouchProxyController {
       firstValueFrom(
         this.httpService.delete(
           `${this.databaseUrl}/${this.databaseName}/${id}`,
-          {
-            auth: { username: this.username, password: this.password },
-          },
         ),
       ),
     );
