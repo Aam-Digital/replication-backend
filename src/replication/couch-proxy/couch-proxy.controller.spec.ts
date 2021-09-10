@@ -1,13 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CouchProxyController } from './couch-proxy.controller';
 import { HttpService } from '@nestjs/axios';
-import { firstValueFrom, of } from 'rxjs';
+import { firstValueFrom, of, throwError } from 'rxjs';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
 import { User } from '../../session/session/user-auth.dto';
 import { ConfigService } from '@nestjs/config';
+import { NotFoundException } from '@nestjs/common';
 
 describe('CouchProxyController', () => {
   let controller: CouchProxyController;
@@ -227,5 +228,19 @@ describe('CouchProxyController', () => {
       );
     });
     expect(result).toBe(true);
+  });
+
+  it('should return a not found exception in case of error', async () => {
+    jest
+      .spyOn(mockHttpService, 'get')
+      .mockReturnValue(throwError(() => ({ request: { data: 'someData' } })));
+
+    const result = firstValueFrom(controller.getLocal('someId'));
+
+    await expect(result).rejects.toThrow(NotFoundException);
+    expect(mockHttpService.get).toHaveBeenCalledWith(
+      `${DATABASE_URL}/${DATABASE_NAME}/_local/someId`,
+      { auth: { username: USERNAME, password: PASSWORD } },
+    );
   });
 });
