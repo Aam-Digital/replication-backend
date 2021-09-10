@@ -11,13 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import {
-  catchError,
-  firstValueFrom,
-  map,
-  Observable,
-  tap,
-} from 'rxjs';
+import { catchError, firstValueFrom, map, Observable, tap } from 'rxjs';
 import { ChangesFeed } from './couchdb-dtos/changes.dto';
 import {
   RevisionDiffRequest,
@@ -87,8 +81,6 @@ export class CouchProxyController {
    * This may return a 404 Object Not Found error in case no previous replication was done.
    * In this case a full replication is started.
    *
-   * TODO when permissions change, edit/remove sequenceID of local doc to restart sync
-   *
    * @param id replication id
    */
   @Get('/:db/_local/:id')
@@ -113,10 +105,7 @@ export class CouchProxyController {
    * @param body replication log
    */
   @Put('/:db/_local/:id')
-  putLocal(
-    @Param('id') id: string,
-    @Body() body: any,
-  ): Observable<any> {
+  putLocal(@Param('id') id: string, @Body() body: any): Observable<any> {
     return this.httpService
       .put(`${this.databaseUrl}/${this.databaseName}/_local/${id}`, body, {
         auth: { username: this.username, password: this.password },
@@ -131,9 +120,7 @@ export class CouchProxyController {
    * @returns ChangesFeed a list that contains IDs and revision numbers that have been changed.
    */
   @Get('/:db/_changes')
-  changes(
-    @Query() queryParams: any,
-  ): Observable<ChangesFeed> {
+  changes(@Query() queryParams: any): Observable<ChangesFeed> {
     return this.httpService
       .get(`${this.databaseUrl}/${this.databaseName}/_changes`, {
         params: queryParams,
