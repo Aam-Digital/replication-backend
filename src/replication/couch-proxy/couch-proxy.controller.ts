@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { catchError, firstValueFrom, map, Observable, tap } from 'rxjs';
+import { catchError, firstValueFrom, map, Observable } from 'rxjs';
 import { ChangesFeed } from './couchdb-dtos/changes.dto';
 import {
   RevisionDiffRequest,
@@ -190,7 +190,6 @@ export class CouchProxyController {
       )
       .pipe(
         map((response) => response.data),
-        tap((response) => console.log('bulk get response', response)),
         map((response) =>
           this.documentFilter.transformBulkGetResponse(response, user.roles),
         ),
@@ -221,7 +220,6 @@ export class CouchProxyController {
       )
       .pipe(
         map((response) => response.data),
-        tap((response) => console.log('all docs response', response)),
         map((response) =>
           this.documentFilter.transformAllDocsResponse(response, user.roles),
         ),
