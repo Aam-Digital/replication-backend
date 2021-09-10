@@ -24,6 +24,7 @@ describe('CouchProxyController', () => {
       post: () => of({}),
       get: () => of({}),
       put: () => of({}),
+      delete: () => of({}),
     } as any;
 
     documentFilter = {
@@ -188,9 +189,7 @@ describe('CouchProxyController', () => {
       .mockReturnValue(filteredRequest);
     const user: User = { name: 'username', roles: ['admin'] };
 
-    await firstValueFrom(
-      controller.bulkDocs(request, { user: user } as any),
-    );
+    await firstValueFrom(controller.bulkDocs(request, { user: user } as any));
 
     expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(request, [
       'admin',
@@ -200,5 +199,33 @@ describe('CouchProxyController', () => {
       filteredRequest,
       { auth: { username: USERNAME, password: PASSWORD } },
     );
+  });
+
+  it('should delete all docs in the _local db', async () => {
+    const mockAllDocsResponse = {
+      rows: [
+        { id: '_local/firstDoc' },
+        { id: '_local/secondDoc' },
+        { id: '_local/thirdDoc' },
+      ],
+    };
+    jest
+      .spyOn(mockHttpService, 'get')
+      .mockReturnValue(of({ data: mockAllDocsResponse } as any));
+    jest.spyOn(mockHttpService, 'delete').mockReturnValue(of(undefined));
+
+    const result = await controller.clearLocal();
+
+    expect(mockHttpService.get).toHaveBeenCalledWith(
+      `${DATABASE_URL}/${DATABASE_NAME}/_local_docs`,
+      { auth: { username: USERNAME, password: PASSWORD } },
+    );
+    mockAllDocsResponse.rows.forEach((row) => {
+      expect(mockHttpService.delete).toHaveBeenCalledWith(
+        `${DATABASE_URL}/${DATABASE_NAME}/${row.id}`,
+        { auth: { username: USERNAME, password: PASSWORD } },
+      );
+    });
+    expect(result).toBe(true);
   });
 });

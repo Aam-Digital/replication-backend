@@ -257,4 +257,40 @@ export class CouchProxyController {
       })
       .pipe(map((response) => response.data));
   }
+
+  /**
+   * Deletes all local documents of the remote database.
+   * These document hold meta-information about the replication process.
+   * Deleting them forces clients to re-run sync and check which documents are different.
+   * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#retrieve-replication-logs-from-source-and-target}
+   *
+   * This function should be called whenever the permissions change to re-trigger sync
+   * TODO do this automatically
+   */
+  @Post('/clear_local')
+  async clearLocal(): Promise<any> {
+    const localDocsResponse = await firstValueFrom(
+      this.httpService
+        .get<AllDocsResponse>(
+          `${this.databaseUrl}/${this.databaseName}/_local_docs`,
+          {
+            auth: { username: this.username, password: this.password },
+          },
+        )
+        .pipe(map((response) => response.data)),
+    );
+    const ids = localDocsResponse.rows.map((doc) => doc.id);
+    const deletePromises = ids.map((id) =>
+      firstValueFrom(
+        this.httpService.delete(
+          `${this.databaseUrl}/${this.databaseName}/${id}`,
+          {
+            auth: { username: this.username, password: this.password },
+          },
+        ),
+      ),
+    );
+    await Promise.all(deletePromises);
+    return true;
+  }
 }
