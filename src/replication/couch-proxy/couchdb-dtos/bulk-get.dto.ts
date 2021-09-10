@@ -10,16 +10,16 @@ export class BulkGetRequest {
   docs: BulkGetRequestDoc[];
 }
 
-class OkDoc {
+export class OkDoc {
   ok: DatabaseDocument;
 }
 
-class ErrorDoc {
+export class ErrorDoc {
   error: DocError;
 }
 
 @ApiExtraModels(OkDoc, ErrorDoc)
-class BulkGetResult {
+export class BulkGetResult {
   id: string;
   @ApiProperty({
     type: 'array',

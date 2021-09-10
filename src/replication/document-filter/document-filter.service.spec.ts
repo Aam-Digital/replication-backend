@@ -19,7 +19,7 @@ describe('DocumentFilterService', () => {
     expect(service).toBeDefined();
   });
 
-  it('should set deleted flag and remove additional properties on docs without permissions in BulkGet', () => {
+  it('should filter out docs without permissions in BulkGet', () => {
     const bulkGetResponse: BulkGetResponse = {
       results: [
         {
@@ -57,19 +57,6 @@ describe('DocumentFilterService', () => {
     expect(result).toEqual({
       results: [
         {
-          id: 'Child:1',
-          docs: [
-            {
-              ok: {
-                _id: 'Child:1',
-                _rev: 'someRev',
-                _revisions: { start: 1, ids: ['someRev'] },
-                _deleted: true,
-              },
-            },
-          ],
-        },
-        {
           id: 'School:1',
           docs: [
             {
@@ -86,7 +73,7 @@ describe('DocumentFilterService', () => {
     });
   });
 
-  it('should set deleted flag and remove additional properties on docs without permissions in AllDocs', () => {
+  it('should filter out docs without permissions in AllDocs', () => {
     const allDocsResponse: AllDocsResponse = {
       total_rows: 2,
       offset: 0,
@@ -132,17 +119,6 @@ describe('DocumentFilterService', () => {
             _rev: 'someRev',
             _revisions: { start: 1, ids: ['someRev'] },
             someProperty: 'someValue',
-          },
-        },
-        {
-          id: 'School:1',
-          key: 'anotherKey',
-          value: { rev: 'anotherRev' },
-          doc: {
-            _id: 'School:1',
-            _rev: 'anotherRev',
-            _revisions: { start: 1, ids: ['anotherRev'] },
-            _deleted: true,
           },
         },
       ],

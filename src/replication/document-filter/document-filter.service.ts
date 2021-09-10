@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { BulkGetResponse } from '../couch-proxy/couchdb-dtos/bulk-get.dto';
+import {
+  BulkGetResponse,
+  BulkGetResult,
+  OkDoc,
+} from '../couch-proxy/couchdb-dtos/bulk-get.dto';
 import { AccessControlEntry } from './access-control-entry';
 import { AllDocsResponse } from '../couch-proxy/couchdb-dtos/all-docs.dto';
 import {
@@ -17,25 +21,39 @@ export class DocumentFilterService {
     response: BulkGetResponse,
     userRoles: string[],
   ): BulkGetResponse {
-    response.results.forEach((result) =>
-      result.docs
-        .filter((doc) => (doc as { ok: DatabaseDocument }).ok)
-        .forEach(
-          (doc: { ok: DatabaseDocument }) =>
-            (doc.ok = this.applyPermissionsToDoc(doc.ok, userRoles)),
-        ),
-    );
-    return response;
+    const withPermissions: BulkGetResult[] = response.results.map((result) => {
+      return {
+        id: result.id,
+        docs: result.docs.filter((docResult) => {
+          if (docResult.hasOwnProperty('ok')) {
+            const document = (docResult as OkDoc).ok;
+            return (
+              document._deleted || this.hasPermissions(document, userRoles)
+            );
+          } else {
+            // error
+            return true;
+          }
+        }),
+      };
+    });
+    // Only return results where at least one document is left
+    return {
+      results: withPermissions.filter((result) => result.docs.length > 0),
+    };
   }
 
   transformAllDocsResponse(
     response: AllDocsResponse,
     userRoles: string[],
   ): AllDocsResponse {
-    response.rows.forEach(
-      (row) => (row.doc = this.applyPermissionsToDoc(row.doc, userRoles)),
-    );
-    return response;
+    return {
+      total_rows: response.total_rows,
+      offset: response.offset,
+      rows: response.rows.filter(
+        (row) => row.doc._deleted || this.hasPermissions(row.doc, userRoles),
+      ),
+    };
   }
 
   filterBulkDocsRequest(
@@ -46,27 +64,6 @@ export class DocumentFilterService {
       new_edits: request.new_edits,
       docs: request.docs.filter((doc) => this.hasPermissions(doc, userRoles)),
     };
-  }
-
-  private applyPermissionsToDoc(
-    doc: DatabaseDocument,
-    userRoles: string[],
-  ): DatabaseDocument {
-    if (doc._deleted) {
-      // Always pass deleted documents
-      return doc;
-    }
-    if (this.hasPermissions(doc, userRoles)) {
-      return doc;
-    } else {
-      // Send deleted response so local elements are deleted
-      return {
-        _id: doc._id,
-        _rev: doc._rev,
-        _revisions: doc._revisions,
-        _deleted: true,
-      };
-    }
   }
 
   private hasPermissions(doc: DatabaseDocument, userRoles: string[]): boolean {
