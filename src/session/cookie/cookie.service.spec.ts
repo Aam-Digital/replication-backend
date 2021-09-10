@@ -2,19 +2,19 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CookieService, TOKEN_KEY } from './cookie.service';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '../session/user-auth.dto';
-import { Response } from 'express';
+import { ExecutionContext } from '@nestjs/common';
 
 describe('CookieService', () => {
   let service: CookieService;
   let mockJwtService: JwtService;
-  const jwtToken = 'JWT_TOKEN'
+  const jwtToken = 'JWT_TOKEN';
 
   beforeEach(async () => {
     mockJwtService = { sign: () => jwtToken } as any;
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CookieService,
-        { provide: JwtService, useValue: mockJwtService }
+        { provide: JwtService, useValue: mockJwtService },
       ],
     }).compile();
 
@@ -27,19 +27,31 @@ describe('CookieService', () => {
 
   it('should set a cookie containing the user info on the response', () => {
     const user: User = { name: 'Username', roles: ['user_app'] };
-    const cookies = { };
-    const setCookieMock = jest.fn((key: string, value: string) => cookies[key] = value);
-    const response: Response = {
+    const request = { user: user };
+    const cookies = {};
+    const setCookieMock = jest.fn(
+      (key: string, value: string) => (cookies[key] = value),
+    );
+    const response = {
       cookies: cookies,
       cookie: setCookieMock,
+    };
+    const context: ExecutionContext = {
+      switchToHttp: () => ({
+        getRequest: () => request,
+        getResponse: () => response,
+      }),
     } as any;
     jest.spyOn(mockJwtService, 'sign').mockReturnValue(jwtToken);
 
-    service.addResponseCookie(user, response);
+    service.addResponseCookie(context);
 
     expect(setCookieMock.mock.calls[0][0]).toBe(TOKEN_KEY);
     expect(setCookieMock.mock.calls[0][1]).toBe(jwtToken);
-    expect(mockJwtService.sign).toHaveBeenCalledWith({ name: 'Username', sub: ['user_app'] })
+    expect(mockJwtService.sign).toHaveBeenCalledWith({
+      name: 'Username',
+      sub: ['user_app'],
+    });
     expect(response['cookies'][TOKEN_KEY]).toBe(jwtToken);
   });
 });

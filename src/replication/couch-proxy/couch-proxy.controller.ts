@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { catchError, map, Observable } from 'rxjs';
+import { catchError, firstValueFrom, map, Observable } from 'rxjs';
 import { ChangesFeed } from './couchdb-dtos/changes.dto';
 import {
   RevisionDiffRequest,
@@ -24,8 +24,8 @@ import {
 import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
-import { JwtGuard } from '../session/jwt/jwt.guard';
-import { User } from '../session/session/user-auth.dto';
+import { JwtGuard } from '../../session/jwt/jwt.guard';
+import { User } from '../../session/session/user-auth.dto';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 
@@ -35,10 +35,12 @@ export class CouchProxyController {
   static readonly DATABASE_USER_ENV = 'DATABASE_USER';
   static readonly DATABASE_PASSWORD_ENV = 'DATABASE_PASSWORD';
   static readonly DATABASE_URL_ENV = 'DATABASE_URL';
+  static readonly DATABASE_NAME_ENV = 'DATABASE_NAME';
 
   readonly username: string;
   readonly password: string;
   readonly databaseUrl: string;
+  readonly databaseName: string;
 
   constructor(
     private httpService: HttpService,
@@ -51,8 +53,17 @@ export class CouchProxyController {
     this.password = this.configService.get<string>(
       CouchProxyController.DATABASE_PASSWORD_ENV,
     );
+    // Send the basic auth header with every request
+    this.httpService.axiosRef.defaults.auth = {
+      username: this.username,
+      password: this.password,
+    };
+
     this.databaseUrl = this.configService.get<string>(
       CouchProxyController.DATABASE_URL_ENV,
+    );
+    this.databaseName = this.configService.get<string>(
+      CouchProxyController.DATABASE_NAME_ENV,
     );
   }
 
@@ -63,9 +74,7 @@ export class CouchProxyController {
   @Get('/')
   getDB(): Observable<any> {
     return this.httpService
-      .get(`${this.databaseUrl}/`, {
-        auth: { username: this.username, password: this.password },
-      })
+      .get(`${this.databaseUrl}/`)
       .pipe(map((response) => response.data));
   }
 
@@ -76,17 +85,12 @@ export class CouchProxyController {
    * This may return a 404 Object Not Found error in case no previous replication was done.
    * In this case a full replication is started.
    *
-   * TODO when permissions change, edit/remove sequenceID of local doc to restart sync
-   *
-   * @param db name of the database
    * @param id replication id
    */
   @Get('/:db/_local/:id')
-  getLocal(@Param('db') db: string, @Param('id') id: string): Observable<any> {
+  getLocal(@Param('id') id: string): Observable<any> {
     return this.httpService
-      .get(`${this.databaseUrl}/${db}/_local/${id}`, {
-        auth: { username: this.username, password: this.password },
-      })
+      .get(`${this.databaseUrl}/${this.databaseName}/_local/${id}`)
       .pipe(
         catchError((err) => {
           throw new NotFoundException(err.request.data);
@@ -99,39 +103,27 @@ export class CouchProxyController {
    * Store new replication log on the remote database.
    * See {@link https://docs.couchdb.org/en/stable/api/local.html#put--db-_local-docid}
    *
-   * @param db name of the database
    * @param id identifier of the replication log
    * @param body replication log
    */
   @Put('/:db/_local/:id')
-  putLocal(
-    @Param('db') db: string,
-    @Param('id') id: string,
-    @Body() body: any,
-  ): Observable<any> {
+  putLocal(@Param('id') id: string, @Body() body: any): Observable<any> {
     return this.httpService
-      .put(`${this.databaseUrl}/${db}/_local/${id}`, body, {
-        auth: { username: this.username, password: this.password },
-      })
+      .put(`${this.databaseUrl}/${this.databaseName}/_local/${id}`, body)
       .pipe(map((response) => response.data));
   }
 
   /**
    * Listen to the changes feed.
    * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#listen-to-changes-feed}
-   * @param db
    * @param queryParams
    * @returns ChangesFeed a list that contains IDs and revision numbers that have been changed.
    */
   @Get('/:db/_changes')
-  changes(
-    @Param('db') db: string,
-    @Query() queryParams: any,
-  ): Observable<ChangesFeed> {
+  changes(@Query() queryParams: any): Observable<ChangesFeed> {
     return this.httpService
-      .get(`${this.databaseUrl}/${db}/_changes`, {
+      .get(`${this.databaseUrl}/${this.databaseName}/_changes`, {
         params: queryParams,
-        auth: { username: this.username, password: this.password },
       })
       .pipe(map((response) => response.data));
   }
@@ -139,19 +131,15 @@ export class CouchProxyController {
   /**
    * Compare revisions with remote database.
    * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#calculate-revision-difference}
-   * @param db name of the database
    * @param body list of documents and their revisions
    * @returns RevisionDiffResponse list of documents and their revisions that are missing in the remote database
    */
   @Post('/:db/_revs_diff')
   revsDiff(
-    @Param('db') db: string,
     @Body() body: RevisionDiffRequest,
   ): Observable<RevisionDiffResponse> {
     return this.httpService
-      .post(`${this.databaseUrl}/${db}/_revs_diff`, body, {
-        auth: { username: this.username, password: this.password },
-      })
+      .post(`${this.databaseUrl}/${this.databaseName}/_revs_diff`, body)
       .pipe(map((response) => response.data));
   }
 
@@ -159,14 +147,12 @@ export class CouchProxyController {
    * Upload multiple documents with a single request.
    * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#upload-batch-of-changed-documents}
    *
-   * @param db name of the database
    * @param body list of documents to be saved in the remote database
    * @param request holding information about the current user
-   * @params BulkDocsResponse list of success or error messages regarding the to-be-saved documents
+   * @returns BulkDocsResponse list of success or error messages regarding the to-be-saved documents
    */
   @Post('/:db/_bulk_docs')
   bulkDocs(
-    @Param('db') db: string,
     @Body() body: BulkDocsRequest,
     @Req() request: Request,
   ): Observable<BulkDocsResponse> {
@@ -176,9 +162,7 @@ export class CouchProxyController {
       user.roles,
     );
     return this.httpService
-      .post(`${this.databaseUrl}/${db}/_bulk_docs`, filteredBody, {
-        auth: { username: this.username, password: this.password },
-      })
+      .post(`${this.databaseUrl}/${this.databaseName}/_bulk_docs`, filteredBody)
       .pipe(map((response) => response.data));
   }
 
@@ -186,7 +170,6 @@ export class CouchProxyController {
    * Retrieve multiple documents from database.
    * See {@link https://docs.couchdb.org/en/stable/api/database/bulk-api.html?highlight=bulk_get#post--db-_bulk_get}
    *
-   * @param db name of database
    * @param queryParams
    * @param body list of document IDs which should be fetched from the remote database
    * @param request holding information about the current user
@@ -194,20 +177,20 @@ export class CouchProxyController {
    */
   @Post('/:db/_bulk_get')
   bulkPost(
-    @Param('db') db: string,
     @Query() queryParams: any,
     @Body() body: BulkGetRequest,
     @Req() request: Request,
   ): Observable<BulkGetResponse> {
     const user = request.user as User;
     return this.httpService
-      .post(`${this.databaseUrl}/${db}/_bulk_get`, body, {
-        params: queryParams,
-        auth: { username: this.username, password: this.password },
-      })
+      .post<BulkGetResponse>(
+        `${this.databaseUrl}/${this.databaseName}/_bulk_get`,
+        body,
+        { params: queryParams },
+      )
       .pipe(
         map((response) => response.data),
-        map((response: BulkGetResponse) =>
+        map((response) =>
           this.documentFilter.transformBulkGetResponse(response, user.roles),
         ),
       );
@@ -217,7 +200,6 @@ export class CouchProxyController {
    * Fetch a bulk of documents specified by the ID's in the body.
    * See {@link https://docs.couchdb.org/en/stable/api/database/bulk-api.html?highlight=all_docs#post--db-_all_docs}
    *
-   * @param db remote database
    * @param queryParams
    * @param body a object containing document ID's to be fetched
    * @param request holding information about the current user
@@ -225,17 +207,17 @@ export class CouchProxyController {
    */
   @Post('/:db/_all_docs')
   allDocs(
-    @Param('db') db: string,
     @Query() queryParams: any,
     @Body() body: AllDocsRequest,
     @Req() request: Request,
   ): Observable<AllDocsResponse> {
     const user = request.user as User;
     return this.httpService
-      .post<AllDocsResponse>(`${this.databaseUrl}/${db}/_all_docs`, body, {
-        params: queryParams,
-        auth: { username: this.username, password: this.password },
-      })
+      .post<AllDocsResponse>(
+        `${this.databaseUrl}/${this.databaseName}/_all_docs`,
+        body,
+        { params: queryParams },
+      )
       .pipe(
         map((response) => response.data),
         map((response) =>
@@ -246,17 +228,45 @@ export class CouchProxyController {
 
   /**
    * Unused?
-   * @param db
    * @param queryParams
    */
   @Get('/:db/_bulk_get')
-  bulkGet(@Param('db') db: string, @Query() queryParams: any): Observable<any> {
-    console.log('GET bulk doc called', db, queryParams);
+  bulkGet(@Query() queryParams: any): Observable<any> {
+    console.log('GET bulk doc called', queryParams);
     return this.httpService
-      .get(`${this.databaseUrl}/${db}/_bulk_get`, {
+      .get(`${this.databaseUrl}/${this.databaseName}/_bulk_get`, {
         params: queryParams,
-        auth: { username: this.username, password: this.password },
       })
       .pipe(map((response) => response.data));
+  }
+
+  /**
+   * Deletes all local documents of the remote database.
+   * These document hold meta-information about the replication process.
+   * Deleting them forces clients to re-run sync and check which documents are different.
+   * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#retrieve-replication-logs-from-source-and-target}
+   *
+   * This function should be called whenever the permissions change to re-trigger sync
+   * TODO do this automatically
+   */
+  @Post('/clear_local')
+  async clearLocal(): Promise<any> {
+    const localDocsResponse = await firstValueFrom(
+      this.httpService
+        .get<AllDocsResponse>(
+          `${this.databaseUrl}/${this.databaseName}/_local_docs`,
+        )
+        .pipe(map((response) => response.data)),
+    );
+    const ids = localDocsResponse.rows.map((doc) => doc.id);
+    const deletePromises = ids.map((id) =>
+      firstValueFrom(
+        this.httpService.delete(
+          `${this.databaseUrl}/${this.databaseName}/${id}`,
+        ),
+      ),
+    );
+    await Promise.all(deletePromises);
+    return true;
   }
 }

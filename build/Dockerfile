@@ -50,8 +50,10 @@ RUN npm ci --no-progress --only=production
 
 COPY --from=builder /app/dist ./dist
 
-# The url of the CouchDB database
+# The url of the CouchDB instance
 ENV DATABASE_URL="https://dev.aam-digital.com/db"
+# The name of the database in the CouchDB instance
+ENV DATABASE_NAME="app"
 # The user credentials which can access ALL data on the database
 ENV DATABASE_USER="demo"
 ENV DATABASE_PASSWORD="pass"

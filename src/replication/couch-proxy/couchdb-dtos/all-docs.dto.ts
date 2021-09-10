@@ -4,15 +4,15 @@ export class AllDocsRequest {
   keys: string[];
 }
 
-class AllDocRow {
+class DocMetaInf {
   id: string;
   key: string;
   value: { rev: string };
-  doc: DatabaseDocument;
+  doc?: DatabaseDocument;
 }
 
 export class AllDocsResponse {
   total_rows: number;
   offset: number;
-  rows: AllDocRow[];
+  rows: DocMetaInf[];
 }

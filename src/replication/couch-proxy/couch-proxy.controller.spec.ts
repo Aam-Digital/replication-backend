@@ -1,13 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CouchProxyController } from './couch-proxy.controller';
 import { HttpService } from '@nestjs/axios';
-import { firstValueFrom, of } from 'rxjs';
+import { firstValueFrom, of, throwError } from 'rxjs';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
-import { User } from '../session/session/user-auth.dto';
+import { User } from '../../session/session/user-auth.dto';
 import { ConfigService } from '@nestjs/config';
+import { NotFoundException } from '@nestjs/common';
 
 describe('CouchProxyController', () => {
   let controller: CouchProxyController;
@@ -15,6 +16,7 @@ describe('CouchProxyController', () => {
   let documentFilter: DocumentFilterService;
   let mockConfigService: ConfigService;
   const DATABASE_URL = 'database.url';
+  const DATABASE_NAME = 'app';
   const USERNAME = 'demo';
   const PASSWORD = 'pass';
 
@@ -23,6 +25,8 @@ describe('CouchProxyController', () => {
       post: () => of({}),
       get: () => of({}),
       put: () => of({}),
+      delete: () => of({}),
+      axiosRef: { defaults: { auth: undefined } },
     } as any;
 
     documentFilter = {
@@ -36,6 +40,7 @@ describe('CouchProxyController', () => {
     config[CouchProxyController.DATABASE_USER_ENV] = USERNAME;
     config[CouchProxyController.DATABASE_PASSWORD_ENV] = PASSWORD;
     config[CouchProxyController.DATABASE_URL_ENV] = DATABASE_URL;
+    config[CouchProxyController.DATABASE_NAME_ENV] = DATABASE_NAME;
     mockConfigService = {
       get: jest.fn((key) => config[key]),
     } as any;
@@ -66,6 +71,16 @@ describe('CouchProxyController', () => {
     expect(mockConfigService.get).toHaveBeenCalledWith(
       CouchProxyController.DATABASE_URL_ENV,
     );
+    expect(mockConfigService.get).toHaveBeenCalledWith(
+      CouchProxyController.DATABASE_NAME_ENV,
+    );
+  });
+
+  it('should set the default auth header', () => {
+    expect(mockHttpService.axiosRef.defaults.auth).toEqual({
+      username: USERNAME,
+      password: PASSWORD,
+    });
   });
 
   it('should use the document filter service in bulkGet', async () => {
@@ -89,7 +104,7 @@ describe('CouchProxyController', () => {
     const user: User = { name: 'username', roles: ['user'] };
 
     const result = await firstValueFrom(
-      controller.bulkPost(null, null, null, { user: user } as any),
+      controller.bulkPost(null, null, { user: user } as any),
     );
 
     expect(documentFilter.transformBulkGetResponse).toHaveBeenCalledWith(
@@ -141,7 +156,7 @@ describe('CouchProxyController', () => {
     const user: User = { name: 'username', roles: ['user'] };
 
     const result = await firstValueFrom(
-      controller.allDocs(null, null, null, { user: user } as any),
+      controller.allDocs(null, null, { user: user } as any),
     );
 
     expect(documentFilter.transformAllDocsResponse).toHaveBeenCalledWith(
@@ -186,17 +201,53 @@ describe('CouchProxyController', () => {
       .mockReturnValue(filteredRequest);
     const user: User = { name: 'username', roles: ['admin'] };
 
-    await firstValueFrom(
-      controller.bulkDocs('db', request, { user: user } as any),
-    );
+    await firstValueFrom(controller.bulkDocs(request, { user: user } as any));
 
     expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(request, [
       'admin',
     ]);
     expect(mockHttpService.post).toHaveBeenCalledWith(
-      `${DATABASE_URL}/db/_bulk_docs`,
+      `${DATABASE_URL}/${DATABASE_NAME}/_bulk_docs`,
       filteredRequest,
-      { auth: { username: USERNAME, password: PASSWORD } },
+    );
+  });
+
+  it('should delete all docs in the _local db', async () => {
+    const mockAllDocsResponse = {
+      rows: [
+        { id: '_local/firstDoc' },
+        { id: '_local/secondDoc' },
+        { id: '_local/thirdDoc' },
+      ],
+    };
+    jest
+      .spyOn(mockHttpService, 'get')
+      .mockReturnValue(of({ data: mockAllDocsResponse } as any));
+    jest.spyOn(mockHttpService, 'delete').mockReturnValue(of(undefined));
+
+    const result = await controller.clearLocal();
+
+    expect(mockHttpService.get).toHaveBeenCalledWith(
+      `${DATABASE_URL}/${DATABASE_NAME}/_local_docs`,
+    );
+    mockAllDocsResponse.rows.forEach((row) => {
+      expect(mockHttpService.delete).toHaveBeenCalledWith(
+        `${DATABASE_URL}/${DATABASE_NAME}/${row.id}`,
+      );
+    });
+    expect(result).toBe(true);
+  });
+
+  it('should return a not found exception in case of error', async () => {
+    jest
+      .spyOn(mockHttpService, 'get')
+      .mockReturnValue(throwError(() => ({ request: { data: 'someData' } })));
+
+    const result = firstValueFrom(controller.getLocal('someId'));
+
+    await expect(result).rejects.toThrow(NotFoundException);
+    expect(mockHttpService.get).toHaveBeenCalledWith(
+      `${DATABASE_URL}/${DATABASE_NAME}/_local/someId`,
     );
   });
 });
