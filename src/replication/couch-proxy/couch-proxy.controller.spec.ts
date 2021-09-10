@@ -15,6 +15,7 @@ describe('CouchProxyController', () => {
   let documentFilter: DocumentFilterService;
   let mockConfigService: ConfigService;
   const DATABASE_URL = 'database.url';
+  const DATABASE_NAME = 'app';
   const USERNAME = 'demo';
   const PASSWORD = 'pass';
 
@@ -36,6 +37,7 @@ describe('CouchProxyController', () => {
     config[CouchProxyController.DATABASE_USER_ENV] = USERNAME;
     config[CouchProxyController.DATABASE_PASSWORD_ENV] = PASSWORD;
     config[CouchProxyController.DATABASE_URL_ENV] = DATABASE_URL;
+    config[CouchProxyController.DATABASE_NAME_ENV] = DATABASE_NAME;
     mockConfigService = {
       get: jest.fn((key) => config[key]),
     } as any;
@@ -89,7 +91,7 @@ describe('CouchProxyController', () => {
     const user: User = { name: 'username', roles: ['user'] };
 
     const result = await firstValueFrom(
-      controller.bulkPost(null, null, null, { user: user } as any),
+      controller.bulkPost(null, null, { user: user } as any),
     );
 
     expect(documentFilter.transformBulkGetResponse).toHaveBeenCalledWith(
@@ -141,7 +143,7 @@ describe('CouchProxyController', () => {
     const user: User = { name: 'username', roles: ['user'] };
 
     const result = await firstValueFrom(
-      controller.allDocs(null, null, null, { user: user } as any),
+      controller.allDocs(null, null, { user: user } as any),
     );
 
     expect(documentFilter.transformAllDocsResponse).toHaveBeenCalledWith(
@@ -187,14 +189,14 @@ describe('CouchProxyController', () => {
     const user: User = { name: 'username', roles: ['admin'] };
 
     await firstValueFrom(
-      controller.bulkDocs('db', request, { user: user } as any),
+      controller.bulkDocs(request, { user: user } as any),
     );
 
     expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(request, [
       'admin',
     ]);
     expect(mockHttpService.post).toHaveBeenCalledWith(
-      `${DATABASE_URL}/db/_bulk_docs`,
+      `${DATABASE_URL}/${DATABASE_NAME}/_bulk_docs`,
       filteredRequest,
       { auth: { username: USERNAME, password: PASSWORD } },
     );
