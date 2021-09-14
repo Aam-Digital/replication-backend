@@ -3,5 +3,6 @@ export enum Action {
   CREATE = 'create',
   UPDATE = 'update',
   DELETE = 'delete',
-  MANAGE = 'manage',  // matches any other action
+  WRITE = 'write', // currently no create/update/delete distinction is done
+  MANAGE = 'manage', // matches any other action
 }
