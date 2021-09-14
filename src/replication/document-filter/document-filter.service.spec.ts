@@ -16,8 +16,8 @@ describe('DocumentFilterService', () => {
     }).compile();
 
     service = module.get<DocumentFilterService>(DocumentFilterService);
-    normalUser = { name: 'normalUser', roles: ['user'] };
-    adminUser = { name: 'adminUser', roles: ['admin'] };
+    normalUser = new User('normalUser', ['user']);
+    adminUser = new User('adminUser', ['admin']);
   });
 
   it('should be defined', () => {

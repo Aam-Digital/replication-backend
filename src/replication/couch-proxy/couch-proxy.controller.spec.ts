@@ -101,7 +101,7 @@ describe('CouchProxyController', () => {
     jest
       .spyOn(documentFilter, 'transformBulkGetResponse')
       .mockReturnValue(filteredResponse);
-    const user: User = { name: 'username', roles: ['user'] };
+    const user = new User('username', ['user']);
 
     const result = await firstValueFrom(
       controller.bulkPost(null, null, { user: user } as any),
@@ -153,7 +153,7 @@ describe('CouchProxyController', () => {
     jest
       .spyOn(documentFilter, 'transformAllDocsResponse')
       .mockReturnValue(filteredResponse);
-    const user: User = { name: 'username', roles: ['user'] };
+    const user = new User('username', ['user']);
 
     const result = await firstValueFrom(
       controller.allDocs(null, null, { user: user } as any),
@@ -199,7 +199,7 @@ describe('CouchProxyController', () => {
     jest
       .spyOn(documentFilter, 'filterBulkDocsRequest')
       .mockReturnValue(filteredRequest);
-    const user: User = { name: 'username', roles: ['admin'] };
+    const user = new User('username', ['admin']);
 
     await firstValueFrom(controller.bulkDocs(request, { user: user } as any));
 
