@@ -8,7 +8,8 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
 @Injectable()
 export class RulesService {
   rules: Map<string, DocumentRule[]>;
-  initRules() {
+
+  constructor() {
     // TODO read from database
     // TODO what to do if no rules are defined? -> allow everything?
     this.rules = new Map<string, DocumentRule[]>();
