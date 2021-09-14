@@ -3,9 +3,12 @@ import { DocumentFilterService } from './document-filter.service';
 import { BulkGetResponse } from '../couch-proxy/couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from '../couch-proxy/couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { User } from '../../session/session/user-auth.dto';
 
 describe('DocumentFilterService', () => {
   let service: DocumentFilterService;
+  let normalUser: User;
+  let adminUser: User;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -13,6 +16,8 @@ describe('DocumentFilterService', () => {
     }).compile();
 
     service = module.get<DocumentFilterService>(DocumentFilterService);
+    normalUser = { name: 'normalUser', roles: ['user'] };
+    adminUser = { name: 'adminUser', roles: ['admin'] };
   });
 
   it('should be defined', () => {
@@ -52,7 +57,10 @@ describe('DocumentFilterService', () => {
     };
     service.accessControlList = [{ entity: 'Child', roles: ['admin'] }];
 
-    const result = service.transformBulkGetResponse(bulkGetResponse, ['user']);
+    const result = service.transformBulkGetResponse(
+      bulkGetResponse,
+      normalUser,
+    );
 
     expect(result).toEqual({
       results: [
@@ -104,7 +112,10 @@ describe('DocumentFilterService', () => {
     };
     service.accessControlList = [{ entity: 'School', roles: ['admin'] }];
 
-    const result = service.transformAllDocsResponse(allDocsResponse, ['user']);
+    const result = service.transformAllDocsResponse(
+      allDocsResponse,
+      normalUser,
+    );
 
     expect(result).toEqual({
       total_rows: 2,
@@ -145,7 +156,7 @@ describe('DocumentFilterService', () => {
     };
     service.accessControlList = [{ entity: 'School', roles: ['admin'] }];
 
-    const result = service.filterBulkDocsRequest(request, ['user']);
+    const result = service.filterBulkDocsRequest(request, normalUser);
 
     expect(result).toEqual({
       new_edits: false,

@@ -10,6 +10,7 @@ import {
   BulkDocsRequest,
   DatabaseDocument,
 } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { User } from '../../session/session/user-auth.dto';
 
 @Injectable()
 export class DocumentFilterService {
@@ -19,7 +20,7 @@ export class DocumentFilterService {
 
   transformBulkGetResponse(
     response: BulkGetResponse,
-    userRoles: string[],
+    user: User,
   ): BulkGetResponse {
     const withPermissions: BulkGetResult[] = response.results.map((result) => {
       return {
@@ -27,9 +28,7 @@ export class DocumentFilterService {
         docs: result.docs.filter((docResult) => {
           if (docResult.hasOwnProperty('ok')) {
             const document = (docResult as OkDoc).ok;
-            return (
-              document._deleted || this.hasPermissions(document, userRoles)
-            );
+            return document._deleted || this.hasPermissions(document, user);
           } else {
             // error
             return true;
@@ -45,28 +44,25 @@ export class DocumentFilterService {
 
   transformAllDocsResponse(
     response: AllDocsResponse,
-    userRoles: string[],
+    user: User,
   ): AllDocsResponse {
     return {
       total_rows: response.total_rows,
       offset: response.offset,
       rows: response.rows.filter(
-        (row) => row.doc._deleted || this.hasPermissions(row.doc, userRoles),
+        (row) => row.doc._deleted || this.hasPermissions(row.doc, user),
       ),
     };
   }
 
-  filterBulkDocsRequest(
-    request: BulkDocsRequest,
-    userRoles: string[],
-  ): BulkDocsRequest {
+  filterBulkDocsRequest(request: BulkDocsRequest, user: User): BulkDocsRequest {
     return {
       new_edits: request.new_edits,
-      docs: request.docs.filter((doc) => this.hasPermissions(doc, userRoles)),
+      docs: request.docs.filter((doc) => this.hasPermissions(doc, user)),
     };
   }
 
-  private hasPermissions(doc: DatabaseDocument, userRoles: string[]): boolean {
+  private hasPermissions(doc: DatabaseDocument, user: User): boolean {
     const matchingACLEntries = this.accessControlList.filter((entry) =>
       doc._id.toLowerCase().startsWith(entry.entity.toLowerCase() + ':'),
     );
@@ -75,7 +71,7 @@ export class DocumentFilterService {
       return true;
     }
     return matchingACLEntries.some((entry) =>
-      entry.roles.some((role) => userRoles.includes(role)),
+      entry.roles.some((role) => user.roles.includes(role)),
     );
   }
 }

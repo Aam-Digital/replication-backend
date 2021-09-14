@@ -109,7 +109,7 @@ describe('CouchProxyController', () => {
 
     expect(documentFilter.transformBulkGetResponse).toHaveBeenCalledWith(
       httpServiceResponse.data,
-      ['user'],
+      user,
     );
     expect(result).toEqual(filteredResponse);
   });
@@ -161,7 +161,7 @@ describe('CouchProxyController', () => {
 
     expect(documentFilter.transformAllDocsResponse).toHaveBeenCalledWith(
       httpServiceResponse.data,
-      ['user'],
+      user,
     );
     expect(result).toEqual(filteredResponse);
   });
@@ -203,9 +203,10 @@ describe('CouchProxyController', () => {
 
     await firstValueFrom(controller.bulkDocs(request, { user: user } as any));
 
-    expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(request, [
-      'admin',
-    ]);
+    expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(
+      request,
+      user,
+    );
     expect(mockHttpService.post).toHaveBeenCalledWith(
       `${DATABASE_URL}/${DATABASE_NAME}/_bulk_docs`,
       filteredRequest,

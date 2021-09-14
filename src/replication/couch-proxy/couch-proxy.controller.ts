@@ -157,10 +157,7 @@ export class CouchProxyController {
     @Req() request: Request,
   ): Observable<BulkDocsResponse> {
     const user = request.user as User;
-    const filteredBody = this.documentFilter.filterBulkDocsRequest(
-      body,
-      user.roles,
-    );
+    const filteredBody = this.documentFilter.filterBulkDocsRequest(body, user);
     return this.httpService
       .post(`${this.databaseUrl}/${this.databaseName}/_bulk_docs`, filteredBody)
       .pipe(map((response) => response.data));
@@ -191,7 +188,7 @@ export class CouchProxyController {
       .pipe(
         map((response) => response.data),
         map((response) =>
-          this.documentFilter.transformBulkGetResponse(response, user.roles),
+          this.documentFilter.transformBulkGetResponse(response, user),
         ),
       );
   }
@@ -221,7 +218,7 @@ export class CouchProxyController {
       .pipe(
         map((response) => response.data),
         map((response) =>
-          this.documentFilter.transformAllDocsResponse(response, user.roles),
+          this.documentFilter.transformAllDocsResponse(response, user),
         ),
       );
   }
