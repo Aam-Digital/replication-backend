@@ -7,6 +7,9 @@ import {
   DatabaseDocument,
 } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { User } from '../../session/session/user-auth.dto';
+import { PermissionService } from '../permission/permission.service';
+import { Action } from '../rules/action';
+import { RulesService } from '../rules/rules.service';
 
 describe('DocumentFilterService', () => {
   let service: DocumentFilterService;
@@ -14,10 +17,19 @@ describe('DocumentFilterService', () => {
   let adminUser: User;
   let schoolDoc: DatabaseDocument;
   let childDoc: DatabaseDocument;
+  let mockRulesService: RulesService;
 
   beforeEach(async () => {
+    mockRulesService = {
+      getRulesForUser: () => undefined,
+    } as any;
+
     const module: TestingModule = await Test.createTestingModule({
-      providers: [DocumentFilterService],
+      providers: [
+        DocumentFilterService,
+        PermissionService,
+        { provide: RulesService, useValue: mockRulesService },
+      ],
     }).compile();
 
     service = module.get<DocumentFilterService>(DocumentFilterService);
@@ -42,74 +54,54 @@ describe('DocumentFilterService', () => {
     expect(service).toBeDefined();
   });
 
-  it('should filter out docs without permissions in BulkGet', () => {
-    const bulkGetResponse: BulkGetResponse = {
-      results: [
-        {
-          id: childDoc._id,
-          docs: [{ ok: childDoc }],
-        },
-        {
-          id: schoolDoc._id,
-          docs: [{ ok: schoolDoc }],
-        },
-      ],
-    };
-    service.accessControlList = [{ entity: 'Child', roles: ['admin'] }];
+  it('should filter out docs without read permissions in BulkGet', () => {
+    const bulkGetResponse = createBulkGetResponse(schoolDoc, childDoc);
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+      { action: Action.WRITE, subject: 'Child' },
+      { action: Action.READ, subject: 'School' },
+    ]);
 
-    const result = service.transformBulkGetResponse(
-      bulkGetResponse,
-      normalUser,
-    );
+    const result = service.filterBulkGetResponse(bulkGetResponse, normalUser);
 
-    expect(result).toEqual({
-      results: [
-        {
-          id: schoolDoc._id,
-          docs: [{ ok: schoolDoc }],
-        },
-      ],
-    });
+    expect(result).toEqual(createBulkGetResponse(schoolDoc));
   });
 
-  it('should filter out docs without permissions in AllDocs', () => {
-    const allDocsResponse: AllDocsResponse = {
-      total_rows: 2,
-      offset: 0,
-      rows: [
-        {
-          id: childDoc._id,
-          key: 'someKey',
-          value: { rev: childDoc._rev },
-          doc: childDoc,
-        },
-        {
-          id: schoolDoc._id,
-          key: 'anotherKey',
-          value: { rev: schoolDoc._rev },
-          doc: schoolDoc,
-        },
-      ],
-    };
-    service.accessControlList = [{ entity: 'School', roles: ['admin'] }];
+  it('should not filter out deleted documents in bulk get', () => {
+    const bulkGetResponse = createBulkGetResponse(childDoc, schoolDoc);
+    childDoc._deleted = true;
+    schoolDoc._deleted = true;
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+      { action: Action.WRITE, subject: 'Child' },
+      { action: Action.READ, subject: 'School' },
+    ]);
 
-    const result = service.transformAllDocsResponse(
-      allDocsResponse,
-      normalUser,
-    );
+    const result = service.filterBulkGetResponse(bulkGetResponse, normalUser);
 
-    expect(result).toEqual({
-      total_rows: 2,
-      offset: 0,
-      rows: [
-        {
-          id: childDoc._id,
-          key: 'someKey',
-          value: { rev: childDoc._rev },
-          doc: childDoc,
-        },
-      ],
-    });
+    expect(result).toEqual(bulkGetResponse);
+  });
+
+  it('should filter out docs without read permissions in AllDocs', () => {
+    const allDocsResponse = createAllDocsResponse(schoolDoc, childDoc);
+    jest
+      .spyOn(mockRulesService, 'getRulesForUser')
+      .mockReturnValue([{ action: Action.MANAGE, subject: 'Child' }]);
+
+    const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
+
+    expect(result).toEqual(createAllDocsResponse(childDoc));
+  });
+
+  it('should not filter out deleted docs in AllDocs', () => {
+    const allDocsResponse = createAllDocsResponse(schoolDoc, childDoc);
+    schoolDoc._deleted = true;
+    childDoc._deleted = true;
+    jest
+      .spyOn(mockRulesService, 'getRulesForUser')
+      .mockReturnValue([{ action: Action.MANAGE, subject: 'Child' }]);
+
+    const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
+
+    expect(result).toEqual(createAllDocsResponse(schoolDoc, childDoc));
   });
 
   it('should filter documents in BulkDocs request', () => {
@@ -117,7 +109,10 @@ describe('DocumentFilterService', () => {
       new_edits: false,
       docs: [childDoc, schoolDoc],
     };
-    service.accessControlList = [{ entity: 'School', roles: ['admin'] }];
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+      { action: [Action.READ, Action.WRITE], subject: 'Child' },
+      { action: Action.READ, subject: 'School' },
+    ]);
 
     const result = service.filterBulkDocsRequest(request, normalUser);
 
@@ -126,4 +121,30 @@ describe('DocumentFilterService', () => {
       docs: [childDoc],
     });
   });
+
+  function createBulkGetResponse(
+    ...documents: DatabaseDocument[]
+  ): BulkGetResponse {
+    return {
+      results: documents.map((doc) => ({
+        id: doc._id,
+        docs: [{ ok: doc }],
+      })),
+    };
+  }
+
+  function createAllDocsResponse(
+    ...documents: DatabaseDocument[]
+  ): AllDocsResponse {
+    return {
+      total_rows: 10,
+      offset: 0,
+      rows: documents.map((doc) => ({
+        id: doc._id,
+        key: 'key-' + doc._id,
+        value: { rev: schoolDoc._rev },
+        doc: doc,
+      })),
+    };
+  }
 });

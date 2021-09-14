@@ -188,7 +188,7 @@ export class CouchProxyController {
       .pipe(
         map((response) => response.data),
         map((response) =>
-          this.documentFilter.transformBulkGetResponse(response, user),
+          this.documentFilter.filterBulkGetResponse(response, user),
         ),
       );
   }
@@ -218,7 +218,7 @@ export class CouchProxyController {
       .pipe(
         map((response) => response.data),
         map((response) =>
-          this.documentFilter.transformAllDocsResponse(response, user),
+          this.documentFilter.filterAllDocsResponse(response, user),
         ),
       );
   }

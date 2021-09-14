@@ -30,9 +30,8 @@ describe('CouchProxyController', () => {
     } as any;
 
     documentFilter = {
-      accessControlList: [],
-      transformBulkGetResponse: () => null,
-      transformAllDocsResponse: () => null,
+      filterBulkGetResponse: () => null,
+      filterAllDocsResponse: () => null,
       filterBulkDocsRequest: () => null,
     } as any;
 
@@ -99,7 +98,7 @@ describe('CouchProxyController', () => {
       results: [{ id: 'someID', docs: [] }],
     };
     jest
-      .spyOn(documentFilter, 'transformBulkGetResponse')
+      .spyOn(documentFilter, 'filterBulkGetResponse')
       .mockReturnValue(filteredResponse);
     const user = new User('username', ['user']);
 
@@ -107,7 +106,7 @@ describe('CouchProxyController', () => {
       controller.bulkPost(null, null, { user: user } as any),
     );
 
-    expect(documentFilter.transformBulkGetResponse).toHaveBeenCalledWith(
+    expect(documentFilter.filterBulkGetResponse).toHaveBeenCalledWith(
       httpServiceResponse.data,
       user,
     );
@@ -151,7 +150,7 @@ describe('CouchProxyController', () => {
       ],
     };
     jest
-      .spyOn(documentFilter, 'transformAllDocsResponse')
+      .spyOn(documentFilter, 'filterAllDocsResponse')
       .mockReturnValue(filteredResponse);
     const user = new User('username', ['user']);
 
@@ -159,7 +158,7 @@ describe('CouchProxyController', () => {
       controller.allDocs(null, null, { user: user } as any),
     );
 
-    expect(documentFilter.transformAllDocsResponse).toHaveBeenCalledWith(
+    expect(documentFilter.filterAllDocsResponse).toHaveBeenCalledWith(
       httpServiceResponse.data,
       user,
     );
