@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { RulesService } from './rules.service';
-import { Actions, ALL_SUBJECTS } from './actions';
-import { RawRule } from '@casl/ability';
+import { DocumentRule, RulesService } from './rules.service';
+import { Action } from './action';
+import { User } from '../../session/session/user-auth.dto';
 
 describe('RulesService', () => {
   let service: RulesService;
-  let adminRules: RawRule[];
-  let userRules: RawRule[];
+  let adminRules: DocumentRule[];
+  let userRules: DocumentRule[];
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -16,10 +16,10 @@ describe('RulesService', () => {
     service = module.get<RulesService>(RulesService);
     service.initRules();
 
-    adminRules = [{ action: Actions.MANAGE, subject: ALL_SUBJECTS }];
+    adminRules = [{ action: Action.MANAGE, subject: 'Aser' }];
     service.rules.set('admin', adminRules);
     userRules = [
-      { action: [Actions.READ, Actions.UPDATE], subject: ALL_SUBJECTS },
+      { action: [Action.READ, Action.UPDATE], subject: 'Aser' },
     ];
     service.rules.set('user', userRules);
   });
@@ -29,11 +29,11 @@ describe('RulesService', () => {
   });
 
   it('should only return the rules for the passed user roles', () => {
-    let result = service.getRulesForRoles(['user']);
+    let result = service.getRulesForUser(new User('normalUser', ['user']));
 
     expect(result).toEqual(userRules);
 
-    result = service.getRulesForRoles(['user', 'admin']);
+    result = service.getRulesForUser(new User('superUser', ['user', 'admin']));
     expect(result).toEqual(userRules.concat(adminRules));
   });
 });

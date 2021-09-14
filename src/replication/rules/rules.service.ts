@@ -1,15 +1,19 @@
 import { Injectable } from '@nestjs/common';
-import { RawRule } from '@casl/ability';
+import { RawRuleOf } from '@casl/ability';
+import { DocumentAbility } from '../permission/permission.service';
+import { User } from '../../session/session/user-auth.dto';
+
+export type DocumentRule = RawRuleOf<DocumentAbility>;
 
 @Injectable()
 export class RulesService {
-  rules: Map<string, RawRule[]>;
+  rules: Map<string, DocumentRule[]>;
   initRules() {
     // TODO read from database
-    this.rules = new Map<string, RawRule[]>();
+    this.rules = new Map<string, DocumentRule[]>();
   }
 
-  getRulesForRoles(roles: string[]): RawRule[] {
-    return roles.map((role) => this.rules.get(role)).flat();
+  getRulesForUser(user: User): DocumentRule[] {
+    return user.roles.map((role) => this.rules.get(role)).flat();
   }
 }

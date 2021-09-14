@@ -1,9 +1,7 @@
-export enum Actions {
+export enum Action {
   READ = 'read',
   CREATE = 'create',
   UPDATE = 'update',
   DELETE = 'delete',
-  MANAGE = 'manage',
+  MANAGE = 'manage',  // matches any other action
 }
-
-export const ALL_SUBJECTS = 'all';
