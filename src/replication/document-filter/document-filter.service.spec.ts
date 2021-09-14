@@ -2,13 +2,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentFilterService } from './document-filter.service';
 import { BulkGetResponse } from '../couch-proxy/couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from '../couch-proxy/couchdb-dtos/all-docs.dto';
-import { BulkDocsRequest } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
+import {
+  BulkDocsRequest,
+  DatabaseDocument,
+} from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { User } from '../../session/session/user-auth.dto';
 
 describe('DocumentFilterService', () => {
   let service: DocumentFilterService;
   let normalUser: User;
   let adminUser: User;
+  let schoolDoc: DatabaseDocument;
+  let childDoc: DatabaseDocument;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -18,6 +23,19 @@ describe('DocumentFilterService', () => {
     service = module.get<DocumentFilterService>(DocumentFilterService);
     normalUser = new User('normalUser', ['user']);
     adminUser = new User('adminUser', ['admin']);
+
+    schoolDoc = {
+      _id: 'School:1',
+      _rev: 'anotherRev',
+      _revisions: { start: 1, ids: ['anotherRev'] },
+      anotherProperty: 'anotherValue',
+    };
+    childDoc = {
+      _id: 'Child:1',
+      _rev: 'someRev',
+      _revisions: { start: 1, ids: ['someRev'] },
+      someProperty: 'someValue',
+    };
   });
 
   it('should be defined', () => {
@@ -28,30 +46,12 @@ describe('DocumentFilterService', () => {
     const bulkGetResponse: BulkGetResponse = {
       results: [
         {
-          id: 'Child:1',
-          docs: [
-            {
-              ok: {
-                _id: 'Child:1',
-                _rev: 'someRev',
-                _revisions: { start: 1, ids: ['someRev'] },
-                someProperty: 'someValue',
-              },
-            },
-          ],
+          id: childDoc._id,
+          docs: [{ ok: childDoc }],
         },
         {
-          id: 'School:1',
-          docs: [
-            {
-              ok: {
-                _id: 'School:1',
-                _rev: 'anotherRev',
-                _revisions: { start: 1, ids: ['anotherRev'] },
-                anotherProperty: 'anotherValue',
-              },
-            },
-          ],
+          id: schoolDoc._id,
+          docs: [{ ok: schoolDoc }],
         },
       ],
     };
@@ -65,17 +65,8 @@ describe('DocumentFilterService', () => {
     expect(result).toEqual({
       results: [
         {
-          id: 'School:1',
-          docs: [
-            {
-              ok: {
-                _id: 'School:1',
-                _rev: 'anotherRev',
-                _revisions: { start: 1, ids: ['anotherRev'] },
-                anotherProperty: 'anotherValue',
-              },
-            },
-          ],
+          id: schoolDoc._id,
+          docs: [{ ok: schoolDoc }],
         },
       ],
     });
@@ -87,26 +78,16 @@ describe('DocumentFilterService', () => {
       offset: 0,
       rows: [
         {
-          id: 'Child:1',
+          id: childDoc._id,
           key: 'someKey',
-          value: { rev: 'someRev' },
-          doc: {
-            _id: 'Child:1',
-            _rev: 'someRev',
-            _revisions: { start: 1, ids: ['someRev'] },
-            someProperty: 'someValue',
-          },
+          value: { rev: childDoc._rev },
+          doc: childDoc,
         },
         {
-          id: 'School:1',
+          id: schoolDoc._id,
           key: 'anotherKey',
-          value: { rev: 'anotherRev' },
-          doc: {
-            _id: 'School:1',
-            _rev: 'anotherRev',
-            _revisions: { start: 1, ids: ['anotherRev'] },
-            anotherProperty: 'anotherValue',
-          },
+          value: { rev: schoolDoc._rev },
+          doc: schoolDoc,
         },
       ],
     };
@@ -122,15 +103,10 @@ describe('DocumentFilterService', () => {
       offset: 0,
       rows: [
         {
-          id: 'Child:1',
+          id: childDoc._id,
           key: 'someKey',
-          value: { rev: 'someRev' },
-          doc: {
-            _id: 'Child:1',
-            _rev: 'someRev',
-            _revisions: { start: 1, ids: ['someRev'] },
-            someProperty: 'someValue',
-          },
+          value: { rev: childDoc._rev },
+          doc: childDoc,
         },
       ],
     });
@@ -139,20 +115,7 @@ describe('DocumentFilterService', () => {
   it('should filter documents in BulkDocs request', () => {
     const request: BulkDocsRequest = {
       new_edits: false,
-      docs: [
-        {
-          _id: 'Child:1',
-          _rev: 'someRev',
-          _revisions: { start: 1, ids: ['someRev'] },
-          someProperty: 'someValue',
-        },
-        {
-          _id: 'School:1',
-          _rev: 'anotherRev',
-          _revisions: { start: 1, ids: ['anotherRev'] },
-          anotherProperty: 'anotherProperty',
-        },
-      ],
+      docs: [childDoc, schoolDoc],
     };
     service.accessControlList = [{ entity: 'School', roles: ['admin'] }];
 
@@ -160,14 +123,7 @@ describe('DocumentFilterService', () => {
 
     expect(result).toEqual({
       new_edits: false,
-      docs: [
-        {
-          _id: 'Child:1',
-          _rev: 'someRev',
-          _revisions: { start: 1, ids: ['someRev'] },
-          someProperty: 'someValue',
-        },
-      ],
+      docs: [childDoc],
     });
   });
 });
