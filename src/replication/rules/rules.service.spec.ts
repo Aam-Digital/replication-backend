@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentRule, RulesService } from './rules.service';
-import { Action } from './action';
 import { User } from '../../session/session/user-auth.dto';
 
 describe('RulesService', () => {
@@ -16,11 +15,9 @@ describe('RulesService', () => {
     service = module.get<RulesService>(RulesService);
     service.initRules();
 
-    adminRules = [{ action: Action.MANAGE, subject: 'Aser' }];
+    adminRules = [{ action: 'manage', subject: 'Aser' }];
     service.rules.set('admin', adminRules);
-    userRules = [
-      { action: [Action.READ, Action.UPDATE], subject: 'Aser' },
-    ];
+    userRules = [{ action: ['read', 'write'], subject: 'Aser' }];
     service.rules.set('user', userRules);
   });
 

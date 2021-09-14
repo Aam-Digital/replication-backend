@@ -8,7 +8,6 @@ import {
 } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { User } from '../../session/session/user-auth.dto';
 import { PermissionService } from '../permission/permission.service';
-import { Action } from '../rules/action';
 import { RulesService } from '../rules/rules.service';
 
 describe('DocumentFilterService', () => {
@@ -57,8 +56,8 @@ describe('DocumentFilterService', () => {
   it('should filter out docs without read permissions in BulkGet', () => {
     const bulkGetResponse = createBulkGetResponse(schoolDoc, childDoc);
     jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: Action.WRITE, subject: 'Child' },
-      { action: Action.READ, subject: 'School' },
+      { action: 'write', subject: 'Child' },
+      { action: 'read', subject: 'School' },
     ]);
 
     const result = service.filterBulkGetResponse(bulkGetResponse, normalUser);
@@ -71,8 +70,8 @@ describe('DocumentFilterService', () => {
     childDoc._deleted = true;
     schoolDoc._deleted = true;
     jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: Action.WRITE, subject: 'Child' },
-      { action: Action.READ, subject: 'School' },
+      { action: 'write', subject: 'Child' },
+      { action: 'read', subject: 'School' },
     ]);
 
     const result = service.filterBulkGetResponse(bulkGetResponse, normalUser);
@@ -84,7 +83,7 @@ describe('DocumentFilterService', () => {
     const allDocsResponse = createAllDocsResponse(schoolDoc, childDoc);
     jest
       .spyOn(mockRulesService, 'getRulesForUser')
-      .mockReturnValue([{ action: Action.MANAGE, subject: 'Child' }]);
+      .mockReturnValue([{ action: 'manage', subject: 'Child' }]);
 
     const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
 
@@ -97,7 +96,7 @@ describe('DocumentFilterService', () => {
     childDoc._deleted = true;
     jest
       .spyOn(mockRulesService, 'getRulesForUser')
-      .mockReturnValue([{ action: Action.MANAGE, subject: 'Child' }]);
+      .mockReturnValue([{ action: 'manage', subject: 'Child' }]);
 
     const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
 
@@ -110,8 +109,8 @@ describe('DocumentFilterService', () => {
       docs: [childDoc, schoolDoc],
     };
     jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: [Action.READ, Action.WRITE], subject: 'Child' },
-      { action: Action.READ, subject: 'School' },
+      { action: ['read', 'write'], subject: 'Child' },
+      { action: 'read', subject: 'School' },
     ]);
 
     const result = service.filterBulkDocsRequest(request, normalUser);

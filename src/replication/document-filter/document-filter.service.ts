@@ -8,7 +8,6 @@ import { AllDocsResponse } from '../couch-proxy/couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { User } from '../../session/session/user-auth.dto';
 import { PermissionService } from '../permission/permission.service';
-import { Action } from '../rules/action';
 
 @Injectable()
 export class DocumentFilterService {
@@ -25,7 +24,7 @@ export class DocumentFilterService {
         docs: result.docs.filter((docResult) => {
           if (docResult.hasOwnProperty('ok')) {
             const document = (docResult as OkDoc).ok;
-            return document._deleted || ability.can(Action.READ, document);
+            return document._deleted || ability.can('read', document);
           } else {
             // error
             return true;
@@ -48,7 +47,7 @@ export class DocumentFilterService {
       total_rows: response.total_rows,
       offset: response.offset,
       rows: response.rows.filter(
-        (row) => row.doc._deleted || ability.can(Action.READ, row.doc),
+        (row) => row.doc._deleted || ability.can('read', row.doc),
       ),
     };
   }
@@ -57,7 +56,7 @@ export class DocumentFilterService {
     const ability = this.permissionService.getAbilityFor(user);
     return {
       new_edits: request.new_edits,
-      docs: request.docs.filter((doc) => ability.can(Action.WRITE, doc)),
+      docs: request.docs.filter((doc) => ability.can('write', doc)),
     };
   }
 }

@@ -2,11 +2,17 @@ import { Injectable } from '@nestjs/common';
 import { User } from '../../session/session/user-auth.dto';
 import { RulesService } from '../rules/rules.service';
 import { Ability, InferSubjects } from '@casl/ability';
-import { Action } from '../rules/action';
 import { DatabaseDocument } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 
-export type Subjects = InferSubjects<typeof DatabaseDocument> | string;
-export type DocumentAbility = Ability<[Action, Subjects]>;
+const actions = [
+  'read',
+  'write',  // Could be replaced with more granular distinction (create,update,delete)
+  'manage', // Matches any actions
+] as const;
+
+type Actions = typeof actions[number];
+type Subjects = InferSubjects<typeof DatabaseDocument> | string;
+export type DocumentAbility = Ability<[Actions, Subjects]>;
 
 @Injectable()
 export class PermissionService {
@@ -14,7 +20,7 @@ export class PermissionService {
 
   getAbilityFor(user: User): DocumentAbility {
     const rules = this.rulesService.getRulesForUser(user);
-    return new Ability<[Action, Subjects]>(rules, {
+    return new Ability<[Actions, Subjects]>(rules, {
       detectSubjectType: (subject) => {
         if (subject instanceof String) {
           return subject;
