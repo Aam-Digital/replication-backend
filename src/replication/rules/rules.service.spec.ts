@@ -13,7 +13,6 @@ describe('RulesService', () => {
     }).compile();
 
     service = module.get<RulesService>(RulesService);
-    service.initRules();
 
     adminRules = [{ action: 'manage', subject: 'Aser' }];
     service.rules.set('admin', adminRules);
