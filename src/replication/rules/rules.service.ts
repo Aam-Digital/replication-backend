@@ -2,17 +2,16 @@ import { Injectable } from '@nestjs/common';
 import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
 import { User } from '../../session/session/user-auth.dto';
+import * as Rules from '../../assets/rules.json';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 
 @Injectable()
 export class RulesService {
-  rules: Map<string, DocumentRule[]>;
+  private rules = new Map<string, DocumentRule[]>();
 
   constructor() {
-    // TODO read from database
-    // TODO what to do if no rules are defined? -> allow everything?
-    this.rules = new Map<string, DocumentRule[]>();
+    Object.keys(Rules).forEach((key) => this.rules.set(key, Rules[key]));
   }
 
   getRulesForUser(user: User): DocumentRule[] {

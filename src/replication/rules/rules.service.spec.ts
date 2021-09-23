@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentRule, RulesService } from './rules.service';
 import { User } from '../../session/session/user-auth.dto';
+import * as TestRules from '../../assets/rules.json';
 
 describe('RulesService', () => {
   let service: RulesService;
@@ -14,10 +15,8 @@ describe('RulesService', () => {
 
     service = module.get<RulesService>(RulesService);
 
-    adminRules = [{ action: 'manage', subject: 'Aser' }];
-    service.rules.set('admin', adminRules);
-    userRules = [{ action: ['read', 'write'], subject: 'Aser' }];
-    service.rules.set('user', userRules);
+    adminRules = TestRules.admin_app as any;
+    userRules = TestRules.user_app as any;
   });
 
   it('should be defined', () => {
@@ -25,11 +24,13 @@ describe('RulesService', () => {
   });
 
   it('should only return the rules for the passed user roles', () => {
-    let result = service.getRulesForUser(new User('normalUser', ['user']));
+    let result = service.getRulesForUser(new User('normalUser', ['user_app']));
 
     expect(result).toEqual(userRules);
 
-    result = service.getRulesForUser(new User('superUser', ['user', 'admin']));
+    result = service.getRulesForUser(
+      new User('superUser', ['user_app', 'admin_app']),
+    );
     expect(result).toEqual(userRules.concat(adminRules));
   });
 });
