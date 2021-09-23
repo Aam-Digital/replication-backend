@@ -1,0 +1,9 @@
+{
+  "user_app": [
+    { "action": "read", "subject": "Aser" },
+    { "action":  "write", "subject":  "Child", "inverted": true }
+  ],
+  "admin_app": [
+    { "action": "write", "subject": "Child" }
+  ]
+}
