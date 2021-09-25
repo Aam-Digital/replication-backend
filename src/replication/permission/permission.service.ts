@@ -6,7 +6,7 @@ import { DatabaseDocument } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 
 const actions = [
   'read',
-  'write',  // Could be replaced with more granular distinction (create,update,delete)
+  'write', // Could be replaced with more granular distinction (create,update,delete)
   'manage', // Matches any actions
 ] as const;
 
@@ -14,10 +14,22 @@ type Actions = typeof actions[number];
 type Subjects = InferSubjects<typeof DatabaseDocument> | string;
 export type DocumentAbility = Ability<[Actions, Subjects]>;
 
+/**
+ * Service that creates ability objects which can be used to check permissions.
+ *
+ * For more information about the abilities check the CASL docs {@link https://casl.js.org/v5/en/guide/intro}
+ */
 @Injectable()
 export class PermissionService {
   constructor(private rulesService: RulesService) {}
 
+  /**
+   * Creates an ability object containing all rules that are defined for the roles of the given user.
+   * This ability object can be used to check the permissions of the user on various documents.
+   *
+   * @param user for which the ability object should be created
+   * @returns DocumentAbility that allows to check the users permissions on a given document and action
+   */
   getAbilityFor(user: User): DocumentAbility {
     const rules = this.rulesService.getRulesForUser(user);
     return new Ability<[Actions, Subjects]>(rules, {
