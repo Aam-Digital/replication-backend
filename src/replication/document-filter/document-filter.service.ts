@@ -4,32 +4,27 @@ import {
   BulkGetResult,
   OkDoc,
 } from '../couch-proxy/couchdb-dtos/bulk-get.dto';
-import { AccessControlEntry } from './access-control-entry';
 import { AllDocsResponse } from '../couch-proxy/couchdb-dtos/all-docs.dto';
-import {
-  BulkDocsRequest,
-  DatabaseDocument,
-} from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { BulkDocsRequest } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { User } from '../../session/session/user-auth.dto';
+import { PermissionService } from '../permission/permission.service';
 
 @Injectable()
 export class DocumentFilterService {
-  public accessControlList: AccessControlEntry[] = [
-    { entity: 'Aser', roles: ['admin'] },
-  ];
+  constructor(private permissionService: PermissionService) {}
 
-  transformBulkGetResponse(
+  filterBulkGetResponse(
     response: BulkGetResponse,
-    userRoles: string[],
+    user: User,
   ): BulkGetResponse {
+    const ability = this.permissionService.getAbilityFor(user);
     const withPermissions: BulkGetResult[] = response.results.map((result) => {
       return {
         id: result.id,
         docs: result.docs.filter((docResult) => {
           if (docResult.hasOwnProperty('ok')) {
             const document = (docResult as OkDoc).ok;
-            return (
-              document._deleted || this.hasPermissions(document, userRoles)
-            );
+            return document._deleted || ability.can('read', document);
           } else {
             // error
             return true;
@@ -43,39 +38,25 @@ export class DocumentFilterService {
     };
   }
 
-  transformAllDocsResponse(
+  filterAllDocsResponse(
     response: AllDocsResponse,
-    userRoles: string[],
+    user: User,
   ): AllDocsResponse {
+    const ability = this.permissionService.getAbilityFor(user);
     return {
       total_rows: response.total_rows,
       offset: response.offset,
       rows: response.rows.filter(
-        (row) => row.doc._deleted || this.hasPermissions(row.doc, userRoles),
+        (row) => row.doc._deleted || ability.can('read', row.doc),
       ),
     };
   }
 
-  filterBulkDocsRequest(
-    request: BulkDocsRequest,
-    userRoles: string[],
-  ): BulkDocsRequest {
+  filterBulkDocsRequest(request: BulkDocsRequest, user: User): BulkDocsRequest {
+    const ability = this.permissionService.getAbilityFor(user);
     return {
       new_edits: request.new_edits,
-      docs: request.docs.filter((doc) => this.hasPermissions(doc, userRoles)),
+      docs: request.docs.filter((doc) => ability.can('write', doc)),
     };
-  }
-
-  private hasPermissions(doc: DatabaseDocument, userRoles: string[]): boolean {
-    const matchingACLEntries = this.accessControlList.filter((entry) =>
-      doc._id.toLowerCase().startsWith(entry.entity.toLowerCase() + ':'),
-    );
-    if (matchingACLEntries.length === 0) {
-      // No permissions every user has permission
-      return true;
-    }
-    return matchingACLEntries.some((entry) =>
-      entry.roles.some((role) => userRoles.includes(role)),
-    );
   }
 }

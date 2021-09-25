@@ -18,7 +18,7 @@ describe('SessionController', () => {
   });
 
   it('should return the user object on the request', () => {
-    const user: User = { name: 'user', roles: ['user_app'] };
+    const user = new User('user', ['user_app']);
 
     const response = controller.session({ user: user } as any);
 

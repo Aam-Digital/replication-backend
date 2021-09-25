@@ -4,6 +4,5 @@ export class UserCredentials {
 }
 
 export class User {
-  name: string;
-  roles: string[];
+  constructor(public name: string, public roles: string[]) {}
 }
