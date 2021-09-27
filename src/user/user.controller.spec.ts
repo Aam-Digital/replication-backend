@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserController } from './user.controller';
 import { ConfigService } from '@nestjs/config';
-import { CouchProxyController } from '../../replication/couch-proxy/couch-proxy.controller';
+import { CouchProxyController } from '../replication/couch-proxy/couch-proxy.controller';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom, of, throwError } from 'rxjs';
 import { UnauthorizedException } from '@nestjs/common';

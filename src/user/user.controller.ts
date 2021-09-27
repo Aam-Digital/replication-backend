@@ -8,12 +8,12 @@ import {
   Put,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CouchProxyController } from '../../replication/couch-proxy/couch-proxy.controller';
-import { User, UserPassword } from '../../session/session/user-auth.dto';
+import { CouchProxyController } from '../replication/couch-proxy/couch-proxy.controller';
+import { User, UserPassword } from '../session/session/user-auth.dto';
 import { HttpService } from '@nestjs/axios';
 import { catchError, firstValueFrom, map, Observable } from 'rxjs';
 import { ApiBasicAuth } from '@nestjs/swagger';
-import { DocSuccess } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 
 /**
  * This controller handles the interaction with the CouchDB _users database.
