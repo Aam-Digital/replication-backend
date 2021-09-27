@@ -4,13 +4,15 @@ import {
   Param,
   Headers,
   UnauthorizedException,
+  Body,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CouchProxyController } from '../../replication/couch-proxy/couch-proxy.controller';
 import { User } from '../../session/session/user-auth.dto';
 import { HttpService } from '@nestjs/axios';
-import { catchError, map, Observable } from 'rxjs';
+import { catchError, firstValueFrom, map, Observable } from 'rxjs';
 import { ApiBasicAuth } from '@nestjs/swagger';
+import { DocSuccess } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 
 @ApiBasicAuth()
 @Controller('_users')
@@ -39,10 +41,9 @@ export class UserController {
     @Param('username') username: string,
     @Headers('Authorization') authHeader: string,
   ): Observable<User> {
-    const userUrl = this.databaseUrl + '/_users/' + username;
     return this.httpService
-      .get<User>(userUrl, {
-        headers: { authorization: authHeader },
+      .get<User>(this.getUserUrl(username), {
+        headers: { Authorization: authHeader },
       })
       .pipe(
         map((response) => response.data),
@@ -53,5 +54,25 @@ export class UserController {
           );
         }),
       );
+  }
+
+  async putUser(
+    @Param('username') username: string,
+    @Body() reqUser: { password: string },
+    @Headers('Authorization') authHeader: string,
+  ): Promise<DocSuccess> {
+    const dbUser = await firstValueFrom(this.getUser(username, authHeader));
+    const userWithPass = Object.assign(dbUser, { password: reqUser.password });
+    return firstValueFrom(
+      this.httpService
+        .put<DocSuccess>(this.getUserUrl(username), userWithPass, {
+          auth: { username: this.admin_user, password: this.admin_pass },
+        })
+        .pipe(map((response) => response.data)),
+    );
+  }
+
+  private getUserUrl(username: string): string {
+    return this.databaseUrl + '/_users/' + username;
   }
 }
