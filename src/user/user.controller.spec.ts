@@ -121,7 +121,7 @@ describe('UserController', () => {
     );
   });
 
-  it('should not sent put request if basic auth header is invalid', async () => {
+  it('should not send put request if basic auth header is invalid', async () => {
     jest
       .spyOn(mockHttpService, 'get')
       .mockReturnValue(throwError(() => new Error()));
