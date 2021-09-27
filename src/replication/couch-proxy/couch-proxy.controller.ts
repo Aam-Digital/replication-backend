@@ -28,8 +28,10 @@ import { JwtGuard } from '../../session/jwt/jwt.guard';
 import { User } from '../../session/session/user-auth.dto';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { ApiBearerAuth } from '@nestjs/swagger';
 
 @UseGuards(JwtGuard)
+@ApiBearerAuth()
 @Controller()
 export class CouchProxyController {
   static readonly DATABASE_USER_ENV = 'DATABASE_USER';
