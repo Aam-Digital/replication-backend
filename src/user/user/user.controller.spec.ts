@@ -76,7 +76,7 @@ describe('UserController', () => {
       DATABASE_URL + '/_users/' + COUCHDB_USERNAME,
       {
         headers: {
-          Authorization: BASIC_AUTH_HEADER,
+          authorization: BASIC_AUTH_HEADER,
         },
       },
     );
@@ -112,7 +112,7 @@ describe('UserController', () => {
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
     expect(mockHttpService.get).toHaveBeenCalledWith(COUCHDB_USER_URL, {
-      headers: { Authorization: BASIC_AUTH_HEADER },
+      headers: { authorization: BASIC_AUTH_HEADER },
     });
     expect(mockHttpService.put).toHaveBeenCalledWith(
       COUCHDB_USER_URL,
