@@ -30,9 +30,8 @@ describe('CouchProxyController', () => {
     } as any;
 
     documentFilter = {
-      accessControlList: [],
-      transformBulkGetResponse: () => null,
-      transformAllDocsResponse: () => null,
+      filterBulkGetResponse: () => null,
+      filterAllDocsResponse: () => null,
       filterBulkDocsRequest: () => null,
     } as any;
 
@@ -99,17 +98,17 @@ describe('CouchProxyController', () => {
       results: [{ id: 'someID', docs: [] }],
     };
     jest
-      .spyOn(documentFilter, 'transformBulkGetResponse')
+      .spyOn(documentFilter, 'filterBulkGetResponse')
       .mockReturnValue(filteredResponse);
-    const user: User = { name: 'username', roles: ['user'] };
+    const user = new User('username', ['user']);
 
     const result = await firstValueFrom(
       controller.bulkPost(null, null, { user: user } as any),
     );
 
-    expect(documentFilter.transformBulkGetResponse).toHaveBeenCalledWith(
+    expect(documentFilter.filterBulkGetResponse).toHaveBeenCalledWith(
       httpServiceResponse.data,
-      ['user'],
+      user,
     );
     expect(result).toEqual(filteredResponse);
   });
@@ -151,17 +150,17 @@ describe('CouchProxyController', () => {
       ],
     };
     jest
-      .spyOn(documentFilter, 'transformAllDocsResponse')
+      .spyOn(documentFilter, 'filterAllDocsResponse')
       .mockReturnValue(filteredResponse);
-    const user: User = { name: 'username', roles: ['user'] };
+    const user = new User('username', ['user']);
 
     const result = await firstValueFrom(
       controller.allDocs(null, null, { user: user } as any),
     );
 
-    expect(documentFilter.transformAllDocsResponse).toHaveBeenCalledWith(
+    expect(documentFilter.filterAllDocsResponse).toHaveBeenCalledWith(
       httpServiceResponse.data,
-      ['user'],
+      user,
     );
     expect(result).toEqual(filteredResponse);
   });
@@ -199,13 +198,14 @@ describe('CouchProxyController', () => {
     jest
       .spyOn(documentFilter, 'filterBulkDocsRequest')
       .mockReturnValue(filteredRequest);
-    const user: User = { name: 'username', roles: ['admin'] };
+    const user = new User('username', ['admin']);
 
     await firstValueFrom(controller.bulkDocs(request, { user: user } as any));
 
-    expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(request, [
-      'admin',
-    ]);
+    expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(
+      request,
+      user,
+    );
     expect(mockHttpService.post).toHaveBeenCalledWith(
       `${DATABASE_URL}/${DATABASE_NAME}/_bulk_docs`,
       filteredRequest,
