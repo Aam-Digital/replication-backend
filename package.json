@@ -30,6 +30,8 @@
     "@nestjs/passport": "^8.0.1",
     "@nestjs/platform-express": "^8.0.0",
     "@nestjs/swagger": "^5.0.9",
+    "@ntegral/nestjs-sentry": "^3.0.6",
+    "@sentry/node": "^6.13.3",
     "cookie-parser": "^1.4.5",
     "http-proxy-middleware": "^2.0.1",
     "passport": "^0.4.1",
