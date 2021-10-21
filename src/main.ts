@@ -15,6 +15,8 @@ async function bootstrap() {
     .setTitle('Replication Backend')
     .setDescription('A proxy that implements the CouchDB replication protocol')
     .setVersion('Beta')
+    .addServer('/', 'local')
+    .addServer('/db', 'deployed')
     .addBasicAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
