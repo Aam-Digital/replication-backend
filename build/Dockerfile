@@ -5,7 +5,7 @@
 # >> docker run -p=80:80 replication-ms:latest
 # To mount 'rules.json' file into the container
 # >> docker run -p=80:3000 --name ms -v "<absolute path>\rules.json:/app/dist/assets/rules.json" replication-ms:latest
-FROM node:16.8.0-alpine3.13 as builder
+FROM node:16-alpine3.13 as builder
 WORKDIR /app
 
 COPY package*.json ./
@@ -42,7 +42,7 @@ ARG GIT_COMMITTED_AT
 ARG CC_TEST_REPORTER_ID
 RUN if [ "$UPLOAD_COVERAGE" = true ] ; then ./cc-test-reporter after-build --debug ; fi
 
-FROM node:16.8.0-alpine3.13
+FROM node:16-alpine3.13
 WORKDIR /app
 # Some packages enable optimization when this is set
 ENV NODE_ENV="production"
