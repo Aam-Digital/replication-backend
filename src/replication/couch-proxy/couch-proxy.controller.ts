@@ -224,20 +224,6 @@ export class CouchProxyController {
   }
 
   /**
-   * Unused?
-   * @param queryParams
-   */
-  @Get('/:db/_bulk_get')
-  bulkGet(@Query() queryParams: any): Observable<any> {
-    console.log('GET bulk doc called', queryParams);
-    return this.httpService
-      .get(`${this.databaseUrl}/${this.databaseName}/_bulk_get`, {
-        params: queryParams,
-      })
-      .pipe(map((response) => response.data));
-  }
-
-  /**
    * Deletes all local documents of the remote database.
    * These document hold meta-information about the replication process.
    * Deleting them forces clients to re-run sync and check which documents are different.
