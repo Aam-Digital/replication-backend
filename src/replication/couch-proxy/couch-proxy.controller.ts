@@ -72,7 +72,7 @@ export class CouchProxyController {
    * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#get-target-information}
    */
   @Get('/')
-  getDB(): Observable<any> {
+  getRoot(): Observable<any> {
     return this.httpService
       .get(`${this.databaseUrl}/`)
       .pipe(map((response) => response.data));
