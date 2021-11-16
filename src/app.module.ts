@@ -11,13 +11,19 @@ import { SentryModule } from '@ntegral/nestjs-sentry';
     UserModule,
     SentryModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        dsn: configService.get('SENTRY_DSN'),
-        debug: true,
-        environment: 'prod',
-        release: 'backend@latest',
-        whitelistUrls: [/https?:\/\/(.*)\.?aam-digital\.com/],
-      }),
+      useFactory: async (configService: ConfigService) => {
+        if (!configService.get('SENTRY_DSN')) {
+          return;
+        }
+
+        return {
+          dsn: configService.get('SENTRY_DSN'),
+          debug: true,
+          environment: 'prod',
+          release: 'backend@latest',
+          whitelistUrls: [/https?:\/\/(.*)\.?aam-digital\.com/],
+        };
+      },
       inject: [ConfigService],
     }),
   ],
