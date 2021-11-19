@@ -173,7 +173,7 @@ export class CouchProxyController {
    * @returns BulkGetResponse list of documents or error messages
    */
   @Post('/:db/_bulk_get')
-  bulkPost(
+  bulkGetPost(
     @Query() queryParams: any,
     @Body() body: BulkGetRequest,
     @Req() request: Request,
@@ -221,6 +221,15 @@ export class CouchProxyController {
           this.documentFilter.filterAllDocsResponse(response, user),
         ),
       );
+  }
+
+  @Get('/:db/_all_docs')
+  allDocsGet(
+    @Query() queryParams: any,
+    @Body() body: AllDocsRequest,
+    @Req() request: Request,
+  ) {
+    return this.allDocs(queryParams, body, request);
   }
 
   /**

@@ -103,7 +103,7 @@ describe('CouchProxyController', () => {
     const user = new User('username', ['user']);
 
     const result = await firstValueFrom(
-      controller.bulkPost(null, null, { user: user } as any),
+      controller.bulkGetPost(null, null, { user: user } as any),
     );
 
     expect(documentFilter.filterBulkGetResponse).toHaveBeenCalledWith(
