@@ -28,6 +28,7 @@ import { JwtGuard } from '../../session/jwt/jwt.guard';
 import { User } from '../../session/session/user-auth.dto';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { ApiOperation } from '@nestjs/swagger';
 
 @UseGuards(JwtGuard)
 @Controller()
@@ -152,10 +153,15 @@ export class CouchProxyController {
    * @returns BulkDocsResponse list of success or error messages regarding the to-be-saved documents
    */
   @Post('/:db/_bulk_docs')
+  @ApiOperation({
+    description: `Upload multiple documents with a single request.\n\ncaveats: only works with ?include_docs=true`,
+  })
   bulkDocs(
     @Body() body: BulkDocsRequest,
     @Req() request: Request,
   ): Observable<BulkDocsResponse> {
+    // TODO: check C/U/D permissions
+
     const user = request.user as User;
     const filteredBody = this.documentFilter.filterBulkDocsRequest(body, user);
     return this.httpService
