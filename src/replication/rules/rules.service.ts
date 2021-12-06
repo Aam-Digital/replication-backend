@@ -19,7 +19,10 @@ export class RulesService extends CouchDBInteracter {
 
   constructor(httpService: HttpService, configService: ConfigService) {
     super(httpService, configService);
-    // TODO add service to reload rules
+    this.loadRules();
+  }
+
+  loadRules() {
     this.httpService
       .get<Permission>(
         `${this.databaseUrl}/${this.databaseName}/${Permission.DOC_ID}`,
