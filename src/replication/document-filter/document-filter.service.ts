@@ -7,10 +7,17 @@ import {
 import {
   AllDocsRequest,
   AllDocsResponse,
+  DocMetaInf,
 } from '../couch-proxy/couchdb-dtos/all-docs.dto';
-import { BulkDocsRequest } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
+import {
+  BulkDocsRequest,
+  DatabaseDocument,
+} from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { User } from '../../session/session/user-auth.dto';
-import { PermissionService } from '../permission/permission.service';
+import {
+  DocumentAbility,
+  PermissionService,
+} from '../permission/permission.service';
 import { HttpService } from '@nestjs/axios';
 import { CouchProxyController } from '../couch-proxy/couch-proxy.controller';
 import { ConfigService } from '@nestjs/config';
@@ -96,20 +103,29 @@ export class DocumentFilterService {
     );
     return {
       new_edits: request.new_edits,
-      docs: request.docs.filter((doc) => {
-        const existing = response.rows.find(
-          (responseDoc) => responseDoc.id === doc._id,
-        );
-        if (existing) {
-          if (doc._deleted) {
-            return ability.can('delete', existing.doc);
-          } else {
-            return ability.can('update', existing.doc);
-          }
-        } else {
-          return ability.can('create', doc);
-        }
-      }),
+      docs: request.docs.filter((doc) =>
+        this.hasPermissionsForDoc(
+          doc,
+          response.rows.find((responseDoc) => responseDoc.id === doc._id),
+          ability,
+        ),
+      ),
     };
+  }
+
+  private hasPermissionsForDoc(
+    updatedDoc: DatabaseDocument,
+    existingDoc: DocMetaInf,
+    ability: DocumentAbility,
+  ) {
+    if (existingDoc) {
+      if (updatedDoc._deleted) {
+        return ability.can('delete', existingDoc.doc);
+      } else {
+        return ability.can('update', existingDoc.doc);
+      }
+    } else {
+      return ability.can('create', updatedDoc);
+    }
   }
 }
