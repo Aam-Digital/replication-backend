@@ -28,43 +28,17 @@ import { JwtGuard } from '../../session/jwt/jwt.guard';
 import { User } from '../../session/session/user-auth.dto';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { CouchDBInteracter } from '../../utils/couchdb-interacter';
 
 @UseGuards(JwtGuard)
 @Controller()
-export class CouchProxyController {
-  static readonly DATABASE_USER_ENV = 'DATABASE_USER';
-  static readonly DATABASE_PASSWORD_ENV = 'DATABASE_PASSWORD';
-  static readonly DATABASE_URL_ENV = 'DATABASE_URL';
-  static readonly DATABASE_NAME_ENV = 'DATABASE_NAME';
-
-  readonly username: string;
-  readonly password: string;
-  readonly databaseUrl: string;
-  readonly databaseName: string;
-
+export class CouchProxyController extends CouchDBInteracter{
   constructor(
-    private httpService: HttpService,
+    httpService: HttpService,
+    configService: ConfigService,
     private documentFilter: DocumentFilterService,
-    private configService: ConfigService,
   ) {
-    this.username = this.configService.get<string>(
-      CouchProxyController.DATABASE_USER_ENV,
-    );
-    this.password = this.configService.get<string>(
-      CouchProxyController.DATABASE_PASSWORD_ENV,
-    );
-    // Send the basic auth header with every request
-    this.httpService.axiosRef.defaults.auth = {
-      username: this.username,
-      password: this.password,
-    };
-
-    this.databaseUrl = this.configService.get<string>(
-      CouchProxyController.DATABASE_URL_ENV,
-    );
-    this.databaseName = this.configService.get<string>(
-      CouchProxyController.DATABASE_NAME_ENV,
-    );
+    super(httpService, configService);
   }
 
   /**
