@@ -11,7 +11,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { catchError, firstValueFrom, map, Observable } from 'rxjs';
+import {
+  catchError,
+  firstValueFrom,
+  from,
+  map,
+  Observable,
+  switchMap,
+} from 'rxjs';
 import { ChangesFeed } from './couchdb-dtos/changes.dto';
 import {
   RevisionDiffRequest,
@@ -38,8 +45,6 @@ export class CouchProxyController {
   static readonly DATABASE_URL_ENV = 'DATABASE_URL';
   static readonly DATABASE_NAME_ENV = 'DATABASE_NAME';
 
-  readonly username: string;
-  readonly password: string;
   readonly databaseUrl: string;
   readonly databaseName: string;
 
@@ -48,16 +53,14 @@ export class CouchProxyController {
     private documentFilter: DocumentFilterService,
     private configService: ConfigService,
   ) {
-    this.username = this.configService.get<string>(
-      CouchProxyController.DATABASE_USER_ENV,
-    );
-    this.password = this.configService.get<string>(
-      CouchProxyController.DATABASE_PASSWORD_ENV,
-    );
     // Send the basic auth header with every request
     this.httpService.axiosRef.defaults.auth = {
-      username: this.username,
-      password: this.password,
+      username: this.configService.get<string>(
+        CouchProxyController.DATABASE_USER_ENV,
+      ),
+      password: this.configService.get<string>(
+        CouchProxyController.DATABASE_PASSWORD_ENV,
+      ),
     };
 
     this.databaseUrl = this.configService.get<string>(
@@ -160,13 +163,16 @@ export class CouchProxyController {
     @Body() body: BulkDocsRequest,
     @Req() request: Request,
   ): Observable<BulkDocsResponse> {
-    // TODO: check C/U/D permissions
-
     const user = request.user as User;
-    const filteredBody = this.documentFilter.filterBulkDocsRequest(body, user);
-    return this.httpService
-      .post(`${this.databaseUrl}/${this.databaseName}/_bulk_docs`, filteredBody)
-      .pipe(map((response) => response.data));
+    return from(this.documentFilter.filterBulkDocsRequest(body, user)).pipe(
+      switchMap((filteredBody) =>
+        this.httpService.post(
+          `${this.databaseUrl}/${this.databaseName}/_bulk_docs`,
+          filteredBody,
+        ),
+      ),
+      map((response) => response.data),
+    );
   }
 
   /**

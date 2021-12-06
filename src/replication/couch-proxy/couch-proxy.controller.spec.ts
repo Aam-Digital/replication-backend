@@ -197,7 +197,7 @@ describe('CouchProxyController', () => {
     };
     jest
       .spyOn(documentFilter, 'filterBulkDocsRequest')
-      .mockReturnValue(filteredRequest);
+      .mockReturnValue(Promise.resolve(filteredRequest));
     const user = new User('username', ['admin']);
 
     await firstValueFrom(controller.bulkDocs(request, { user: user } as any));

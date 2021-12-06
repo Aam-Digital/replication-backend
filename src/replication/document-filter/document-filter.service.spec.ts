@@ -9,6 +9,10 @@ import {
 import { User } from '../../session/session/user-auth.dto';
 import { PermissionService } from '../permission/permission.service';
 import { RulesService } from '../rules/rules.service';
+import { HttpService } from '@nestjs/axios';
+import { of } from 'rxjs';
+import { CouchProxyController } from '../couch-proxy/couch-proxy.controller';
+import { ConfigService } from '@nestjs/config';
 
 describe('DocumentFilterService', () => {
   let service: DocumentFilterService;
@@ -17,10 +21,25 @@ describe('DocumentFilterService', () => {
   let schoolDoc: DatabaseDocument;
   let childDoc: DatabaseDocument;
   let mockRulesService: RulesService;
+  let mockHttpService: HttpService;
+  let mockConfigService: ConfigService;
+  const databaseUrl = 'https://couchdb.com';
+  const databaseName = 'test-db';
 
   beforeEach(async () => {
     mockRulesService = {
       getRulesForUser: () => undefined,
+    } as any;
+    mockHttpService = {
+      post: () => of(undefined),
+      axiosRef: { defaults: { auth: undefined } },
+    } as any;
+
+    const config = {};
+    config[CouchProxyController.DATABASE_URL_ENV] = databaseUrl;
+    config[CouchProxyController.DATABASE_NAME_ENV] = databaseName;
+    mockConfigService = {
+      get: jest.fn((key) => config[key]),
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -28,6 +47,8 @@ describe('DocumentFilterService', () => {
         DocumentFilterService,
         PermissionService,
         { provide: RulesService, useValue: mockRulesService },
+        { provide: HttpService, useValue: mockHttpService },
+        { provide: ConfigService, useValue: mockConfigService },
       ],
     }).compile();
 
@@ -35,18 +56,8 @@ describe('DocumentFilterService', () => {
     normalUser = new User('normalUser', ['user']);
     adminUser = new User('adminUser', ['admin']);
 
-    schoolDoc = {
-      _id: 'School:1',
-      _rev: 'anotherRev',
-      _revisions: { start: 1, ids: ['anotherRev'] },
-      anotherProperty: 'anotherValue',
-    };
-    childDoc = {
-      _id: 'Child:1',
-      _rev: 'someRev',
-      _revisions: { start: 1, ids: ['someRev'] },
-      someProperty: 'someValue',
-    };
+    schoolDoc = getSchoolDoc();
+    childDoc = getChildDoc();
   });
 
   it('should be defined', () => {
@@ -56,7 +67,7 @@ describe('DocumentFilterService', () => {
   it('should filter out docs without read permissions in BulkGet', () => {
     const bulkGetResponse = createBulkGetResponse(schoolDoc, childDoc);
     jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: 'write', subject: 'Child' },
+      { action: 'update', subject: 'Child' },
       { action: 'read', subject: 'School' },
     ]);
 
@@ -70,7 +81,7 @@ describe('DocumentFilterService', () => {
     childDoc._deleted = true;
     schoolDoc._deleted = true;
     jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: 'write', subject: 'Child' },
+      { action: 'update', subject: 'Child' },
       { action: 'read', subject: 'School' },
     ]);
 
@@ -103,23 +114,137 @@ describe('DocumentFilterService', () => {
     expect(result).toEqual(createAllDocsResponse(schoolDoc, childDoc));
   });
 
-  it('should filter documents in BulkDocs request', () => {
+  it('should apply permissions to CREATE operations in BulkDocs', async () => {
+    const request: BulkDocsRequest = {
+      new_edits: true,
+      docs: [childDoc, schoolDoc],
+    };
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+      { action: 'create', subject: 'Child' },
+      { action: ['read', 'update'], subject: 'School' },
+    ]);
+    jest
+      .spyOn(mockHttpService, 'post')
+      .mockReturnValue(of({ data: { rows: [] } } as any));
+
+    const result = await service.filterBulkDocsRequest(request, normalUser);
+
+    expect(result).toEqual({
+      new_edits: true,
+      docs: [childDoc],
+    });
+  });
+
+  it('should apply permissions to UPDATE operations in BulkDocs', async () => {
     const request: BulkDocsRequest = {
       new_edits: false,
       docs: [childDoc, schoolDoc],
     };
     jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: ['read', 'write'], subject: 'Child' },
+      { action: 'update', subject: 'Child' },
       { action: 'read', subject: 'School' },
     ]);
+    jest
+      .spyOn(mockHttpService, 'post')
+      .mockReturnValue(
+        of({ data: createAllDocsResponse(childDoc, schoolDoc) } as any),
+      );
 
-    const result = service.filterBulkDocsRequest(request, normalUser);
+    const result = await service.filterBulkDocsRequest(request, normalUser);
 
     expect(result).toEqual({
       new_edits: false,
       docs: [childDoc],
     });
   });
+
+  it('should apply permissions to DELETE operations in BulkDocs', async () => {
+    const deletedChildDoc = getChildDoc();
+    deletedChildDoc._deleted = true;
+    const deletedSchoolDoc = getSchoolDoc();
+    deletedSchoolDoc._deleted = true;
+    const request: BulkDocsRequest = {
+      new_edits: false,
+      docs: [deletedChildDoc, deletedSchoolDoc],
+    };
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+      { action: 'delete', subject: 'Child' },
+      { action: ['read', 'update'], subject: 'School' },
+    ]);
+    jest
+      .spyOn(mockHttpService, 'post')
+      .mockReturnValue(
+        of({ data: createAllDocsResponse(childDoc, schoolDoc) } as any),
+      );
+
+    const result = await service.filterBulkDocsRequest(request, normalUser);
+
+    expect(result).toEqual({
+      new_edits: false,
+      docs: [deletedChildDoc],
+    });
+  });
+
+  it('should check the permissions on the document from the database', async () => {
+    const privateSchool = getSchoolDoc();
+    privateSchool.privateSchool = true;
+    const publicSchool = getSchoolDoc();
+    publicSchool._id = 'School:2';
+    publicSchool.privateSchool = false;
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+      { action: 'update', subject: 'Child' },
+      {
+        action: ['update', 'delete'],
+        subject: 'School',
+        conditions: { privateSchool: false }, // User is only allowed to update/delete public schools
+      },
+    ]);
+    jest
+      .spyOn(mockHttpService, 'post')
+      .mockReturnValue(
+        of({ data: createAllDocsResponse(privateSchool, publicSchool) } as any),
+      );
+    // User makes change to a document on which no permissions are given
+    const updatedPrivateSchool = getSchoolDoc();
+    updatedPrivateSchool.privateSchool = false;
+    updatedPrivateSchool.name = 'Not so Private School';
+    // User deletes a document, permissions can't be checked directly
+    const deletedPublicSchool: DatabaseDocument = {
+      _id: publicSchool._id,
+      _rev: publicSchool._rev,
+      _revisions: publicSchool._revisions,
+      _deleted: true,
+    };
+    const request: BulkDocsRequest = {
+      new_edits: false,
+      docs: [updatedPrivateSchool, deletedPublicSchool],
+    };
+
+    const result = await service.filterBulkDocsRequest(request, normalUser);
+
+    expect(result).toEqual({
+      new_edits: false,
+      docs: [deletedPublicSchool],
+    });
+  });
+
+  function getSchoolDoc(): DatabaseDocument {
+    return {
+      _id: 'School:1',
+      _rev: 'anotherRev',
+      _revisions: { start: 1, ids: ['anotherRev'] },
+      anotherProperty: 'anotherValue',
+    };
+  }
+
+  function getChildDoc(): DatabaseDocument {
+    return {
+      _id: 'Child:1',
+      _rev: 'someRev',
+      _revisions: { start: 1, ids: ['someRev'] },
+      someProperty: 'someValue',
+    };
+  }
 
   function createBulkGetResponse(
     ...documents: DatabaseDocument[]
