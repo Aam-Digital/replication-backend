@@ -13,7 +13,6 @@ import { RulesService } from '../rules/rules.service';
 describe('DocumentFilterService', () => {
   let service: DocumentFilterService;
   let normalUser: User;
-  let adminUser: User;
   let schoolDoc: DatabaseDocument;
   let childDoc: DatabaseDocument;
   let mockRulesService: RulesService;
@@ -33,7 +32,6 @@ describe('DocumentFilterService', () => {
 
     service = module.get<DocumentFilterService>(DocumentFilterService);
     normalUser = new User('normalUser', ['user']);
-    adminUser = new User('adminUser', ['admin']);
 
     schoolDoc = {
       _id: 'School:1',

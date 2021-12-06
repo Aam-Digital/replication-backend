@@ -7,7 +7,7 @@ describe('RulesController', () => {
   let mockRulesService: RulesService;
 
   beforeEach(async () => {
-    mockRulesService = { loadRules: () => {} } as any;
+    mockRulesService = { loadRules: () => undefined } as any;
     const module: TestingModule = await Test.createTestingModule({
       controllers: [RulesController],
       providers: [{ provide: RulesService, useValue: mockRulesService }],
