@@ -14,7 +14,6 @@ describe('CouchProxyController', () => {
   let controller: CouchProxyController;
   let mockHttpService: HttpService;
   let documentFilter: DocumentFilterService;
-  let mockConfigService: ConfigService;
   const DATABASE_URL = 'database.url';
   const DATABASE_NAME = 'app';
   const USERNAME = 'demo';
@@ -40,16 +39,13 @@ describe('CouchProxyController', () => {
     config[CouchProxyController.DATABASE_PASSWORD_ENV] = PASSWORD;
     config[CouchProxyController.DATABASE_URL_ENV] = DATABASE_URL;
     config[CouchProxyController.DATABASE_NAME_ENV] = DATABASE_NAME;
-    mockConfigService = {
-      get: jest.fn((key) => config[key]),
-    } as any;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CouchProxyController],
       providers: [
         { provide: HttpService, useValue: mockHttpService },
         { provide: DocumentFilterService, useValue: documentFilter },
-        { provide: ConfigService, useValue: mockConfigService },
+        { provide: ConfigService, useValue: new ConfigService(config) },
       ],
     }).compile();
 
@@ -58,21 +54,6 @@ describe('CouchProxyController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
-  });
-
-  it('should load the variables from the config', () => {
-    expect(mockConfigService.get).toHaveBeenCalledWith(
-      CouchProxyController.DATABASE_USER_ENV,
-    );
-    expect(mockConfigService.get).toHaveBeenCalledWith(
-      CouchProxyController.DATABASE_PASSWORD_ENV,
-    );
-    expect(mockConfigService.get).toHaveBeenCalledWith(
-      CouchProxyController.DATABASE_URL_ENV,
-    );
-    expect(mockConfigService.get).toHaveBeenCalledWith(
-      CouchProxyController.DATABASE_NAME_ENV,
-    );
   });
 
   it('should set the default auth header', () => {
