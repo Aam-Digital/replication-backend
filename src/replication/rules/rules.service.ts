@@ -6,6 +6,8 @@ import { HttpService } from '@nestjs/axios';
 import { CouchDBInteracter } from '../../utils/couchdb-interacter';
 import { ConfigService } from '@nestjs/config';
 import { Permission } from './permission';
+import { catchError, map, Observable, of } from 'rxjs';
+import { AxiosResponse } from 'axios';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 
@@ -22,12 +24,15 @@ export class RulesService extends CouchDBInteracter {
     this.loadRules();
   }
 
-  loadRules() {
-    this.httpService
+  loadRules(): Observable<Permission> {
+    return this.httpService
       .get<Permission>(
         `${this.databaseUrl}/${this.databaseName}/${Permission.DOC_ID}`,
       )
-      .subscribe((response) => (this.rules = response.data));
+      .pipe(
+        catchError(() => of({ data: undefined } as AxiosResponse<Permission>)),
+        map((response) => (this.rules = response.data)),
+      );
   }
 
   /**
@@ -36,9 +41,13 @@ export class RulesService extends CouchDBInteracter {
    * @returns DocumentRule[] rules that are related to the user
    */
   getRulesForUser(user: User): DocumentRule[] {
-    return user.roles
-      .filter((role) => this.rules.rulesConfig.hasOwnProperty(role))
-      .map((role) => this.rules.rulesConfig[role])
-      .flat();
+    if (this.rules && this.rules.rulesConfig) {
+      return user.roles
+        .filter((role) => this.rules.rulesConfig.hasOwnProperty(role))
+        .map((role) => this.rules.rulesConfig[role])
+        .flat();
+    } else {
+      return [{ subject: 'all', action: 'manage' }];
+    }
   }
 }

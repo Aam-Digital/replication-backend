@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentRule, RulesService } from './rules.service';
 import { User } from '../../session/session/user-auth.dto';
 import { HttpService } from '@nestjs/axios';
-import { of } from 'rxjs';
+import { firstValueFrom, of, throwError } from 'rxjs';
 import { Permission } from './permission';
 import { CouchProxyController } from '../couch-proxy/couch-proxy.controller';
 import { ConfigService } from '@nestjs/config';
@@ -17,10 +17,6 @@ describe('RulesService', () => {
   const DATABASE_NAME = 'app';
 
   beforeEach(async () => {
-    mockHttpService = {
-      get: () => of(undefined),
-      axiosRef: { defaults: { auth: undefined } },
-    } as any;
     testPermission = new Permission({
       user_app: [
         { action: 'read', subject: 'Aser' },
@@ -28,9 +24,12 @@ describe('RulesService', () => {
       ],
       admin_app: [{ action: 'manage', subject: 'Child' }],
     });
-    jest
-      .spyOn(mockHttpService, 'get')
-      .mockReturnValue(of({ data: testPermission } as any));
+    mockHttpService = {
+      get: () => of({ data: testPermission }),
+      axiosRef: { defaults: { auth: undefined } },
+    } as any;
+    jest.spyOn(mockHttpService, 'get');
+
     const config = {};
     config[CouchProxyController.DATABASE_URL_ENV] = DATABASE_URL;
     config[CouchProxyController.DATABASE_NAME_ENV] = DATABASE_NAME;
@@ -44,6 +43,7 @@ describe('RulesService', () => {
     }).compile();
 
     service = module.get<RulesService>(RulesService);
+    await firstValueFrom(service.loadRules());
 
     userRules = testPermission.rulesConfig['user_app'];
     adminRules = testPermission.rulesConfig['admin_app'];
@@ -57,6 +57,21 @@ describe('RulesService', () => {
     expect(mockHttpService.get).toHaveBeenCalledWith(
       `${DATABASE_URL}/${DATABASE_NAME}/${Permission.DOC_ID}`,
     );
+  });
+
+  it('should allow everything in case no rules object could be found', async () => {
+    jest
+      .spyOn(mockHttpService, 'get')
+      .mockReturnValue(throwError(() => new Error()));
+
+    await firstValueFrom(service.loadRules());
+
+    expect(service.getRulesForUser(new User('some-user', []))).toEqual([
+      {
+        subject: 'all',
+        action: 'manage',
+      },
+    ]);
   });
 
   it('should only return the rules for the passed user roles', () => {
