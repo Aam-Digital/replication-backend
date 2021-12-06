@@ -1,6 +1,8 @@
 import { Controller, Post, UseGuards } from '@nestjs/common';
 import { JwtGuard } from '../../session/jwt/jwt.guard';
 import { RulesService } from './rules.service';
+import { Observable } from 'rxjs';
+import { Permission } from './permission';
 
 @UseGuards(JwtGuard)
 @Controller('rules')
@@ -10,7 +12,7 @@ export class RulesController {
   /**
    * Reload the rules object from the database to apply changed permissions.
    */
-  reloadRules() {
-    this.rulesService.loadRules();
+  reloadRules(): Observable<Permission> {
+    return this.rulesService.loadRules();
   }
 }
