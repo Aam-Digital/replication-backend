@@ -40,7 +40,7 @@ import { ApiOperation } from '@nestjs/swagger';
 
 @UseGuards(JwtGuard)
 @Controller()
-export class CouchProxyController extends CouchDBInteracter{
+export class CouchProxyController extends CouchDBInteracter {
   constructor(
     httpService: HttpService,
     configService: ConfigService,
