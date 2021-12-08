@@ -4,3 +4,8 @@
 # Replication Backend
 
 This backend service is can be used to filter the replication between a PouchDB and a CouchDB instance based on permission rules.
+
+
+## Setup
+This API functions as a proxy layer between a client and a standard CouchDB instance.
+Configure the CouchDB running as the backend database through the environment variable (or the .env file).

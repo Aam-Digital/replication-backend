@@ -103,7 +103,7 @@ describe('CouchProxyController', () => {
     const user = new User('username', ['user']);
 
     const result = await firstValueFrom(
-      controller.bulkPost(null, null, { user: user } as any),
+      controller.bulkGetPost(null, null, { user: user } as any),
     );
 
     expect(documentFilter.filterBulkGetResponse).toHaveBeenCalledWith(
@@ -155,7 +155,7 @@ describe('CouchProxyController', () => {
     const user = new User('username', ['user']);
 
     const result = await firstValueFrom(
-      controller.allDocs(null, null, { user: user } as any),
+      controller.allDocs(null, { user: user } as any, null),
     );
 
     expect(documentFilter.filterAllDocsResponse).toHaveBeenCalledWith(
@@ -197,7 +197,7 @@ describe('CouchProxyController', () => {
     };
     jest
       .spyOn(documentFilter, 'filterBulkDocsRequest')
-      .mockReturnValue(filteredRequest);
+      .mockReturnValue(Promise.resolve(filteredRequest));
     const user = new User('username', ['admin']);
 
     await firstValueFrom(controller.bulkDocs(request, { user: user } as any));

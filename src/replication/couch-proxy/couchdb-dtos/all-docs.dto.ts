@@ -4,7 +4,7 @@ export class AllDocsRequest {
   keys: string[];
 }
 
-class DocMetaInf {
+export class DocMetaInf {
   id: string;
   key: string;
   value: { rev: string };
