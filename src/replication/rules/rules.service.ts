@@ -17,7 +17,7 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
  */
 @Injectable()
 export class RulesService extends CouchDBInteracter {
-  private rules: Permission;
+  private permission: Permission;
 
   constructor(httpService: HttpService, configService: ConfigService) {
     super(httpService, configService);
@@ -31,7 +31,7 @@ export class RulesService extends CouchDBInteracter {
       )
       .pipe(
         catchError(() => of({ data: undefined } as AxiosResponse<Permission>)),
-        map((response) => (this.rules = response.data)),
+        map((response) => (this.permission = response.data)),
       );
   }
 
@@ -41,10 +41,10 @@ export class RulesService extends CouchDBInteracter {
    * @returns DocumentRule[] rules that are related to the user
    */
   getRulesForUser(user: User): DocumentRule[] {
-    if (this.rules && this.rules.rulesConfig) {
+    if (this.permission && this.permission.rulesConfig) {
       return user.roles
-        .filter((role) => this.rules.rulesConfig.hasOwnProperty(role))
-        .map((role) => this.rules.rulesConfig[role])
+        .filter((role) => this.permission.rulesConfig.hasOwnProperty(role))
+        .map((role) => this.permission.rulesConfig[role])
         .flat();
     } else {
       return [{ subject: 'all', action: 'manage' }];

@@ -8,10 +8,11 @@ import { Permission } from './permission';
 @Controller('rules')
 export class RulesController {
   constructor(private rulesService: RulesService) {}
-  @Post('reload')
+
   /**
    * Reload the rules object from the database to apply changed permissions.
    */
+  @Post('reload')
   reloadRules(): Observable<Permission> {
     return this.rulesService.loadRules();
   }
