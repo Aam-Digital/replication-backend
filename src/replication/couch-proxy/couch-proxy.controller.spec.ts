@@ -155,7 +155,7 @@ describe('CouchProxyController', () => {
     const user = new User('username', ['user']);
 
     const result = await firstValueFrom(
-      controller.allDocs(null, null, { user: user } as any),
+      controller.allDocs(null, { user: user } as any, null),
     );
 
     expect(documentFilter.filterAllDocsResponse).toHaveBeenCalledWith(
