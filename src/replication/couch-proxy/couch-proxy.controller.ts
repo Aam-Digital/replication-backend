@@ -210,15 +210,15 @@ export class CouchProxyController {
    * See {@link https://docs.couchdb.org/en/stable/api/database/bulk-api.html?highlight=all_docs#post--db-_all_docs}
    *
    * @param queryParams
-   * @param body a object containing document ID's to be fetched
    * @param request holding information about the current user
+   * @param body (optional) a object containing document ID's to be fetched
    * @returns list of documents
    */
   @Post('/:db/_all_docs')
   allDocs(
     @Query() queryParams: any,
-    @Body() body: AllDocsRequest,
     @Req() request: Request,
+    @Body() body?: AllDocsRequest,
   ): Observable<AllDocsResponse> {
     const user = request.user as User;
     return this.httpService
@@ -236,12 +236,8 @@ export class CouchProxyController {
   }
 
   @Get('/:db/_all_docs')
-  allDocsGet(
-    @Query() queryParams: any,
-    @Body() body: AllDocsRequest,
-    @Req() request: Request,
-  ) {
-    return this.allDocs(queryParams, body, request);
+  allDocsGet(@Query() queryParams: any, @Req() request: Request) {
+    return this.allDocs(queryParams, request);
   }
 
   /**
