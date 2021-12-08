@@ -6,7 +6,9 @@ import { DatabaseDocument } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 
 const actions = [
   'read',
-  'write', // Could be replaced with more granular distinction (create,update,delete)
+  'create',
+  'update',
+  'delete',
   'manage', // Matches any actions
 ] as const;
 

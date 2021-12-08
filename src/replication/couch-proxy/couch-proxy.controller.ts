@@ -11,7 +11,14 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { catchError, firstValueFrom, map, Observable } from 'rxjs';
+import {
+  catchError,
+  firstValueFrom,
+  from,
+  map,
+  Observable,
+  switchMap,
+} from 'rxjs';
 import { ChangesFeed } from './couchdb-dtos/changes.dto';
 import {
   RevisionDiffRequest,
@@ -29,6 +36,7 @@ import { User } from '../../session/session/user-auth.dto';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { CouchDBInteracter } from '../../utils/couchdb-interacter';
+import { ApiOperation } from '@nestjs/swagger';
 
 @UseGuards(JwtGuard)
 @Controller()
@@ -126,15 +134,23 @@ export class CouchProxyController extends CouchDBInteracter{
    * @returns BulkDocsResponse list of success or error messages regarding the to-be-saved documents
    */
   @Post('/:db/_bulk_docs')
+  @ApiOperation({
+    description: `Upload multiple documents with a single request.\n\ncaveats: only works with ?include_docs=true`,
+  })
   bulkDocs(
     @Body() body: BulkDocsRequest,
     @Req() request: Request,
   ): Observable<BulkDocsResponse> {
     const user = request.user as User;
-    const filteredBody = this.documentFilter.filterBulkDocsRequest(body, user);
-    return this.httpService
-      .post(`${this.databaseUrl}/${this.databaseName}/_bulk_docs`, filteredBody)
-      .pipe(map((response) => response.data));
+    return from(this.documentFilter.filterBulkDocsRequest(body, user)).pipe(
+      switchMap((filteredBody) =>
+        this.httpService.post(
+          `${this.databaseUrl}/${this.databaseName}/_bulk_docs`,
+          filteredBody,
+        ),
+      ),
+      map((response) => response.data),
+    );
   }
 
   /**
@@ -147,7 +163,7 @@ export class CouchProxyController extends CouchDBInteracter{
    * @returns BulkGetResponse list of documents or error messages
    */
   @Post('/:db/_bulk_get')
-  bulkPost(
+  bulkGetPost(
     @Query() queryParams: any,
     @Body() body: BulkGetRequest,
     @Req() request: Request,
@@ -172,15 +188,15 @@ export class CouchProxyController extends CouchDBInteracter{
    * See {@link https://docs.couchdb.org/en/stable/api/database/bulk-api.html?highlight=all_docs#post--db-_all_docs}
    *
    * @param queryParams
-   * @param body a object containing document ID's to be fetched
    * @param request holding information about the current user
+   * @param body (optional) a object containing document ID's to be fetched
    * @returns list of documents
    */
   @Post('/:db/_all_docs')
   allDocs(
     @Query() queryParams: any,
-    @Body() body: AllDocsRequest,
     @Req() request: Request,
+    @Body() body?: AllDocsRequest,
   ): Observable<AllDocsResponse> {
     const user = request.user as User;
     return this.httpService
@@ -197,18 +213,9 @@ export class CouchProxyController extends CouchDBInteracter{
       );
   }
 
-  /**
-   * Unused?
-   * @param queryParams
-   */
-  @Get('/:db/_bulk_get')
-  bulkGet(@Query() queryParams: any): Observable<any> {
-    console.log('GET bulk doc called', queryParams);
-    return this.httpService
-      .get(`${this.databaseUrl}/${this.databaseName}/_bulk_get`, {
-        params: queryParams,
-      })
-      .pipe(map((response) => response.data));
+  @Get('/:db/_all_docs')
+  allDocsGet(@Query() queryParams: any, @Req() request: Request) {
+    return this.allDocs(queryParams, request);
   }
 
   /**

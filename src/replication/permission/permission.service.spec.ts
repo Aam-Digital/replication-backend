@@ -33,12 +33,12 @@ describe('PermissionService', () => {
   it('should return ability that allows to create Aser objects if user has permissions', () => {
     jest
       .spyOn(mockRulesService, 'getRulesForUser')
-      .mockReturnValue([{ action: 'write', subject: 'Aser' }]);
+      .mockReturnValue([{ action: 'create', subject: 'Aser' }]);
 
     const ability = service.getAbilityFor(normalUser);
 
     const aserDoc: DatabaseDocument = { _id: 'Aser:someId', _rev: 'someRev' };
-    expect(ability.can('write', aserDoc)).toBe(true);
+    expect(ability.can('create', aserDoc)).toBe(true);
   });
 
   it('should return ability that rejects creation of Aser objects if user does not have enough permissions', () => {
@@ -52,7 +52,7 @@ describe('PermissionService', () => {
       _id: 'Aser:anotherDoc',
       _rev: 'anotherRev',
     };
-    expect(ability.cannot('write', aserDoc)).toBe(true);
+    expect(ability.cannot('create', aserDoc)).toBe(true);
   });
 
   it('should return ability that allows to read Aser and edit Child objects if user has permissions that allow it', () => {
@@ -70,7 +70,7 @@ describe('PermissionService', () => {
       _id: 'Child:someChild',
       _rev: 'ChildRev',
     };
-    expect(ability.can('write', childDoc)).toBe(true);
+    expect(ability.can('update', childDoc)).toBe(true);
     expect(ability.can('read', childDoc)).toBe(true);
   });
 });
