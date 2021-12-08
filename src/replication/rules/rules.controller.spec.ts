@@ -1,13 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RulesController } from './rules.controller';
-import * as Rules from '../../assets/rules.json';
+import { RulesService } from './rules.service';
 
 describe('RulesController', () => {
   let controller: RulesController;
+  let mockRulesService: RulesService;
 
   beforeEach(async () => {
+    mockRulesService = { loadRules: () => undefined } as any;
     const module: TestingModule = await Test.createTestingModule({
       controllers: [RulesController],
+      providers: [{ provide: RulesService, useValue: mockRulesService }],
     }).compile();
 
     controller = module.get<RulesController>(RulesController);
@@ -17,7 +20,11 @@ describe('RulesController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should return the current rules object', () => {
-    expect(controller.getRules()).toEqual(Rules);
+  it('should trigger a reload of the rules', () => {
+    jest.spyOn(mockRulesService, 'loadRules');
+
+    controller.reloadRules();
+
+    expect(mockRulesService.loadRules).toHaveBeenCalled();
   });
 });

@@ -3,8 +3,6 @@
 # Run the following commands from the root folder to build, run and kill the application
 # >> docker build -f build/Dockerfile -t replication-ms:latest .
 # >> docker run -p=80:80 replication-ms:latest
-# To mount 'rules.json' file into the container
-# >> docker run -p=80:3000 --name ms -v "<absolute path>\rules.json:/app/dist/assets/rules.json" replication-ms:latest
 FROM node:16.8.0-alpine3.13 as builder
 WORKDIR /app
 

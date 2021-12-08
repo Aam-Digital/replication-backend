@@ -19,31 +19,18 @@ import {
   PermissionService,
 } from '../permission/permission.service';
 import { HttpService } from '@nestjs/axios';
-import { CouchProxyController } from '../couch-proxy/couch-proxy.controller';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, map } from 'rxjs';
+import { CouchDBInteracter } from '../../utils/couchdb-interacter';
 
 @Injectable()
-export class DocumentFilterService {
-  private readonly databaseEndpoint: string;
+export class DocumentFilterService extends CouchDBInteracter {
   constructor(
     private permissionService: PermissionService,
-    private httpService: HttpService,
-    private configService: ConfigService,
+    httpService: HttpService,
+    configService: ConfigService,
   ) {
-    // Send the basic auth header with every request
-    this.httpService.axiosRef.defaults.auth = {
-      username: this.configService.get<string>(
-        CouchProxyController.DATABASE_USER_ENV,
-      ),
-      password: this.configService.get<string>(
-        CouchProxyController.DATABASE_PASSWORD_ENV,
-      ),
-    };
-    this.databaseEndpoint =
-      this.configService.get<string>(CouchProxyController.DATABASE_URL_ENV) +
-      '/' +
-      this.configService.get<string>(CouchProxyController.DATABASE_NAME_ENV);
+    super(httpService, configService);
   }
 
   filterBulkGetResponse(
@@ -96,7 +83,7 @@ export class DocumentFilterService {
     const response = await firstValueFrom(
       this.httpService
         .post<AllDocsResponse>(
-          `${this.databaseEndpoint}/_bulk_get`,
+          `${this.databaseUrl}/${this.databaseName}/_bulk_get`,
           allDocsRequest,
         )
         .pipe(map((res) => res.data)),

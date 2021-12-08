@@ -1,13 +1,19 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { RawRule } from '@casl/ability';
-import * as Rules from '../../assets/rules.json';
+import { Controller, Post, UseGuards } from '@nestjs/common';
 import { JwtGuard } from '../../session/jwt/jwt.guard';
+import { RulesService } from './rules.service';
+import { Observable } from 'rxjs';
+import { Permission } from './permission';
 
 @UseGuards(JwtGuard)
 @Controller('rules')
 export class RulesController {
-  @Get('/')
-  getRules(): { [key in string]: RawRule[] } {
-    return Rules;
+  constructor(private rulesService: RulesService) {}
+
+  /**
+   * Reload the rules object from the database to apply changed permissions.
+   */
+  @Post('reload')
+  reloadRules(): Observable<Permission> {
+    return this.rulesService.loadRules();
   }
 }

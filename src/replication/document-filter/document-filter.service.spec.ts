@@ -17,7 +17,6 @@ import { ConfigService } from '@nestjs/config';
 describe('DocumentFilterService', () => {
   let service: DocumentFilterService;
   let normalUser: User;
-  let adminUser: User;
   let schoolDoc: DatabaseDocument;
   let childDoc: DatabaseDocument;
   let mockRulesService: RulesService;
@@ -54,7 +53,6 @@ describe('DocumentFilterService', () => {
 
     service = module.get<DocumentFilterService>(DocumentFilterService);
     normalUser = new User('normalUser', ['user']);
-    adminUser = new User('adminUser', ['admin']);
 
     schoolDoc = getSchoolDoc();
     childDoc = getChildDoc();
