@@ -32,7 +32,7 @@
     "@nestjs/swagger": "^5.1.4",
     "@ntegral/nestjs-sentry": "^3.0.6",
     "@sentry/node": "^6.15.0",
-    "cookie-parser": "^1.4.5",
+    "cookie-parser": "^1.4.6",
     "http-proxy-middleware": "^2.0.1",
     "passport": "^0.4.1",
     "passport-jwt": "^4.0.0",
