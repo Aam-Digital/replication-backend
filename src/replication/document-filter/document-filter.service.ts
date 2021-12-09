@@ -83,7 +83,7 @@ export class DocumentFilterService extends CouchDBInteracter {
     const response = await firstValueFrom(
       this.httpService
         .post<AllDocsResponse>(
-          `${this.databaseUrl}/${this.databaseName}/_bulk_get`,
+          `${this.databaseUrl}/${this.databaseName}/_all_docs`,
           allDocsRequest,
         )
         .pipe(map((res) => res.data)),
