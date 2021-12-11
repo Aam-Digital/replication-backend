@@ -10,6 +10,7 @@ async function bootstrap() {
 
   // Required for JWT cookie auth
   app.use(cookieParser());
+  // Change max body size for requests as default 1mb is not enough
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ extended: true, limit: '10mb' }));
 
