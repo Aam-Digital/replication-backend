@@ -3,7 +3,7 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { json, urlencoded } from 'express';
+import { json } from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -12,7 +12,7 @@ async function bootstrap() {
   app.use(cookieParser());
   // Change max body size for requests as default 1mb is not enough
   app.use(json({ limit: '10mb' }));
-  app.use(urlencoded({ extended: true, limit: '10mb' }));
+  // app.use(urlencoded({ extended: true, limit: '10mb' }));
 
   // SwaggerUI setup see https://docs.nestjs.com/openapi/introduction#bootstrap
   const config = new DocumentBuilder()
