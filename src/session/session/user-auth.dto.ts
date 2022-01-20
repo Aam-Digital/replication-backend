@@ -10,3 +10,7 @@ export class UserPassword {
 export class User {
   constructor(public name: string, public roles: string[]) {}
 }
+
+export class SessionResponse {
+  userCtx: User;
+}
