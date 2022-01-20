@@ -3,6 +3,7 @@ import { PermissionService } from './permission.service';
 import { RulesService } from '../rules/rules.service';
 import { User } from '../../session/session/user-auth.dto';
 import { DatabaseDocument } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { Permission } from '../rules/permission';
 
 describe('PermissionService', () => {
   let service: PermissionService;
@@ -72,5 +73,23 @@ describe('PermissionService', () => {
     };
     expect(ability.can('update', childDoc)).toBe(true);
     expect(ability.can('read', childDoc)).toBe(true);
+  });
+
+  it('should return a ability that does not allow to modify the permission document', () => {
+    jest
+      .spyOn(mockRulesService, 'getRulesForUser')
+      .mockReturnValue([{ action: 'manage', subject: 'all' }]);
+
+    const ability = service.getAbilityFor(normalUser);
+
+    const permissionDoc: Permission = {
+      _id: `Permission:${Permission.DOC_ID}`,
+      _rev: 'someRev',
+      rulesConfig: {},
+    };
+    expect(ability.cannot('create', permissionDoc)).toBe(true);
+    expect(ability.cannot('update', permissionDoc)).toBe(true);
+    expect(ability.cannot('delete', permissionDoc)).toBe(true);
+    expect(ability.can('read', permissionDoc)).toBe(true);
   });
 });
