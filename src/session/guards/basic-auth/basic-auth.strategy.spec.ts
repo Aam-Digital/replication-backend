@@ -55,6 +55,7 @@ describe('BasicAuthStrategy', () => {
     );
 
     const response = await strategy.validate(
+      undefined,
       credentials.username,
       credentials.password,
     );
@@ -71,8 +72,8 @@ describe('BasicAuthStrategy', () => {
       .spyOn(mockHttpService, 'get')
       .mockReturnValue(throwError(() => new HttpException('error', 400)));
 
-    return expect(strategy.validate('user', 'wrong_pw')).rejects.toBeInstanceOf(
-      UnauthorizedException,
-    );
+    return expect(
+      strategy.validate(undefined, 'user', 'wrong_pw'),
+    ).rejects.toBeInstanceOf(UnauthorizedException);
   });
 });

@@ -6,6 +6,8 @@ import {
   UnauthorizedException,
   Body,
   Put,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CouchProxyController } from '../replication/couch-proxy/couch-proxy.controller';
@@ -15,6 +17,8 @@ import { catchError, firstValueFrom, map, Observable } from 'rxjs';
 import { ApiBasicAuth } from '@nestjs/swagger';
 import { DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { UserService } from './user.service';
+import { Request } from 'express';
+import { BasicAuthGuard } from '../session/guards/basic-auth/basic-auth-guard.service';
 
 /**
  * This controller handles the interaction with the CouchDB _users database.
@@ -66,19 +70,27 @@ export class UserController {
    * Update the user document with a new password.
    * Users can only update their own document.
    * @param username the name of the user with the 'org.couchdb.user:' prefix
-   * @param reqUser a object from which only the password property will be used
+   * @param updatedUser a object from which only the password property will be used
    * @param authHeader the basic auth header used to verify credentials of the user
+   * @param request the request object holding the user executing the request
    */
+  @UseGuards(BasicAuthGuard)
   @Put('/:username')
   async putUser(
     @Param('username') username: string,
-    @Body() reqUser: UserPassword,
+    @Body() updatedUser: UserPassword,
     @Headers('Authorization') authHeader: string,
+    @Req() request: Request,
   ): Promise<DocSuccess> {
-    const userToBeEdited = await firstValueFrom(
+    const authenticatedUser = request.user as User;
+    const userBeforeUpdate = await firstValueFrom(
       this.getUser(username, authHeader),
     );
-    return this.userService.updateUserObject(userToBeEdited, reqUser);
+    return this.userService.updateUserObject(
+      userBeforeUpdate,
+      updatedUser,
+      authenticatedUser,
+    );
   }
 
   private getUserUrl(username: string): string {

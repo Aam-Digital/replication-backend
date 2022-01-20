@@ -24,7 +24,7 @@ describe('UserController', () => {
     iterations: 10,
     name: 'testUser',
     password_scheme: 'pbkdf2',
-    roles: [],
+    roles: ['user_app'],
     salt: '1112283cf988a34f124200a050d308a1',
     type: 'user',
   };
@@ -115,12 +115,14 @@ describe('UserController', () => {
       COUCHDB_USERNAME,
       userWithPassword,
       BASIC_AUTH_HEADER,
+      { user: COUCHDB_USER_OBJECT } as any,
     );
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
     expect(mockUserService.updateUserObject).toHaveBeenCalledWith(
       COUCHDB_USER_OBJECT,
       userWithPassword,
+      COUCHDB_USER_OBJECT,
     );
   });
 
@@ -134,6 +136,7 @@ describe('UserController', () => {
       USERNAME,
       { password: 'newPass' },
       BASIC_AUTH_HEADER,
+      { user: COUCHDB_USER_OBJECT } as any,
     );
 
     await expect(response).rejects.toThrow(UnauthorizedException);

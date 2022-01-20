@@ -15,6 +15,7 @@ export class UserService extends CouchDBInteracter {
   updateUserObject(
     oldUser: User,
     newUser: UserPassword | (User & UserPassword),
+    loggedInUser: User,
   ): Promise<DocSuccess> {
     const userWithPass = Object.assign(oldUser, { password: newUser.password });
     const userUrl =

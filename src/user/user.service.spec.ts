@@ -72,6 +72,7 @@ describe('UserService', () => {
     const response = service.updateUserObject(
       COUCHDB_USER_OBJECT,
       userWithPassword,
+      COUCHDB_USER_OBJECT,
     );
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
@@ -94,6 +95,7 @@ describe('UserService', () => {
     const response = service.updateUserObject(
       COUCHDB_USER_OBJECT,
       modifiedUser,
+      COUCHDB_USER_OBJECT,
     );
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);

@@ -19,7 +19,7 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
       CouchProxyController.DATABASE_URL_ENV,
     );
   }
-  validate(username, password): Promise<User> {
+  validate(req, username: string, password: string): Promise<User> {
     return firstValueFrom(
       this.httpService
         .get<SessionResponse>(`${this.authServerUrl}/_session`, {

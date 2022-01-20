@@ -7,6 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtStrategy } from './guards/jwt/jwt.strategy';
 import { COOKIE_EXPIRATION_TIME, CookieService } from './cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
+import { BasicAuthStrategy } from './guards/basic-auth/basic-auth.strategy';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { ConfigService } from '@nestjs/config';
     }),
   ],
   controllers: [SessionController],
-  providers: [CouchAuthStrategy, JwtStrategy, CookieService],
+  providers: [CouchAuthStrategy, JwtStrategy, CookieService, BasicAuthStrategy],
   exports: [CookieService],
 })
 export class SessionModule {
