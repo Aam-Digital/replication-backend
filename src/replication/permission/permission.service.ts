@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { User } from '../../session/session/user-auth.dto';
-import { RulesService } from '../rules/rules.service';
+import { DocumentRule, RulesService } from '../rules/rules.service';
 import { Ability, InferSubjects } from '@casl/ability';
 import { DatabaseDocument } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 
@@ -23,6 +23,11 @@ export type DocumentAbility = Ability<[Actions, Subjects]>;
  */
 @Injectable()
 export class PermissionService {
+  private readonly permissionWriteRestriction: DocumentRule = {
+    subject: 'Permission',
+    action: ['create', 'update', 'delete'],
+    inverted: true,
+  };
   constructor(private rulesService: RulesService) {}
 
   /**
@@ -33,7 +38,9 @@ export class PermissionService {
    * @returns DocumentAbility that allows to check the users permissions on a given document and action
    */
   getAbilityFor(user: User): DocumentAbility {
-    const rules = this.rulesService.getRulesForUser(user);
+    const rules = this.rulesService
+      .getRulesForUser(user)
+      .concat(this.permissionWriteRestriction);
     return new Ability<[Actions, Subjects]>(rules, {
       detectSubjectType: (subject) => {
         if (subject instanceof String) {
