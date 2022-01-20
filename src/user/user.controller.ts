@@ -14,6 +14,7 @@ import { HttpService } from '@nestjs/axios';
 import { catchError, firstValueFrom, map, Observable } from 'rxjs';
 import { ApiBasicAuth } from '@nestjs/swagger';
 import { DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { UserService } from './user.service';
 
 /**
  * This controller handles the interaction with the CouchDB _users database.
@@ -24,19 +25,12 @@ import { DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dt
 @Controller('_users')
 export class UserController {
   private readonly databaseUrl: string;
-  private readonly admin_user: string;
-  private readonly admin_pass: string;
 
   constructor(
     private configService: ConfigService,
     private httpService: HttpService,
+    private userService: UserService,
   ) {
-    this.admin_user = this.configService.get<string>(
-      CouchProxyController.DATABASE_USER_ENV,
-    );
-    this.admin_pass = this.configService.get<string>(
-      CouchProxyController.DATABASE_PASSWORD_ENV,
-    );
     this.databaseUrl = this.configService.get<string>(
       CouchProxyController.DATABASE_URL_ENV,
     );
@@ -81,15 +75,10 @@ export class UserController {
     @Body() reqUser: UserPassword,
     @Headers('Authorization') authHeader: string,
   ): Promise<DocSuccess> {
-    const dbUser = await firstValueFrom(this.getUser(username, authHeader));
-    const userWithPass = Object.assign(dbUser, { password: reqUser.password });
-    return firstValueFrom(
-      this.httpService
-        .put<DocSuccess>(this.getUserUrl(username), userWithPass, {
-          auth: { username: this.admin_user, password: this.admin_pass },
-        })
-        .pipe(map((response) => response.data)),
+    const userToBeEdited = await firstValueFrom(
+      this.getUser(username, authHeader),
     );
+    return this.userService.updateUserObject(userToBeEdited, reqUser);
   }
 
   private getUserUrl(username: string): string {
