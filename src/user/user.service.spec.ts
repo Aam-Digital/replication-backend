@@ -25,17 +25,13 @@ describe('UserService', () => {
   const DATABASE_URL = 'database.url';
   const USERNAME = 'demo';
   const PASSWORD = 'pass';
-  const COUCHDB_USERNAME = `${COUCHDB_USER_DOC}:testUser`;
-  const COUCHDB_USER_URL = DATABASE_URL + '/_users/' + COUCHDB_USERNAME;
-  const COUCHDB_USER_OBJECT = {
-    _id: COUCHDB_USERNAME,
+  const couchDBUsername = `${COUCHDB_USER_DOC}:testUser`;
+  const couchDBUserUrl = DATABASE_URL + '/_users/' + couchDBUsername;
+  const couchDBUserObjct = {
+    _id: couchDBUsername,
     _rev: '1-e0ebfb84005b920488fc7a8cc5470cc0',
-    derived_key: 'e579375db0e0c6a6fc79cd9e36a36859f71575c3',
-    iterations: 10,
     name: 'testUser',
-    password_scheme: 'pbkdf2',
     roles: [],
-    salt: '1112283cf988a34f124200a050d308a1',
     type: 'user',
   };
   const requestingUser: User = {
@@ -44,8 +40,8 @@ describe('UserService', () => {
   };
   const SUCCESS_RESPONSE: DocSuccess = {
     ok: true,
-    id: COUCHDB_USER_OBJECT._id,
-    rev: COUCHDB_USER_OBJECT._rev,
+    id: couchDBUserObjct._id,
+    rev: couchDBUserObjct._rev,
   };
 
   beforeEach(async () => {
@@ -56,7 +52,7 @@ describe('UserService', () => {
     } as any;
     jest
       .spyOn(mockHttpService, 'get')
-      .mockReturnValue(of({ data: COUCHDB_USER_OBJECT } as any));
+      .mockReturnValue(of({ data: couchDBUserObjct } as any));
     jest
       .spyOn(mockHttpService, 'put')
       .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
@@ -92,7 +88,7 @@ describe('UserService', () => {
   it('should create ability for passed user', async () => {
     mockAbility([{ subject: 'all', action: 'manage' }]);
 
-    await service.updateUserObject(COUCHDB_USER_OBJECT, requestingUser);
+    await service.updateUserObject(couchDBUserObjct, requestingUser);
 
     expect(mockPermissionService.getAbilityFor).toHaveBeenCalledWith(
       requestingUser,
@@ -109,12 +105,12 @@ describe('UserService', () => {
     ]);
 
     const response = service.getUserObject(
-      COUCHDB_USER_OBJECT._id,
+      couchDBUserObjct._id,
       requestingUser,
     );
 
-    await expect(response).resolves.toBe(COUCHDB_USER_OBJECT);
-    expect(mockHttpService.get).toHaveBeenCalledWith(COUCHDB_USER_URL);
+    await expect(response).resolves.toBe(couchDBUserObjct);
+    expect(mockHttpService.get).toHaveBeenCalledWith(couchDBUserUrl);
   });
 
   it('should throw unauthorized exception if user does not have read permission', async () => {
@@ -127,7 +123,7 @@ describe('UserService', () => {
     ]);
 
     const response = service.getUserObject(
-      COUCHDB_USER_OBJECT._id,
+      couchDBUserObjct._id,
       requestingUser,
     );
 
@@ -140,15 +136,12 @@ describe('UserService', () => {
       { subject: COUCHDB_USER_DOC, action: ['create', 'update', 'read'] },
     ]);
 
-    const response = service.updateUserObject(
-      COUCHDB_USER_OBJECT,
-      requestingUser,
-    );
+    const response = service.updateUserObject(couchDBUserObjct, requestingUser);
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
     expect(mockHttpService.put).toHaveBeenCalledWith(
-      COUCHDB_USER_URL,
-      COUCHDB_USER_OBJECT,
+      couchDBUserUrl,
+      couchDBUserObjct,
     );
   });
 
@@ -156,17 +149,14 @@ describe('UserService', () => {
     spyOn(service, 'getUserObject').mockReturnValue(undefined);
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
 
-    const response = service.updateUserObject(
-      COUCHDB_USER_OBJECT,
-      requestingUser,
-    );
+    const response = service.updateUserObject(couchDBUserObjct, requestingUser);
 
     return expect(response).rejects.toThrow(UnauthorizedException);
   });
 
   it('should allow admins to update the whole user object', async () => {
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
-    const userWithUpdatedRoles = Object.assign({}, COUCHDB_USER_OBJECT);
+    const userWithUpdatedRoles = Object.assign({}, couchDBUserObjct);
     userWithUpdatedRoles.roles = ['admin_app'];
 
     const response = service.updateUserObject(
@@ -176,7 +166,7 @@ describe('UserService', () => {
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
     expect(mockHttpService.put).toHaveBeenCalledWith(
-      COUCHDB_USER_URL,
+      couchDBUserUrl,
       userWithUpdatedRoles,
     );
   });
@@ -190,7 +180,7 @@ describe('UserService', () => {
         conditions: { name: requestingUser.name },
       },
     ]);
-    const userWithUpdatedPassword = Object.assign({}, COUCHDB_USER_OBJECT);
+    const userWithUpdatedPassword = Object.assign({}, couchDBUserObjct);
     userWithUpdatedPassword['password'] = 'new_password';
     const updatedPasswordAndRole = Object.assign({}, userWithUpdatedPassword);
     updatedPasswordAndRole.roles = ['admin_app'];
@@ -202,7 +192,7 @@ describe('UserService', () => {
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
     expect(mockHttpService.put).toHaveBeenCalledWith(
-      COUCHDB_USER_URL,
+      couchDBUserUrl,
       userWithUpdatedPassword,
     );
   });
@@ -220,7 +210,7 @@ describe('UserService', () => {
         conditions: { name: otherUser.name },
       },
     ]);
-    const userWithUpdatedPassword = Object.assign({}, COUCHDB_USER_OBJECT);
+    const userWithUpdatedPassword = Object.assign({}, couchDBUserObjct);
     userWithUpdatedPassword['password'] = 'new_password';
 
     const response = service.updateUserObject(

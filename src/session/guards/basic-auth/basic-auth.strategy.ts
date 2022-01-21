@@ -14,12 +14,12 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
     private httpService: HttpService,
     private configService: ConfigService,
   ) {
-    super({ passReqToCallback: true });
+    super();
     this.authServerUrl = this.configService.get<string>(
       CouchProxyController.DATABASE_URL_ENV,
     );
   }
-  validate(req, username: string, password: string): Promise<User> {
+  validate(username: string, password: string): Promise<User> {
     return firstValueFrom(
       this.httpService
         .get<SessionResponse>(`${this.authServerUrl}/_session`, {

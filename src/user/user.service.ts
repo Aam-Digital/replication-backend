@@ -8,7 +8,10 @@ import { firstValueFrom, map } from 'rxjs';
 import { CouchDBInteracter } from '../utils/couchdb-interacter';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
-import { PermissionService } from '../permissions/permission/permission.service';
+import {
+  DocumentAbility,
+  PermissionService,
+} from '../permissions/permission/permission.service';
 import { permittedFieldsOf } from '@casl/ability/extra';
 import * as _ from 'lodash';
 
@@ -53,26 +56,28 @@ export class UserService extends CouchDBInteracter {
       // Creating
       return this.putUserObject(userDoc);
     } else if (userAbility.can('update', oldUser)) {
-      // Updating
-      const permittedFields = permittedFieldsOf(
-        userAbility,
-        'update',
-        oldUser,
-        {
-          fieldsFrom: (rule) => rule.fields || [],
-        },
-      );
-      if (permittedFields.length > 0) {
-        // Updating some properties
-        const updatedFields = _.pick(userDoc, permittedFields);
-        const updatedUser = Object.assign(oldUser, updatedFields);
-        return this.putUserObject(updatedUser);
-      } else {
-        // Updating whole document
-        return this.putUserObject(userDoc);
-      }
+      return this.updateExistingUser(userAbility, oldUser, userDoc);
     } else {
       throw new UnauthorizedException('unauthorized', 'User is not permitted');
+    }
+  }
+
+  private updateExistingUser(
+    userAbility: DocumentAbility,
+    oldUser: DatabaseDocument,
+    userDoc: DatabaseDocument,
+  ) {
+    const permittedFields = permittedFieldsOf(userAbility, 'update', oldUser, {
+      fieldsFrom: (rule) => rule.fields || [],
+    });
+    if (permittedFields.length > 0) {
+      // Updating some properties
+      const updatedFields = _.pick(userDoc, permittedFields);
+      const updatedUser = Object.assign(oldUser, updatedFields);
+      return this.putUserObject(updatedUser);
+    } else {
+      // Updating whole document
+      return this.putUserObject(userDoc);
     }
   }
 
