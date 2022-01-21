@@ -31,7 +31,7 @@ import {
 import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
-import { JwtGuard } from '../../session/jwt/jwt.guard';
+import { JwtGuard } from '../../session/guards/jwt/jwt.guard';
 import { User } from '../../session/session/user-auth.dto';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';

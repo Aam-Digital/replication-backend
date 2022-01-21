@@ -7,7 +7,7 @@ import {
   Delete,
 } from '@nestjs/common';
 import { User, UserCredentials } from './user-auth.dto';
-import { CouchAuthGuard } from '../auth/couch-auth.guard';
+import { CouchAuthGuard } from '../guards/session-auth/couch-auth.guard';
 import { ApiBody } from '@nestjs/swagger';
 import { Request } from 'express';
 import { TOKEN_KEY } from '../cookie/cookie.service';

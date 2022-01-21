@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { User } from '../../session/session/user-auth.dto';
+import { COUCHDB_USER_DOC, User } from '../../session/session/user-auth.dto';
 import { DocumentRule, RulesService } from '../rules/rules.service';
 import { Ability, InferSubjects } from '@casl/ability';
-import { DatabaseDocument } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { DatabaseDocument } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 
 const actions = [
   'read',
@@ -12,9 +12,13 @@ const actions = [
   'manage', // Matches any actions
 ] as const;
 
-type Actions = typeof actions[number];
-type Subjects = InferSubjects<typeof DatabaseDocument> | string;
+export type Actions = typeof actions[number];
+export type Subjects = InferSubjects<typeof DatabaseDocument> | string;
 export type DocumentAbility = Ability<[Actions, Subjects]>;
+
+export function detectDocumentType(subject: DatabaseDocument): string {
+  return subject._id.split(':')[0] as any;
+}
 
 /**
  * Service that creates ability objects which can be used to check permissions.
@@ -40,15 +44,33 @@ export class PermissionService {
   getAbilityFor(user: User): DocumentAbility {
     const rules = this.rulesService
       .getRulesForUser(user)
-      .concat(this.permissionWriteRestriction);
+      .concat(...this.getPresetRules(user));
     return new Ability<[Actions, Subjects]>(rules, {
-      detectSubjectType: (subject) => {
-        if (subject instanceof String) {
-          return subject;
-        } else {
-          return subject._id.split(':')[0] as any;
-        }
-      },
+      detectSubjectType: detectDocumentType,
     });
+  }
+
+  private getPresetRules(user: User): DocumentRule[] {
+    const presetRules: DocumentRule[] = [this.permissionWriteRestriction];
+    if (!user.roles.includes('_admin')) {
+      // normal users can only read their own user object and update their password
+      presetRules.push({
+        subject: COUCHDB_USER_DOC,
+        action: ['manage'],
+        inverted: true,
+      });
+      presetRules.push({
+        subject: COUCHDB_USER_DOC,
+        action: 'read',
+        conditions: { name: user.name },
+      });
+      presetRules.push({
+        subject: COUCHDB_USER_DOC,
+        action: 'update',
+        fields: 'password',
+        conditions: { name: user.name },
+      });
+    }
+    return presetRules;
   }
 }

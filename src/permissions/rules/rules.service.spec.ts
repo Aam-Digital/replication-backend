@@ -4,7 +4,7 @@ import { User } from '../../session/session/user-auth.dto';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom, of, throwError } from 'rxjs';
 import { Permission } from './permission';
-import { CouchProxyController } from '../couch-proxy/couch-proxy.controller';
+import { CouchProxyController } from '../../replication/couch-proxy/couch-proxy.controller';
 import { ConfigService } from '@nestjs/config';
 
 describe('RulesService', () => {

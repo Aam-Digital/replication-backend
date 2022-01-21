@@ -1,6 +1,6 @@
 import { AuthGuard } from '@nestjs/passport';
 import { ExecutionContext, Injectable } from '@nestjs/common';
-import { CookieService } from '../cookie/cookie.service';
+import { CookieService } from '../../cookie/cookie.service';
 
 @Injectable()
 export class JwtGuard extends AuthGuard('jwt') {

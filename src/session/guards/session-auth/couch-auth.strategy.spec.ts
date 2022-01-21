@@ -4,7 +4,7 @@ import { HttpService } from '@nestjs/axios';
 import { of, throwError } from 'rxjs';
 import { HttpException, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { CouchProxyController } from '../../replication/couch-proxy/couch-proxy.controller';
+import { CouchProxyController } from '../../../replication/couch-proxy/couch-proxy.controller';
 
 describe('CouchAuthStrategy', () => {
   let strategy: CouchAuthStrategy;

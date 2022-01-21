@@ -1,6 +1,6 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
-import { CookieService } from '../cookie/cookie.service';
+import { CookieService } from '../../cookie/cookie.service';
 
 @Injectable()
 export class CouchAuthGuard extends AuthGuard('local') {

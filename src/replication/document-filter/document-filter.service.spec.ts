@@ -7,8 +7,8 @@ import {
   DatabaseDocument,
 } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { User } from '../../session/session/user-auth.dto';
-import { PermissionService } from '../permission/permission.service';
-import { RulesService } from '../rules/rules.service';
+import { PermissionService } from '../../permissions/permission/permission.service';
+import { RulesService } from '../../permissions/rules/rules.service';
 import { HttpService } from '@nestjs/axios';
 import { of } from 'rxjs';
 import { CouchProxyController } from '../couch-proxy/couch-proxy.controller';

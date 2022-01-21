@@ -1,22 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { UserController } from './user.controller';
-import { ConfigService } from '@nestjs/config';
-import { CouchProxyController } from '../replication/couch-proxy/couch-proxy.controller';
-import { HttpService } from '@nestjs/axios';
-import { firstValueFrom, of, throwError } from 'rxjs';
-import { UnauthorizedException } from '@nestjs/common';
+import { UserService } from './user.service';
+import { DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { COUCHDB_USER_DOC } from '../session/session/user-auth.dto';
 
 describe('UserController', () => {
   let controller: UserController;
-  let mockHttpService: HttpService;
-  let mockConfigService: ConfigService;
-  const DATABASE_URL = 'database.url';
-  const USERNAME = 'demo';
-  const PASSWORD = 'pass';
-  const COUCHDB_USERNAME = 'org.couchdb.user:testUser';
-  const BASIC_AUTH_HEADER = 'Basic someHash';
-  const COUCHDB_USER_OBJECT = {
-    _id: COUCHDB_USERNAME,
+  let mockUserService: UserService;
+  const couchDBUsername = `${COUCHDB_USER_DOC}:testUser`;
+  const couchDBUserObject = {
+    _id: couchDBUsername,
     _rev: '1-e0ebfb84005b920488fc7a8cc5470cc0',
     derived_key: 'e579375db0e0c6a6fc79cd9e36a36859f71575c3',
     iterations: 10,
@@ -26,33 +19,24 @@ describe('UserController', () => {
     salt: '1112283cf988a34f124200a050d308a1',
     type: 'user',
   };
-  const SUCCESS_RESPONSE = {
+  const successResponse: DocSuccess = {
     ok: true,
-    id: COUCHDB_USER_OBJECT._id,
-    rev: COUCHDB_USER_OBJECT._rev,
+    id: couchDBUserObject._id,
+    rev: couchDBUserObject._rev,
   };
-  const COUCHDB_USER_URL = DATABASE_URL + '/_users/' + COUCHDB_USERNAME;
-
+  const requestingUser = {
+    name: 'username',
+    role: ['user_app'],
+  };
   beforeEach(async () => {
-    mockHttpService = {
-      get: () => of({}),
-      put: () => of({}),
-    } as any;
-
-    const config = {};
-    config[CouchProxyController.DATABASE_USER_ENV] = USERNAME;
-    config[CouchProxyController.DATABASE_PASSWORD_ENV] = PASSWORD;
-    config[CouchProxyController.DATABASE_URL_ENV] = DATABASE_URL;
-    mockConfigService = {
-      get: jest.fn((key) => config[key]),
+    mockUserService = {
+      getUserObject: () => Promise.resolve(undefined),
+      updateUserObject: () => Promise.resolve(undefined),
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [UserController],
-      providers: [
-        { provide: HttpService, useValue: mockHttpService },
-        { provide: ConfigService, useValue: mockConfigService },
-      ],
+      providers: [{ provide: UserService, useValue: mockUserService }],
     }).compile();
 
     controller = module.get<UserController>(UserController);
@@ -62,111 +46,40 @@ describe('UserController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should forward the get user request with basic auth headers', async () => {
+  it('should call getUser with the username and the requesting user', async () => {
     jest
-      .spyOn(mockHttpService, 'get')
-      .mockReturnValue(of({ data: COUCHDB_USER_OBJECT } as any));
+      .spyOn(mockUserService, 'getUserObject')
+      .mockReturnValue(Promise.resolve(couchDBUserObject));
 
-    const response = firstValueFrom(
-      controller.getUser(COUCHDB_USERNAME, BASIC_AUTH_HEADER),
-    );
+    const response = controller.getUser(couchDBUsername, {
+      user: requestingUser,
+    } as any);
 
-    await expect(response).resolves.toEqual(COUCHDB_USER_OBJECT);
-    expect(mockHttpService.get).toHaveBeenCalledWith(
-      DATABASE_URL + '/_users/' + COUCHDB_USERNAME,
-      {
-        headers: {
-          authorization: BASIC_AUTH_HEADER,
-        },
-      },
+    await expect(response).resolves.toBe(couchDBUserObject);
+    expect(mockUserService.getUserObject).toHaveBeenCalledWith(
+      couchDBUsername,
+      requestingUser,
     );
   });
 
-  it('should fail the user get request with 401 unauthorized response when http request fails', () => {
+  it('should call updateUser with the body and the requesting user', async () => {
     jest
-      .spyOn(mockHttpService, 'get')
-      .mockReturnValue(throwError(() => new Error()));
+      .spyOn(mockUserService, 'updateUserObject')
+      .mockReturnValue(Promise.resolve(successResponse));
 
-    const response = firstValueFrom(controller.getUser('', ''));
-
-    return expect(response).rejects.toThrow(UnauthorizedException);
-  });
-
-  it('should forward the request with admin credentials if user is updating own document', async () => {
-    jest
-      .spyOn(mockHttpService, 'get')
-      .mockReturnValue(of({ data: COUCHDB_USER_OBJECT } as any));
-    jest
-      .spyOn(mockHttpService, 'put')
-      .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
     const userWithPassword = Object.assign(
       { password: 'newPass' },
-      COUCHDB_USER_OBJECT,
+      couchDBUserObject,
     );
 
-    const response = controller.putUser(
-      COUCHDB_USERNAME,
+    const response = controller.putUser(userWithPassword, {
+      user: requestingUser,
+    } as any);
+
+    await expect(response).resolves.toBe(successResponse);
+    expect(mockUserService.updateUserObject).toHaveBeenCalledWith(
       userWithPassword,
-      BASIC_AUTH_HEADER,
-    );
-
-    await expect(response).resolves.toBe(SUCCESS_RESPONSE);
-    expect(mockHttpService.get).toHaveBeenCalledWith(COUCHDB_USER_URL, {
-      headers: { authorization: BASIC_AUTH_HEADER },
-    });
-    expect(mockHttpService.put).toHaveBeenCalledWith(
-      COUCHDB_USER_URL,
-      userWithPassword,
-      { auth: { username: USERNAME, password: PASSWORD } },
-    );
-  });
-
-  it('should not send put request if basic auth header is invalid', async () => {
-    jest
-      .spyOn(mockHttpService, 'get')
-      .mockReturnValue(throwError(() => new Error()));
-    jest.spyOn(mockHttpService, 'put');
-
-    const response = controller.putUser(
-      USERNAME,
-      { password: 'newPass' },
-      BASIC_AUTH_HEADER,
-    );
-
-    await expect(response).rejects.toThrow(UnauthorizedException);
-    expect(mockHttpService.get).toHaveBeenCalled();
-    expect(mockHttpService.put).not.toHaveBeenCalled();
-  });
-
-  it('should only allow modification of the password property', async () => {
-    jest
-      .spyOn(mockHttpService, 'get')
-      .mockReturnValue(of({ data: COUCHDB_USER_OBJECT } as any));
-    jest
-      .spyOn(mockHttpService, 'put')
-      .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
-    const modifiedUser = Object.assign(
-      { password: 'newPass' },
-      COUCHDB_USER_OBJECT,
-    );
-    modifiedUser.roles = ['admin_app'];
-
-    const response = controller.putUser(
-      COUCHDB_USERNAME,
-      modifiedUser,
-      BASIC_AUTH_HEADER,
-    );
-
-    await expect(response).resolves.toBe(SUCCESS_RESPONSE);
-    expect(mockHttpService.get).toHaveBeenCalled();
-    const onlyChangedPassword = Object.assign(
-      { password: 'newPass' },
-      COUCHDB_USER_OBJECT,
-    );
-    expect(mockHttpService.put).toHaveBeenCalledWith(
-      COUCHDB_USER_URL,
-      onlyChangedPassword,
-      { auth: { username: USERNAME, password: PASSWORD } },
+      requestingUser,
     );
   });
 });

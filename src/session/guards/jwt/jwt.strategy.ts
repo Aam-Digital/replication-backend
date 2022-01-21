@@ -1,9 +1,9 @@
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';
 import { Injectable } from '@nestjs/common';
-import { SessionModule } from '../session.module';
-import { User } from '../session/user-auth.dto';
-import { TOKEN_KEY } from '../cookie/cookie.service';
+import { SessionModule } from '../../session.module';
+import { User } from '../../session/user-auth.dto';
+import { TOKEN_KEY } from '../../cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()

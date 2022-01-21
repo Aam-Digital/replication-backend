@@ -1,5 +1,5 @@
 import { Controller, Post, UseGuards } from '@nestjs/common';
-import { JwtGuard } from '../../session/jwt/jwt.guard';
+import { JwtGuard } from '../../session/guards/jwt/jwt.guard';
 import { RulesService } from './rules.service';
 import { Observable } from 'rxjs';
 import { Permission } from './permission';
