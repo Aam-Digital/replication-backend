@@ -12,9 +12,13 @@ const actions = [
   'manage', // Matches any actions
 ] as const;
 
-type Actions = typeof actions[number];
-type Subjects = InferSubjects<typeof DatabaseDocument> | string;
+export type Actions = typeof actions[number];
+export type Subjects = InferSubjects<typeof DatabaseDocument> | string;
 export type DocumentAbility = Ability<[Actions, Subjects]>;
+
+export function detectDocumentType(subject: DatabaseDocument): string {
+  return subject._id.split(':')[0] as any;
+}
 
 /**
  * Service that creates ability objects which can be used to check permissions.
@@ -42,13 +46,7 @@ export class PermissionService {
       .getRulesForUser(user)
       .concat(this.permissionWriteRestriction);
     return new Ability<[Actions, Subjects]>(rules, {
-      detectSubjectType: (subject) => {
-        if (subject instanceof String) {
-          return subject;
-        } else {
-          return subject._id.split(':')[0] as any;
-        }
-      },
+      detectSubjectType: detectDocumentType,
     });
   }
 }

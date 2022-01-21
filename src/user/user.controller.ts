@@ -11,11 +11,11 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { CouchProxyController } from '../replication/couch-proxy/couch-proxy.controller';
-import { User, UserPassword } from '../session/session/user-auth.dto';
+import { User } from '../session/session/user-auth.dto';
 import { HttpService } from '@nestjs/axios';
 import { catchError, firstValueFrom, map, Observable } from 'rxjs';
 import { ApiBasicAuth } from '@nestjs/swagger';
-import { DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { DatabaseDocument, DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { UserService } from './user.service';
 import { Request } from 'express';
 import { BasicAuthGuard } from '../session/guards/basic-auth/basic-auth-guard.service';
@@ -50,9 +50,9 @@ export class UserController {
   getUser(
     @Param('username') username: string,
     @Headers('Authorization') authHeader: string,
-  ): Observable<User> {
+  ): Observable<DatabaseDocument> {
     return this.httpService
-      .get<User>(this.getUserUrl(username), {
+      .get<DatabaseDocument>(this.getUserUrl(username), {
         headers: { authorization: authHeader },
       })
       .pipe(
@@ -78,7 +78,7 @@ export class UserController {
   @Put('/:username')
   async putUser(
     @Param('username') username: string,
-    @Body() updatedUser: UserPassword,
+    @Body() updatedUser: DatabaseDocument,
     @Headers('Authorization') authHeader: string,
     @Req() request: Request,
   ): Promise<DocSuccess> {

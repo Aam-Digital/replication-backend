@@ -3,10 +3,6 @@ export class UserCredentials {
   password: string;
 }
 
-export class UserPassword {
-  password: string;
-}
-
 export class User {
   constructor(public name: string, public roles: string[]) {}
 }
