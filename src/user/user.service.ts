@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { COUCHDB_USER_DOC, User } from '../session/session/user-auth.dto';
+import { User } from '../session/session/user-auth.dto';
 import {
   DatabaseDocument,
   DocSuccess,
@@ -22,15 +22,36 @@ export class UserService extends CouchDBInteracter {
     super(httpService, configService);
   }
 
+  async getUserObject(
+    username: string,
+    requestingUser: User,
+  ): Promise<DatabaseDocument> {
+    const userAbility = this.permissionService.getAbilityFor(requestingUser);
+    const userDoc = await firstValueFrom(
+      this.httpService
+        .get<DatabaseDocument>(this.getUserUrl(username))
+        .pipe(map((response) => response.data)),
+    );
+    if (userAbility.can('read', userDoc)) {
+      return userDoc;
+    } else {
+      throw new UnauthorizedException('unauthorized', 'User is not permitted');
+    }
+  }
+
+  private getUserUrl(username: string): string {
+    return this.databaseUrl + '/_users/' + username;
+  }
+
   async updateUserObject(
-    oldUser: DatabaseDocument,
-    newUser: DatabaseDocument,
-    loggedInUser: User,
+    userDoc: DatabaseDocument,
+    requestingUser: User,
   ): Promise<DocSuccess> {
-    const userAbility = this.permissionService.getAbilityFor(loggedInUser);
-    if (!oldUser && userAbility.can('create', newUser)) {
+    const userAbility = this.permissionService.getAbilityFor(requestingUser);
+    const oldUser = await this.getUserObject(userDoc._id, requestingUser);
+    if (!oldUser && userAbility.can('create', userDoc)) {
       // Creating
-      return this.putUserObject(newUser);
+      return this.putUserObject(userDoc);
     } else if (userAbility.can('update', oldUser)) {
       // Updating
       const permittedFields = permittedFieldsOf(
@@ -43,12 +64,12 @@ export class UserService extends CouchDBInteracter {
       );
       if (permittedFields.length > 0) {
         // Updating some properties
-        const updatedFields = _.pick(newUser, permittedFields);
+        const updatedFields = _.pick(userDoc, permittedFields);
         const updatedUser = Object.assign(oldUser, updatedFields);
         return this.putUserObject(updatedUser);
       } else {
         // Updating whole document
-        return this.putUserObject(newUser);
+        return this.putUserObject(userDoc);
       }
     } else {
       throw new UnauthorizedException('unauthorized', 'User is not permitted');
@@ -56,10 +77,9 @@ export class UserService extends CouchDBInteracter {
   }
 
   private putUserObject(newUserObject): Promise<DocSuccess> {
-    const userUrl = `${this.databaseUrl}/_users/${COUCHDB_USER_DOC}:${newUserObject.name}`;
     return firstValueFrom(
       this.httpService
-        .put<DocSuccess>(userUrl, newUserObject)
+        .put<DocSuccess>(this.getUserUrl(newUserObject._id), newUserObject)
         .pipe(map((response) => response.data)),
     );
   }

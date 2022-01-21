@@ -13,11 +13,9 @@ import {
 import { Ability } from '@casl/ability';
 import { DocumentRule } from '../permissions/rules/rules.service';
 import { UnauthorizedException } from '@nestjs/common';
-import {
-  DatabaseDocument,
-  DocSuccess,
-} from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { COUCHDB_USER_DOC, User } from '../session/session/user-auth.dto';
+import spyOn = jest.spyOn;
 
 describe('UserService', () => {
   let service: UserService;
@@ -29,7 +27,7 @@ describe('UserService', () => {
   const PASSWORD = 'pass';
   const COUCHDB_USERNAME = `${COUCHDB_USER_DOC}:testUser`;
   const COUCHDB_USER_URL = DATABASE_URL + '/_users/' + COUCHDB_USERNAME;
-  const COUCHDB_USER_OBJECT: DatabaseDocument = {
+  const COUCHDB_USER_OBJECT = {
     _id: COUCHDB_USERNAME,
     _rev: '1-e0ebfb84005b920488fc7a8cc5470cc0',
     derived_key: 'e579375db0e0c6a6fc79cd9e36a36859f71575c3',
@@ -40,7 +38,7 @@ describe('UserService', () => {
     salt: '1112283cf988a34f124200a050d308a1',
     type: 'user',
   };
-  const loggedInUser: User = {
+  const requestingUser: User = {
     name: 'testUser',
     roles: [],
   };
@@ -52,9 +50,16 @@ describe('UserService', () => {
 
   beforeEach(async () => {
     mockHttpService = {
-      put: () => of({}),
+      put: () => of(undefined),
+      get: () => of(undefined),
       axiosRef: { defaults: { auth: undefined } },
     } as any;
+    jest
+      .spyOn(mockHttpService, 'get')
+      .mockReturnValue(of({ data: COUCHDB_USER_OBJECT } as any));
+    jest
+      .spyOn(mockHttpService, 'put')
+      .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
 
     const config = {};
     config[CouchProxyController.DATABASE_USER_ENV] = USERNAME;
@@ -87,29 +92,57 @@ describe('UserService', () => {
   it('should create ability for passed user', async () => {
     mockAbility([{ subject: 'all', action: 'manage' }]);
 
-    await service.updateUserObject(
-      undefined,
-      COUCHDB_USER_OBJECT,
-      loggedInUser,
-    );
+    await service.updateUserObject(COUCHDB_USER_OBJECT, requestingUser);
 
     expect(mockPermissionService.getAbilityFor).toHaveBeenCalledWith(
-      loggedInUser,
+      requestingUser,
     );
   });
 
+  it('should return the user object if user has read permissions', async () => {
+    mockAbility([
+      {
+        subject: COUCHDB_USER_DOC,
+        action: 'read',
+        conditions: { name: requestingUser.name },
+      },
+    ]);
+
+    const response = service.getUserObject(
+      COUCHDB_USER_OBJECT._id,
+      requestingUser,
+    );
+
+    await expect(response).resolves.toBe(COUCHDB_USER_OBJECT);
+    expect(mockHttpService.get).toHaveBeenCalledWith(COUCHDB_USER_URL);
+  });
+
+  it('should throw unauthorized exception if user does not have read permission', async () => {
+    mockAbility([
+      {
+        subject: COUCHDB_USER_DOC,
+        action: 'read',
+        inverted: true,
+      },
+    ]);
+
+    const response = service.getUserObject(
+      COUCHDB_USER_OBJECT._id,
+      requestingUser,
+    );
+
+    await expect(response).rejects.toThrow(UnauthorizedException);
+  });
+
   it('should allow admins to create new users', async () => {
-    jest
-      .spyOn(mockHttpService, 'put')
-      .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
+    jest.spyOn(service, 'getUserObject').mockReturnValue(undefined);
     mockAbility([
       { subject: COUCHDB_USER_DOC, action: ['create', 'update', 'read'] },
     ]);
 
     const response = service.updateUserObject(
-      undefined,
       COUCHDB_USER_OBJECT,
-      loggedInUser,
+      requestingUser,
     );
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
@@ -120,29 +153,25 @@ describe('UserService', () => {
   });
 
   it('should throw an unauthorized exception if user is not allowed to create a new user', () => {
+    spyOn(service, 'getUserObject').mockReturnValue(undefined);
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
 
     const response = service.updateUserObject(
-      undefined,
       COUCHDB_USER_OBJECT,
-      loggedInUser,
+      requestingUser,
     );
 
     return expect(response).rejects.toThrow(UnauthorizedException);
   });
 
   it('should allow admins to update the whole user object', async () => {
-    jest
-      .spyOn(mockHttpService, 'put')
-      .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
-    mockAbility([{ subject: COUCHDB_USER_DOC, action: 'update' }]);
+    mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
     const userWithUpdatedRoles = Object.assign({}, COUCHDB_USER_OBJECT);
     userWithUpdatedRoles.roles = ['admin_app'];
 
     const response = service.updateUserObject(
-      COUCHDB_USER_OBJECT,
       userWithUpdatedRoles,
-      loggedInUser,
+      requestingUser,
     );
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
@@ -153,15 +182,12 @@ describe('UserService', () => {
   });
 
   it('should allow normal users to only update their own password', async () => {
-    jest
-      .spyOn(mockHttpService, 'put')
-      .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
     mockAbility([
       {
         subject: COUCHDB_USER_DOC,
-        action: 'update',
+        action: ['update', 'read'],
         fields: 'password',
-        conditions: { name: loggedInUser.name },
+        conditions: { name: requestingUser.name },
       },
     ]);
     const userWithUpdatedPassword = Object.assign({}, COUCHDB_USER_OBJECT);
@@ -170,9 +196,8 @@ describe('UserService', () => {
     updatedPasswordAndRole.roles = ['admin_app'];
 
     const response = service.updateUserObject(
-      COUCHDB_USER_OBJECT,
       updatedPasswordAndRole,
-      loggedInUser,
+      requestingUser,
     );
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
@@ -199,7 +224,6 @@ describe('UserService', () => {
     userWithUpdatedPassword['password'] = 'new_password';
 
     const response = service.updateUserObject(
-      COUCHDB_USER_OBJECT,
       userWithUpdatedPassword,
       otherUser,
     );
