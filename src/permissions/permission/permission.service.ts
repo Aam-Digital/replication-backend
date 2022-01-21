@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { User } from '../../session/session/user-auth.dto';
 import { DocumentRule, RulesService } from '../rules/rules.service';
 import { Ability, InferSubjects } from '@casl/ability';
-import { DatabaseDocument } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { DatabaseDocument } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 
 const actions = [
   'read',

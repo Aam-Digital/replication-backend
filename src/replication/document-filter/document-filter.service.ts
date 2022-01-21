@@ -17,7 +17,7 @@ import { User } from '../../session/session/user-auth.dto';
 import {
   DocumentAbility,
   PermissionService,
-} from '../permission/permission.service';
+} from '../../permissions/permission/permission.service';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom, map } from 'rxjs';

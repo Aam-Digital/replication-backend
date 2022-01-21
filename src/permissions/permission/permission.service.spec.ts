@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PermissionService } from './permission.service';
 import { RulesService } from '../rules/rules.service';
 import { User } from '../../session/session/user-auth.dto';
-import { DatabaseDocument } from '../couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { DatabaseDocument } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { Permission } from '../rules/permission';
 
 describe('PermissionService', () => {
