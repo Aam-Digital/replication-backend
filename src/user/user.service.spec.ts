@@ -13,8 +13,11 @@ import {
 import { Ability } from '@casl/ability';
 import { DocumentRule } from '../permissions/rules/rules.service';
 import { UnauthorizedException } from '@nestjs/common';
-import { DatabaseDocument, DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
-import { User } from '../session/session/user-auth.dto';
+import {
+  DatabaseDocument,
+  DocSuccess,
+} from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { COUCHDB_USER_DOC, User } from '../session/session/user-auth.dto';
 
 describe('UserService', () => {
   let service: UserService;
@@ -24,7 +27,7 @@ describe('UserService', () => {
   const DATABASE_URL = 'database.url';
   const USERNAME = 'demo';
   const PASSWORD = 'pass';
-  const COUCHDB_USERNAME = 'org.couchdb.user:testUser';
+  const COUCHDB_USERNAME = `${COUCHDB_USER_DOC}:testUser`;
   const COUCHDB_USER_URL = DATABASE_URL + '/_users/' + COUCHDB_USERNAME;
   const COUCHDB_USER_OBJECT: DatabaseDocument = {
     _id: COUCHDB_USERNAME,
@@ -100,7 +103,7 @@ describe('UserService', () => {
       .spyOn(mockHttpService, 'put')
       .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
     mockAbility([
-      { subject: 'org.couchdb.user', action: ['create', 'update', 'read'] },
+      { subject: COUCHDB_USER_DOC, action: ['create', 'update', 'read'] },
     ]);
 
     const response = service.updateUserObject(
@@ -117,7 +120,7 @@ describe('UserService', () => {
   });
 
   it('should throw an unauthorized exception if user is not allowed to create a new user', () => {
-    mockAbility([{ subject: 'org.couchdb.user', action: ['update', 'read'] }]);
+    mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
 
     const response = service.updateUserObject(
       undefined,
@@ -132,7 +135,7 @@ describe('UserService', () => {
     jest
       .spyOn(mockHttpService, 'put')
       .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
-    mockAbility([{ subject: 'org.couchdb.user', action: 'update' }]);
+    mockAbility([{ subject: COUCHDB_USER_DOC, action: 'update' }]);
     const userWithUpdatedRoles = Object.assign({}, COUCHDB_USER_OBJECT);
     userWithUpdatedRoles.roles = ['admin_app'];
 
@@ -155,7 +158,7 @@ describe('UserService', () => {
       .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
     mockAbility([
       {
-        subject: 'org.couchdb.user',
+        subject: COUCHDB_USER_DOC,
         action: 'update',
         fields: 'password',
         conditions: { name: loggedInUser.name },
@@ -186,7 +189,7 @@ describe('UserService', () => {
     };
     mockAbility([
       {
-        subject: 'org.couchdb.user',
+        subject: COUCHDB_USER_DOC,
         action: 'update',
         fields: 'password',
         conditions: { name: otherUser.name },

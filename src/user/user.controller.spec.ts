@@ -6,6 +6,7 @@ import { HttpService } from '@nestjs/axios';
 import { firstValueFrom, of, throwError } from 'rxjs';
 import { UnauthorizedException } from '@nestjs/common';
 import { UserService } from './user.service';
+import { COUCHDB_USER_DOC } from '../session/session/user-auth.dto';
 
 describe('UserController', () => {
   let controller: UserController;
@@ -15,7 +16,7 @@ describe('UserController', () => {
   const DATABASE_URL = 'database.url';
   const USERNAME = 'demo';
   const PASSWORD = 'pass';
-  const COUCHDB_USERNAME = 'org.couchdb.user:testUser';
+  const COUCHDB_USERNAME = `${COUCHDB_USER_DOC}:testUser`;
   const BASIC_AUTH_HEADER = 'Basic someHash';
   const COUCHDB_USER_OBJECT = {
     _id: COUCHDB_USERNAME,
@@ -134,7 +135,7 @@ describe('UserController', () => {
 
     const response = controller.putUser(
       USERNAME,
-      { password: 'newPass' },
+      undefined,
       BASIC_AUTH_HEADER,
       { user: COUCHDB_USER_OBJECT } as any,
     );

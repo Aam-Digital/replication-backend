@@ -10,3 +10,5 @@ export class User {
 export class SessionResponse {
   userCtx: User;
 }
+
+export const COUCHDB_USER_DOC = 'org.couchdb.user';

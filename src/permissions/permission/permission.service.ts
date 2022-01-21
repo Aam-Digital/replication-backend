@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { User } from '../../session/session/user-auth.dto';
+import { COUCHDB_USER_DOC, User } from '../../session/session/user-auth.dto';
 import { DocumentRule, RulesService } from '../rules/rules.service';
 import { Ability, InferSubjects } from '@casl/ability';
 import { DatabaseDocument } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
@@ -44,9 +44,33 @@ export class PermissionService {
   getAbilityFor(user: User): DocumentAbility {
     const rules = this.rulesService
       .getRulesForUser(user)
-      .concat(this.permissionWriteRestriction);
+      .concat(...this.getPresetRules(user));
     return new Ability<[Actions, Subjects]>(rules, {
       detectSubjectType: detectDocumentType,
     });
+  }
+
+  private getPresetRules(user: User): DocumentRule[] {
+    const presetRules: DocumentRule[] = [this.permissionWriteRestriction];
+    if (!user.roles.includes('_admin')) {
+      // normal users can only read their own user object and update their password
+      presetRules.push({
+        subject: COUCHDB_USER_DOC,
+        action: ['manage'],
+        inverted: true,
+      });
+      presetRules.push({
+        subject: COUCHDB_USER_DOC,
+        action: 'read',
+        conditions: { name: user.name },
+      });
+      presetRules.push({
+        subject: COUCHDB_USER_DOC,
+        action: 'update',
+        fields: 'password',
+        conditions: { name: user.name },
+      });
+    }
+    return presetRules;
   }
 }

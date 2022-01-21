@@ -1,6 +1,9 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { User } from '../session/session/user-auth.dto';
-import { DatabaseDocument, DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { COUCHDB_USER_DOC, User } from '../session/session/user-auth.dto';
+import {
+  DatabaseDocument,
+  DocSuccess,
+} from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { firstValueFrom, map } from 'rxjs';
 import { CouchDBInteracter } from '../utils/couchdb-interacter';
 import { HttpService } from '@nestjs/axios';
@@ -53,8 +56,7 @@ export class UserService extends CouchDBInteracter {
   }
 
   private putUserObject(newUserObject): Promise<DocSuccess> {
-    const userUrl =
-      this.databaseUrl + '/_users/org.couchdb.user:' + newUserObject.name;
+    const userUrl = `${this.databaseUrl}/_users/${COUCHDB_USER_DOC}:${newUserObject.name}`;
     return firstValueFrom(
       this.httpService
         .put<DocSuccess>(userUrl, newUserObject)
