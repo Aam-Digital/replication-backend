@@ -13,7 +13,7 @@ import {
   DatabaseDocument,
   DocSuccess,
 } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
-import { UserService } from './user.service';
+import { DocumentService } from './document.service';
 import { Request } from 'express';
 import { BasicAuthGuard } from '../session/guards/basic-auth/basic-auth-guard.service';
 
@@ -24,37 +24,47 @@ import { BasicAuthGuard } from '../session/guards/basic-auth/basic-auth-guard.se
  */
 @ApiBasicAuth()
 @UseGuards(BasicAuthGuard)
-@Controller('_users')
-export class UserController {
-  constructor(private userService: UserService) {}
+@Controller('/:db')
+export class DocumentController {
+  constructor(private documentService: DocumentService) {}
 
   /**
-   * Fetch a user document with basic auth.
-   * Users can fetch only their own document.
-   * @param username the name of the user with the 'org.couchdb.user:' prefix
+   * Fetch a document from a database with basic auth.
+   * @param db the name of the database from which the document should be fetched
+   * @param docId the name of the document
    * @param request the request object holding the user executing the request
    */
-  @Get('/:username')
-  getUser(
-    @Param('username') username: string,
+  @Get('/:docId')
+  getDocument(
+    @Param('db') db: string,
+    @Param('docId') docId: string,
     @Req() request: Request,
   ): Promise<DatabaseDocument> {
     const authenticatedUser = request.user as User;
-    return this.userService.getUserObject(username, authenticatedUser);
+    return this.documentService.getDocument(db, docId, authenticatedUser);
   }
 
   /**
    * Update the user document with a new password.
    * Users can only update their own document.
-   * @param userDoc a object from which only the password property will be used
+   * @param db the name of the database from which the document should be fetched
+   * @param docId the ID of the document which should be stored
+   * @param document a object from which only the password property will be used
    * @param request the request object holding the user executing the request
    */
-  @Put('/:username')
-  async putUser(
-    @Body() userDoc: DatabaseDocument,
+  @Put('/:docId')
+  async putDocument(
+    @Param('db') db: string,
+    @Param('docId') docId: string,
+    @Body() document: DatabaseDocument,
     @Req() request: Request,
   ): Promise<DocSuccess> {
     const requestingUser = request.user as User;
-    return this.userService.updateUserObject(userDoc, requestingUser);
+    return this.documentService.putDocument(
+      db,
+      docId,
+      document,
+      requestingUser,
+    );
   }
 }
