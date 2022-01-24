@@ -38,8 +38,6 @@ export class PermissionService {
    * Creates an ability object containing all rules that are defined for the roles of the given user.
    * This ability object can be used to check the permissions of the user on various documents.
    *
-   * TODO add interpolation once necessary {@link https://casl.js.org/v5/en/cookbook/roles-with-persisted-permissions#services}
-   *
    * @param user for which the ability object should be created
    * @returns DocumentAbility that allows to check the users permissions on a given document and action
    */

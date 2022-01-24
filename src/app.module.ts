@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ReplicationModule } from './replication/replication.module';
-import { DocumentModule } from './user/document.module';
+import { DocumentModule } from './document/document.module';
 import { SentryModule } from '@ntegral/nestjs-sentry';
 
 @Module({
