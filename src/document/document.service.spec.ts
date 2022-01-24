@@ -138,10 +138,10 @@ describe('DocumentService', () => {
   });
 
   it('should allow create operation if user has permission', async () => {
-    jest.spyOn(service, 'getDocument').mockReturnValue(undefined);
-    mockAbility([
-      { subject: COUCHDB_USER_DOC, action: ['create', 'update', 'read'] },
-    ]);
+    jest
+      .spyOn(mockHttpService, 'get')
+      .mockReturnValue(throwError(() => new Error()));
+    mockAbility([{ subject: COUCHDB_USER_DOC, action: ['create', 'read'] }]);
 
     const response = service.putDocument(
       databaseName,
@@ -155,9 +155,9 @@ describe('DocumentService', () => {
   });
 
   it('should throw an unauthorized exception if user does not have create permission', () => {
-    spyOn(mockHttpService, 'get').mockReturnValue(
-      throwError(() => new Error()),
-    );
+    jest
+      .spyOn(mockHttpService, 'get')
+      .mockReturnValue(throwError(() => new Error()));
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
 
     const response = service.putDocument(
