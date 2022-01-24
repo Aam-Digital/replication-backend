@@ -15,7 +15,6 @@ import { DocumentRule } from '../permissions/rules/rules.service';
 import { UnauthorizedException } from '@nestjs/common';
 import { DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 import { COUCHDB_USER_DOC, User } from '../session/session/user-auth.dto';
-import spyOn = jest.spyOn;
 
 describe('DocumentService', () => {
   let service: DocumentService;
