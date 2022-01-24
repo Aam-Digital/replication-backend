@@ -1,14 +1,14 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ReplicationModule } from './replication/replication.module';
-import { UserModule } from './user/user.module';
+import { DocumentModule } from './user/document.module';
 import { SentryModule } from '@ntegral/nestjs-sentry';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     ReplicationModule,
-    UserModule,
+    DocumentModule,
     SentryModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => {
