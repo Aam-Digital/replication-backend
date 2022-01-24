@@ -26,7 +26,7 @@ import { BasicAuthGuard } from '../session/guards/basic-auth/basic-auth-guard.se
 @UseGuards(BasicAuthGuard)
 @Controller('/:db')
 export class DocumentController {
-  constructor(private userService: DocumentService) {}
+  constructor(private documentService: DocumentService) {}
 
   /**
    * Fetch a document from a database with basic auth.
@@ -41,7 +41,7 @@ export class DocumentController {
     @Req() request: Request,
   ): Promise<DatabaseDocument> {
     const authenticatedUser = request.user as User;
-    return this.userService.getDocument(db, docId, authenticatedUser);
+    return this.documentService.getDocument(db, docId, authenticatedUser);
   }
 
   /**
@@ -60,6 +60,11 @@ export class DocumentController {
     @Req() request: Request,
   ): Promise<DocSuccess> {
     const requestingUser = request.user as User;
-    return this.userService.putDocument(db, docId, document, requestingUser);
+    return this.documentService.putDocument(
+      db,
+      docId,
+      document,
+      requestingUser,
+    );
   }
 }
