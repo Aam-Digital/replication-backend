@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { COUCHDB_USER_DOC, User } from '../../session/session/user-auth.dto';
-import { DocumentRule, RulesService } from '../rules/rules.service';
-import { Ability, InferSubjects } from '@casl/ability';
+import { User } from '../../session/session/user-auth.dto';
+import { RulesService } from '../rules/rules.service';
+import { Ability, AbilityClass, InferSubjects } from '@casl/ability';
 import { DatabaseDocument } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
 
 const actions = [
@@ -12,9 +12,10 @@ const actions = [
   'manage', // Matches any actions
 ] as const;
 
-export type Actions = typeof actions[number];
-export type Subjects = InferSubjects<typeof DatabaseDocument> | string;
+type Actions = typeof actions[number];
+type Subjects = InferSubjects<typeof DatabaseDocument> | string;
 export type DocumentAbility = Ability<[Actions, Subjects]>;
+export const DocumentAbility = Ability as AbilityClass<DocumentAbility>;
 
 export function detectDocumentType(subject: DatabaseDocument): string {
   return subject._id.split(':')[0] as any;
@@ -27,11 +28,6 @@ export function detectDocumentType(subject: DatabaseDocument): string {
  */
 @Injectable()
 export class PermissionService {
-  private readonly permissionWriteRestriction: DocumentRule = {
-    subject: 'Permission',
-    action: ['create', 'update', 'delete'],
-    inverted: true,
-  };
   constructor(private rulesService: RulesService) {}
 
   /**
@@ -42,35 +38,9 @@ export class PermissionService {
    * @returns DocumentAbility that allows to check the users permissions on a given document and action
    */
   getAbilityFor(user: User): DocumentAbility {
-    const rules = this.rulesService
-      .getRulesForUser(user)
-      .concat(...this.getPresetRules(user));
-    return new Ability<[Actions, Subjects]>(rules, {
+    const rules = this.rulesService.getRulesForUser(user);
+    return new DocumentAbility(rules, {
       detectSubjectType: detectDocumentType,
     });
-  }
-
-  private getPresetRules(user: User): DocumentRule[] {
-    const presetRules: DocumentRule[] = [this.permissionWriteRestriction];
-    if (!user.roles.includes('_admin')) {
-      // normal users can only read their own user object and update their password
-      presetRules.push({
-        subject: COUCHDB_USER_DOC,
-        action: ['manage'],
-        inverted: true,
-      });
-      presetRules.push({
-        subject: COUCHDB_USER_DOC,
-        action: 'read',
-        conditions: { name: user.name },
-      });
-      presetRules.push({
-        subject: COUCHDB_USER_DOC,
-        action: 'update',
-        fields: 'password',
-        conditions: { name: user.name },
-      });
-    }
-    return presetRules;
   }
 }
