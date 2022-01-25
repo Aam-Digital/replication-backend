@@ -39,6 +39,8 @@ export class PermissionService {
    */
   getAbilityFor(user: User): DocumentAbility {
     const rules = this.rulesService.getRulesForUser(user);
-    return new DocumentAbility(rules, { detectSubjectType: detectDocumentType });
+    return new DocumentAbility(rules, {
+      detectSubjectType: detectDocumentType,
+    });
   }
 }
