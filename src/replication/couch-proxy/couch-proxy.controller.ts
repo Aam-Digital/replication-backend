@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Get,
-  NotFoundException,
   Param,
   Post,
   Put,
@@ -11,14 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import {
-  catchError,
-  firstValueFrom,
-  from,
-  map,
-  Observable,
-  switchMap,
-} from 'rxjs';
+import { firstValueFrom, from, map, Observable, switchMap } from 'rxjs';
 import { ChangesFeed } from './couchdb-dtos/changes.dto';
 import {
   RevisionDiffRequest,
@@ -73,12 +65,7 @@ export class CouchProxyController extends CouchDBInteracter {
   getLocal(@Param('id') id: string): Observable<any> {
     return this.httpService
       .get(`${this.databaseUrl}/${this.databaseName}/_local/${id}`)
-      .pipe(
-        catchError((err) => {
-          throw new NotFoundException(err.request.data);
-        }),
-        map((response) => response.data),
-      );
+      .pipe(map((response) => response.data));
   }
 
   /**
