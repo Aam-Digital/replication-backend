@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ReplicationModule } from './replication/replication.module';
 import { DocumentModule } from './document/document.module';
 import { SentryModule } from '@ntegral/nestjs-sentry';
+import { Severity } from '@sentry/types';
 
 @Module({
   imports: [
@@ -23,6 +24,13 @@ import { SentryModule } from '@ntegral/nestjs-sentry';
           environment: 'prod',
           release: 'backend@latest',
           whitelistUrls: [/https?:\/\/(.*)\.?aam-digital\.com/],
+          beforeSend: (event) => {
+            if ([Severity.Log, Severity.Info].includes(event.level)) {
+              return null;
+            } else {
+              return event;
+            }
+          },
         };
       },
     }),

@@ -4,9 +4,10 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { json, urlencoded } from 'express';
+import { SentryService } from '@ntegral/nestjs-sentry';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { logger: false });
   // Proxy for CouchDB admin view
   app.use(
     '/db',
@@ -40,6 +41,9 @@ async function bootstrap() {
   // Configure this after the proxy to prevent parsing of proxy request body
   app.use(json({ limit: '10mb' }));
   app.use(urlencoded({ extended: true, limit: '10mb' }));
+
+  // Logging everything through sentry
+  app.useLogger(SentryService.SentryServiceInstance());
 
   await app.listen(3000);
 }
