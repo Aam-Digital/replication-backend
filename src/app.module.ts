@@ -11,6 +11,7 @@ import { SentryModule } from '@ntegral/nestjs-sentry';
     DocumentModule,
     SentryModule.forRootAsync({
       imports: [ConfigModule],
+      inject: [ConfigService],
       useFactory: async (configService: ConfigService) => {
         if (!configService.get('SENTRY_DSN')) {
           return;
@@ -24,7 +25,6 @@ import { SentryModule } from '@ntegral/nestjs-sentry';
           whitelistUrls: [/https?:\/\/(.*)\.?aam-digital\.com/],
         };
       },
-      inject: [ConfigService],
     }),
   ],
 })
