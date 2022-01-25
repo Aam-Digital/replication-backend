@@ -16,8 +16,6 @@ describe('CouchProxyController', () => {
   let documentFilter: DocumentFilterService;
   const DATABASE_URL = 'database.url';
   const DATABASE_NAME = 'app';
-  const USERNAME = 'demo';
-  const PASSWORD = 'pass';
 
   beforeEach(async () => {
     mockHttpService = {
@@ -25,7 +23,6 @@ describe('CouchProxyController', () => {
       get: () => of({}),
       put: () => of({}),
       delete: () => of({}),
-      axiosRef: { defaults: { auth: undefined } },
     } as any;
 
     documentFilter = {
@@ -35,8 +32,6 @@ describe('CouchProxyController', () => {
     } as any;
 
     const config = {};
-    config[CouchProxyController.DATABASE_USER_ENV] = USERNAME;
-    config[CouchProxyController.DATABASE_PASSWORD_ENV] = PASSWORD;
     config[CouchProxyController.DATABASE_URL_ENV] = DATABASE_URL;
     config[CouchProxyController.DATABASE_NAME_ENV] = DATABASE_NAME;
 
@@ -54,13 +49,6 @@ describe('CouchProxyController', () => {
 
   it('should be defined', () => {
     expect(controller).toBeDefined();
-  });
-
-  it('should set the default auth header', () => {
-    expect(mockHttpService.axiosRef.defaults.auth).toEqual({
-      username: USERNAME,
-      password: PASSWORD,
-    });
   });
 
   it('should use the document filter service in bulkGet', async () => {
