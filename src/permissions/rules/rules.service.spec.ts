@@ -80,22 +80,22 @@ describe('RulesService', () => {
   it('should return the rules for every passed user role', () => {
     let result = service.getRulesForUser(new User('normalUser', ['user_app']));
 
-    userRules.forEach((rule) => expect(result).toContain(rule));
-    adminRules.forEach((rule) => expect(result).not.toContain(rule));
+    userRules.forEach((rule) => expect(result).toContainEqual(rule));
+    adminRules.forEach((rule) => expect(result).not.toContainEqual(rule));
 
     result = service.getRulesForUser(
       new User('superUser', ['user_app', 'admin_app']),
     );
     userRules
       .concat(adminRules)
-      .forEach((rule) => expect(result).toContain(rule));
+      .forEach((rule) => expect(result).toContainEqual(rule));
   });
 
   it('should not fail if no rules exist for a given role', () => {
     const result = service.getRulesForUser(
       new User('specialUser', ['user_app', 'manager_app']),
     );
-    userRules.forEach((rule) => expect(result).toContain(rule));
+    userRules.forEach((rule) => expect(result).toContainEqual(rule));
   });
 
   it('should return a ability that does not allow to modify the permission document', () => {
@@ -144,5 +144,30 @@ describe('RulesService', () => {
     expect(ability.cannot('update', otherUserDoc, 'password')).toBe(true);
     expect(ability.cannot('create', otherUserDoc)).toBe(true);
     expect(ability.cannot('delete', otherUserDoc)).toBe(true);
+  });
+
+  it('should inject user properties', async () => {
+    const user = new User('some-user', ['another_role']);
+    const permissionWithVariable: Permission = new Permission({
+      another_role: [
+        {
+          subject: 'User',
+          action: 'read',
+          conditions: { name: '${user.name}' },
+        },
+      ],
+    });
+    jest
+      .spyOn(mockHttpService, 'get')
+      .mockReturnValue(of({ data: permissionWithVariable } as any));
+
+    await firstValueFrom(service.loadRules());
+    const rules = service.getRulesForUser(user);
+
+    expect(rules).toContainEqual({
+      subject: 'User',
+      action: 'read',
+      conditions: { name: user.name },
+    });
   });
 });

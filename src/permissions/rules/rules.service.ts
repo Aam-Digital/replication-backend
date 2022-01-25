@@ -8,6 +8,7 @@ import { ConfigService } from '@nestjs/config';
 import { Permission } from './permission';
 import { catchError, map, Observable, of } from 'rxjs';
 import { AxiosResponse } from 'axios';
+import * as _ from 'lodash';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 
@@ -46,16 +47,16 @@ export class RulesService extends CouchDBInteracter {
    * @returns DocumentRule[] rules that are related to the user
    */
   getRulesForUser(user: User): DocumentRule[] {
-    const userRules = this.getRulesForRoles(user.roles);
-    return userRules.concat(...this.getDefaultRules(user));
+    return this.getDBRules(user).concat(...this.getDefaultRules(user));
   }
 
-  private getRulesForRoles(roles: string[]): DocumentRule[] {
+  private getDBRules(user: User): DocumentRule[] {
     if (this.permission && this.permission.rulesConfig) {
-      return roles
+      const userRules = user.roles
         .filter((role) => this.permission.rulesConfig.hasOwnProperty(role))
         .map((role) => this.permission.rulesConfig[role])
         .flat();
+      return this.interpolateUser(userRules, user);
     } else {
       return [{ subject: 'all', action: 'manage' }];
     }
@@ -83,5 +84,22 @@ export class RulesService extends CouchDBInteracter {
       });
     }
     return presetRules;
+  }
+
+  private interpolateUser(rules: DocumentRule[], user: User) {
+    return JSON.parse(JSON.stringify(rules), (that, rawValue) => {
+      if (rawValue[0] !== '$') {
+        return rawValue;
+      }
+
+      const name = rawValue.slice(2, -1);
+      const value = _.get({ user }, name);
+
+      if (typeof value === 'undefined') {
+        throw new ReferenceError(`Variable ${name} is not defined`);
+      }
+
+      return value;
+    });
   }
 }
