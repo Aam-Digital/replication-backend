@@ -5,12 +5,10 @@ import { HttpService } from '@nestjs/axios';
 import { CouchProxyController } from '../replication/couch-proxy/couch-proxy.controller';
 import { ConfigService } from '@nestjs/config';
 import {
-  Actions,
   detectDocumentType,
+  DocumentAbility,
   PermissionService,
-  Subjects,
 } from '../permissions/permission/permission.service';
-import { Ability } from '@casl/ability';
 import { DocumentRule } from '../permissions/rules/rules.service';
 import { UnauthorizedException } from '@nestjs/common';
 import { DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
@@ -244,10 +242,10 @@ describe('DocumentService', () => {
   });
 
   function mockAbility(rules: DocumentRule[]) {
-    jest.spyOn(mockPermissionService, 'getAbilityFor').mockReturnValue(
-      new Ability<[Actions, Subjects]>(rules, {
-        detectSubjectType: detectDocumentType,
-      }),
-    );
+    jest
+      .spyOn(mockPermissionService, 'getAbilityFor')
+      .mockReturnValue(
+        new DocumentAbility(rules, { detectSubjectType: detectDocumentType }),
+      );
   }
 });

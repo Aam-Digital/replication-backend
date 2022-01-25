@@ -1,9 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PermissionService } from './permission.service';
-import { RulesService } from '../rules/rules.service';
-import { COUCHDB_USER_DOC, User } from '../../session/session/user-auth.dto';
+import { DocumentRule, RulesService } from '../rules/rules.service';
+import { User } from '../../session/session/user-auth.dto';
 import { DatabaseDocument } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
-import { Permission } from '../rules/permission';
 
 describe('PermissionService', () => {
   let service: PermissionService;
@@ -29,6 +28,18 @@ describe('PermissionService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  it('should create a ability with the received rules', () => {
+    const rules: DocumentRule[] = [
+      { action: 'create', subject: 'Aser' },
+      { action: 'manage', subject: 'Note', inverted: true },
+    ];
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue(rules);
+
+    const ability = service.getAbilityFor(normalUser);
+
+    expect(ability.rules).toBe(rules);
   });
 
   it('should return ability that allows to create Aser objects if user has permissions', () => {
@@ -73,54 +84,5 @@ describe('PermissionService', () => {
     };
     expect(ability.can('update', childDoc)).toBe(true);
     expect(ability.can('read', childDoc)).toBe(true);
-  });
-
-  it('should return a ability that does not allow to modify the permission document', () => {
-    jest
-      .spyOn(mockRulesService, 'getRulesForUser')
-      .mockReturnValue([{ action: 'manage', subject: 'all' }]);
-
-    const ability = service.getAbilityFor(normalUser);
-
-    const permissionDoc: Permission = {
-      _id: `Permission:${Permission.DOC_ID}`,
-      _rev: 'someRev',
-      rulesConfig: {},
-    };
-    expect(ability.cannot('create', permissionDoc)).toBe(true);
-    expect(ability.cannot('update', permissionDoc)).toBe(true);
-    expect(ability.cannot('delete', permissionDoc)).toBe(true);
-    expect(ability.can('read', permissionDoc)).toBe(true);
-  });
-
-  it('should return a ability where normal users can only read their own user doc and update their password', () => {
-    jest
-      .spyOn(mockRulesService, 'getRulesForUser')
-      .mockReturnValue([{ action: 'manage', subject: 'all' }]);
-
-    const ability = service.getAbilityFor(normalUser);
-
-    const userDoc: DatabaseDocument = {
-      _id: `${COUCHDB_USER_DOC}:${normalUser.name}`,
-      _rev: 'someRev',
-      name: normalUser.name,
-    };
-
-    const otherUserDoc: DatabaseDocument = {
-      _id: `${COUCHDB_USER_DOC}:otherUser`,
-      _rev: 'otherRev',
-      name: 'otherUser',
-    };
-
-    expect(ability.can('read', userDoc)).toBe(true);
-    expect(ability.can('update', userDoc, 'password')).toBe(true);
-    expect(ability.cannot('update', userDoc, 'roles')).toBe(true);
-    expect(ability.cannot('create', userDoc)).toBe(true);
-    expect(ability.cannot('delete', userDoc)).toBe(true);
-    expect(ability.cannot('read', otherUserDoc)).toBe(true);
-    expect(ability.cannot('update', otherUserDoc)).toBe(true);
-    expect(ability.cannot('update', otherUserDoc, 'password')).toBe(true);
-    expect(ability.cannot('create', otherUserDoc)).toBe(true);
-    expect(ability.cannot('delete', otherUserDoc)).toBe(true);
   });
 });
