@@ -3,9 +3,10 @@ import { RulesService } from './rules/rules.service';
 import { PermissionService } from './permission/permission.service';
 import { RulesController } from './rules/rules.controller';
 import { HttpModule } from '@nestjs/axios';
+import { SessionModule } from '../session/session.module';
 
 @Module({
-  imports: [HttpModule],
+  imports: [HttpModule, SessionModule],
   controllers: [RulesController],
   providers: [RulesService, PermissionService],
   exports: [PermissionService],
