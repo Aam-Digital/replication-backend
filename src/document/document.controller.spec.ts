@@ -5,7 +5,7 @@ import { DocSuccess } from '../replication/couch-proxy/couchdb-dtos/bulk-docs.dt
 
 describe('DocumentController', () => {
   let controller: DocumentController;
-  let mockUserService: DocumentService;
+  let mockDocumentService: DocumentService;
   const databaseName = '/_users';
   const documentID = `Doctype:someID`;
   const document = {
@@ -22,14 +22,14 @@ describe('DocumentController', () => {
     role: ['user_app'],
   };
   beforeEach(async () => {
-    mockUserService = {
+    mockDocumentService = {
       getDocument: () => Promise.resolve(undefined),
       putDocument: () => Promise.resolve(undefined),
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DocumentController],
-      providers: [{ provide: DocumentService, useValue: mockUserService }],
+      providers: [{ provide: DocumentService, useValue: mockDocumentService }],
     }).compile();
 
     controller = module.get<DocumentController>(DocumentController);
@@ -39,9 +39,9 @@ describe('DocumentController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should call getDocument with the document and DB info', async () => {
+  it('should call getDocument with the ID and database name', async () => {
     jest
-      .spyOn(mockUserService, 'getDocument')
+      .spyOn(mockDocumentService, 'getDocument')
       .mockReturnValue(Promise.resolve(document));
 
     const response = controller.getDocument(databaseName, documentID, {
@@ -49,31 +49,30 @@ describe('DocumentController', () => {
     } as any);
 
     await expect(response).resolves.toBe(document);
-    expect(mockUserService.getDocument).toHaveBeenCalledWith(
+    expect(mockDocumentService.getDocument).toHaveBeenCalledWith(
       databaseName,
       documentID,
       requestingUser,
     );
   });
 
-  it('should also pass the body to putDocument', async () => {
+  it('should set the _id of the document and pass it to the documentService', async () => {
     jest
-      .spyOn(mockUserService, 'putDocument')
+      .spyOn(mockDocumentService, 'putDocument')
       .mockReturnValue(Promise.resolve(successResponse));
 
     const response = controller.putDocument(
       databaseName,
       documentID,
-      document,
+      { _rev: document._rev },
       {
         user: requestingUser,
       } as any,
     );
 
     await expect(response).resolves.toBe(successResponse);
-    expect(mockUserService.putDocument).toHaveBeenCalledWith(
+    expect(mockDocumentService.putDocument).toHaveBeenCalledWith(
       databaseName,
-      documentID,
       document,
       requestingUser,
     );

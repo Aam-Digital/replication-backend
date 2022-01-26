@@ -53,18 +53,17 @@ export class DocumentService extends CouchDBInteracter {
 
   async putDocument(
     databaseName: string,
-    documentID: string,
     document: DatabaseDocument,
     requestingUser: User,
   ): Promise<DocSuccess> {
     const userAbility = this.permissionService.getAbilityFor(requestingUser);
     const existingDoc = await this.getDocumentFromDB(
       databaseName,
-      documentID,
+      document._id,
     ).catch(() => undefined); // Doc does not exist
     if (!existingDoc && userAbility.can('create', document)) {
       // Creating
-      return this.putDocumentToDB(databaseName, documentID, document);
+      return this.putDocumentToDB(databaseName, document);
     } else if (userAbility.can('update', existingDoc)) {
       // Updating
       const finalDoc = this.applyPermissions(
@@ -72,21 +71,19 @@ export class DocumentService extends CouchDBInteracter {
         existingDoc,
         document,
       );
-      return this.putDocumentToDB(databaseName, documentID, finalDoc);
+      return this.putDocumentToDB(databaseName, finalDoc);
     } else {
-      // TODO support 'delete'
       throw new UnauthorizedException('unauthorized', 'User is not permitted');
     }
   }
 
   private putDocumentToDB(
     dbName: string,
-    docID: string,
-    newUserObject: DatabaseDocument,
+    document: DatabaseDocument,
   ): Promise<DocSuccess> {
     return firstValueFrom(
       this.httpService
-        .put<DocSuccess>(this.buildDocUrl(dbName, docID), newUserObject)
+        .put<DocSuccess>(this.buildDocUrl(dbName, document._id), document)
         .pipe(map((response) => response.data)),
     );
   }

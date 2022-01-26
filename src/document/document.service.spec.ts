@@ -85,12 +85,7 @@ describe('DocumentService', () => {
   it('should create ability for passed user', async () => {
     mockAbility([{ subject: 'all', action: 'manage' }]);
 
-    await service.putDocument(
-      databaseName,
-      userDoc._id,
-      userDoc,
-      requestingUser,
-    );
+    await service.putDocument(databaseName, userDoc, requestingUser);
 
     expect(mockPermissionService.getAbilityFor).toHaveBeenCalledWith(
       requestingUser,
@@ -140,12 +135,7 @@ describe('DocumentService', () => {
       .mockReturnValue(throwError(() => new Error()));
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['create', 'read'] }]);
 
-    const response = service.putDocument(
-      databaseName,
-      userDoc._id,
-      userDoc,
-      requestingUser,
-    );
+    const response = service.putDocument(databaseName, userDoc, requestingUser);
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
     expect(mockHttpService.put).toHaveBeenCalledWith(userURL, userDoc);
@@ -157,12 +147,7 @@ describe('DocumentService', () => {
       .mockReturnValue(throwError(() => new Error()));
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
 
-    const response = service.putDocument(
-      databaseName,
-      userDoc._id,
-      userDoc,
-      requestingUser,
-    );
+    const response = service.putDocument(databaseName, userDoc, requestingUser);
 
     return expect(response).rejects.toThrow(UnauthorizedException);
   });
@@ -174,7 +159,6 @@ describe('DocumentService', () => {
 
     const response = service.putDocument(
       databaseName,
-      userDoc._id,
       userWithUpdatedRoles,
       requestingUser,
     );
@@ -203,7 +187,6 @@ describe('DocumentService', () => {
 
     const response = service.putDocument(
       databaseName,
-      userDoc._id,
       updatedPasswordAndRole,
       requestingUser,
     );
@@ -233,7 +216,6 @@ describe('DocumentService', () => {
 
     const response = service.putDocument(
       databaseName,
-      userDoc._id,
       userWithUpdatedPassword,
       otherUser,
     );
