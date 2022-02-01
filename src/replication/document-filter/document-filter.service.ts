@@ -85,6 +85,9 @@ export class DocumentFilterService extends CouchDBInteracter {
         .post<AllDocsResponse>(
           `${this.databaseUrl}/${this.databaseName}/_all_docs`,
           allDocsRequest,
+          {
+            params: { include_docs: true },
+          },
         )
         .pipe(map((res) => res.data)),
     );
