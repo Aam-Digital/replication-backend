@@ -7,11 +7,17 @@ import {
   Put,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
-import { firstValueFrom, from, map, Observable, switchMap } from 'rxjs';
-import { ChangesFeed } from './couchdb-dtos/changes.dto';
+import {
+  firstValueFrom,
+  from,
+  map,
+  Observable,
+  switchMap,
+} from 'rxjs';
 import {
   RevisionDiffRequest,
   RevisionDiffResponse,
@@ -25,7 +31,7 @@ import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
 import { JwtGuard } from '../../session/guards/jwt/jwt.guard';
 import { User } from '../../session/session/user-auth.dto';
-import { Request } from 'express';
+import { Request, Response } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { CouchDBInteracter } from '../../utils/couchdb-interacter';
 import { ApiOperation } from '@nestjs/swagger';
@@ -86,15 +92,17 @@ export class CouchProxyController extends CouchDBInteracter {
    * Listen to the changes feed.
    * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#listen-to-changes-feed}
    * @param queryParams
+   * @param res the response that is sent back to client
    * @returns ChangesFeed a list that contains IDs and revision numbers that have been changed.
    */
   @Get('/:db/_changes')
-  changes(@Query() queryParams: any): Observable<ChangesFeed> {
-    return this.httpService
+  changes(@Query() queryParams: any, @Res() res: Response) {
+    this.httpService
       .get(`${this.databaseUrl}/${this.databaseName}/_changes`, {
         params: queryParams,
+        responseType: 'stream',
       })
-      .pipe(map((response) => response.data));
+      .subscribe({ next: (response) => response.data.pipe(res) });
   }
 
   /**
