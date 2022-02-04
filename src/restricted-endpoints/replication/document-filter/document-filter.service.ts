@@ -66,8 +66,8 @@ export class DocumentFilterService extends CouchDBInteracter {
     return {
       total_rows: response.total_rows,
       offset: response.offset,
-      rows: response.rows.filter(
-        (row) => row.doc._deleted || ability.can('read', row.doc),
+      rows: response.rows.filter((row) =>
+        row.doc ? row.doc._deleted || ability.can('read', row.doc) : true,
       ),
     };
   }
