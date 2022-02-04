@@ -1,4 +1,9 @@
-import { HttpException, Module } from '@nestjs/common';
+import {
+  HttpException,
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+} from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SentryModule } from '@ntegral/nestjs-sentry';
 import { Severity } from '@sentry/types';
@@ -6,9 +11,12 @@ import { ProxyModule } from './proxy/proxy.module';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
 import { HttpModule, HttpService } from '@nestjs/axios';
 import { CouchDBInteracter } from './utils/couchdb-interacter';
+import { CombinedAuthMiddleware } from './auth/guards/combined-auth.middleware';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
+    AuthModule,
     HttpModule,
     ConfigModule.forRoot({ isGlobal: true }),
     SentryModule.forRootAsync({
@@ -39,25 +47,29 @@ import { CouchDBInteracter } from './utils/couchdb-interacter';
     RestrictedEndpointsModule,
   ],
 })
-export class AppModule {
-  constructor(
-    public httpService: HttpService,
-    public configService: ConfigService,
-  ) {
+export class AppModule implements NestModule {
+  constructor(httpService: HttpService, public configService: ConfigService) {
+    console.log(
+      'test',
+      configService.get<string>(CouchDBInteracter.DATABASE_USER_ENV),
+      configService.get<string>(CouchDBInteracter.DATABASE_PASSWORD_ENV),
+    );
     // TODO maybe introduce HttpModule wrapper
     // Send the basic auth header with every request
-    this.httpService.axiosRef.defaults.auth = {
-      username: this.configService.get<string>(
-        CouchDBInteracter.DATABASE_USER_ENV,
-      ),
-      password: this.configService.get<string>(
+    httpService.axiosRef.defaults.auth = {
+      username: configService.get<string>(CouchDBInteracter.DATABASE_USER_ENV),
+      password: configService.get<string>(
         CouchDBInteracter.DATABASE_PASSWORD_ENV,
       ),
     };
 
     // Map the Axios errors to NestJS exceptions
-    this.httpService.axiosRef.interceptors.response.use(undefined, (err) => {
+    httpService.axiosRef.interceptors.response.use(undefined, (err) => {
       throw new HttpException(err.response.data, err.response.status);
     });
+  }
+
+  configure(consumer: MiddlewareConsumer) {
+    consumer.apply(CombinedAuthMiddleware).exclude('_session').forRoutes('*');
   }
 }

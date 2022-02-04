@@ -68,7 +68,6 @@ export class RulesService extends CouchDBInteracter {
         .flat();
       return this.interpolateUser(userRules, user);
     } else {
-      console.log('returning default');
       return [{ subject: 'all', action: 'manage' }];
     }
   }

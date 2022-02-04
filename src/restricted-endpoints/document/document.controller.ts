@@ -1,21 +1,11 @@
-import {
-  Controller,
-  Get,
-  Param,
-  Body,
-  Put,
-  UseGuards,
-  Req,
-} from '@nestjs/common';
+import { Controller, Get, Param, Body, Put, Req } from '@nestjs/common';
 import { User } from '../session/user-auth.dto';
-import { ApiBasicAuth } from '@nestjs/swagger';
 import {
   DatabaseDocument,
   DocSuccess,
 } from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
 import { DocumentService } from './document.service';
 import { Request } from 'express';
-import { BasicAuthGuard } from '../../auth/guards/basic-auth/basic-auth-guard.service';
 
 /**
  * This controller implements endpoints to interact with single documents of a database.
@@ -25,8 +15,6 @@ import { BasicAuthGuard } from '../../auth/guards/basic-auth/basic-auth-guard.se
  *
  * TODO DELETE is not supported yet
  */
-@ApiBasicAuth()
-@UseGuards(BasicAuthGuard)
 @Controller('/:db')
 export class DocumentController {
   constructor(private documentService: DocumentService) {}

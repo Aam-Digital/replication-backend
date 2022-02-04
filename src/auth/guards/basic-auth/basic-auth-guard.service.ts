@@ -1,5 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { ExecutionContext, Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
-export class BasicAuthGuard extends AuthGuard('basic') {}
+export class BasicAuthGuard extends AuthGuard('basic') {
+  canActivate(context: ExecutionContext): Promise<boolean> {
+    return super.canActivate(context) as Promise<boolean>;
+  }
+}

@@ -1,10 +1,8 @@
-import { Controller, Post, UseGuards } from '@nestjs/common';
-import { JwtGuard } from '../../auth/guards/jwt/jwt.guard';
+import { Controller, Post } from '@nestjs/common';
 import { RulesService } from './rules.service';
 import { Observable } from 'rxjs';
 import { Permission } from './permission';
 
-@UseGuards(JwtGuard)
 @Controller('rules')
 export class RulesController {
   constructor(private rulesService: RulesService) {}

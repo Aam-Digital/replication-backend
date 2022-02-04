@@ -31,10 +31,13 @@ async function bootstrap() {
     .setVersion('Beta')
     .addServer('/', 'local')
     .addServer('/db', 'deployed')
-    .addBasicAuth()
+    .addBasicAuth(undefined, 'BasicAuth')
+    .addSecurityRequirements('BasicAuth')
     .build();
   const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api', app, document);
+  SwaggerModule.setup('api', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
 
   // Required for JWT cookie auth
   app.use(cookieParser());

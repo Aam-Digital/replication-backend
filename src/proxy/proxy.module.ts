@@ -4,18 +4,13 @@ import {
   NestModule,
   RequestMethod,
 } from '@nestjs/common';
-import { JwtMiddleware } from '../auth/guards/jwt/jwt.middleware';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { AuthModule } from '../auth/auth.module';
 
-@Module({
-  imports: [AuthModule],
-})
+@Module({})
 export class ProxyModule implements NestModule {
   configure(consumer: MiddlewareConsumer): any {
     consumer
       .apply(
-        JwtMiddleware,
         createProxyMiddleware({
           target: process.env.DATABASE_URL,
           secure: true,

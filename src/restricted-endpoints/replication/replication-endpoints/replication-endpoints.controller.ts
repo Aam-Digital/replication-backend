@@ -1,12 +1,4 @@
-import {
-  Body,
-  Controller,
-  Get,
-  Post,
-  Query,
-  Req,
-  UseGuards,
-} from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom, from, map, Observable, switchMap } from 'rxjs';
 import {
@@ -16,14 +8,12 @@ import {
 import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
-import { JwtGuard } from '../../../auth/guards/jwt/jwt.guard';
 import { User } from '../../session/user-auth.dto';
 import { Request } from 'express';
 import { ConfigService } from '@nestjs/config';
 import { CouchDBInteracter } from '../../../utils/couchdb-interacter';
 import { ApiOperation } from '@nestjs/swagger';
 
-@UseGuards(JwtGuard)
 @Controller()
 export class ReplicationEndpointsController extends CouchDBInteracter {
   constructor(

@@ -1,15 +1,16 @@
-import { DocumentModule } from './document.module';
 import { HttpService } from '@nestjs/axios';
-import { CouchDBInteracter } from '../../utils/couchdb-interacter';
 import { ConfigService } from '@nestjs/config';
 import { HttpException } from '@nestjs/common';
+import { AppModule } from './app.module';
+import { CouchDBInteracter } from './utils/couchdb-interacter';
 
-describe('DocumentModule', () => {
-  let module: DocumentModule;
+describe('AppModule', () => {
+  let module: AppModule;
   let mockHttpService: HttpService;
   let responseInterceptor: (err) => any;
   const username = 'demo';
   const password = 'pass';
+
   beforeEach(() => {
     mockHttpService = {
       axiosRef: {
@@ -26,9 +27,11 @@ describe('DocumentModule', () => {
     const config = {};
     config[CouchDBInteracter.DATABASE_USER_ENV] = username;
     config[CouchDBInteracter.DATABASE_PASSWORD_ENV] = password;
+    console.log('config', config);
     const configService = new ConfigService(config);
-
-    module = new DocumentModule(mockHttpService, configService);
+    console.log('test', configService['internalConfig']);
+    module = new AppModule(mockHttpService, configService);
+    console.log('equal', configService === module.configService);
   });
 
   it('should set the default auth header', () => {
