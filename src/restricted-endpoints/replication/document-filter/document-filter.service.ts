@@ -75,6 +75,7 @@ export class DocumentFilterService extends CouchDBInteracter {
   async filterBulkDocsRequest(
     request: BulkDocsRequest,
     user: User,
+    db: string,
   ): Promise<BulkDocsRequest> {
     const ability = this.permissionService.getAbilityFor(user);
     const allDocsRequest: AllDocsRequest = {
@@ -83,7 +84,7 @@ export class DocumentFilterService extends CouchDBInteracter {
     const response = await firstValueFrom(
       this.httpService
         .post<AllDocsResponse>(
-          `${this.databaseUrl}/${this.databaseName}/_all_docs`,
+          `${this.databaseUrl}/${db}/_all_docs`,
           allDocsRequest,
           {
             params: { include_docs: true },

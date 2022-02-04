@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Query, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom, from, map, Observable, switchMap } from 'rxjs';
 import {
@@ -27,6 +27,7 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
    * Upload multiple documents with a single request.
    * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#upload-batch-of-changed-documents}
    *
+   * @param db name of the database to which the documents should be uploaded
    * @param body list of documents to be saved in the remote database
    * @param request holding information about the current user
    * @returns BulkDocsResponse list of success or error messages regarding the to-be-saved documents
@@ -36,14 +37,15 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
     description: `Upload multiple documents with a single request.\n\ncaveats: only works with ?include_docs=true`,
   })
   bulkDocs(
+    @Param('db') db: string,
     @Body() body: BulkDocsRequest,
     @Req() request: Request,
   ): Observable<BulkDocsResponse> {
     const user = request.user as User;
-    return from(this.documentFilter.filterBulkDocsRequest(body, user)).pipe(
+    return from(this.documentFilter.filterBulkDocsRequest(body, user, db)).pipe(
       switchMap((filteredBody) =>
         this.httpService.post(
-          `${this.databaseUrl}/${this.databaseName}/_bulk_docs`,
+          `${this.databaseUrl}/${db}/_bulk_docs`,
           filteredBody,
         ),
       ),
@@ -55,6 +57,7 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
    * Retrieve multiple documents from database.
    * See {@link https://docs.couchdb.org/en/stable/api/database/bulk-api.html?highlight=bulk_get#post--db-_bulk_get}
    *
+   * @param db name of the database from which the documents are fetched
    * @param queryParams
    * @param body list of document IDs which should be fetched from the remote database
    * @param request holding information about the current user
@@ -62,17 +65,16 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
    */
   @Post('/:db/_bulk_get')
   bulkGetPost(
+    @Param('db') db: string,
     @Query() queryParams: any,
     @Body() body: BulkGetRequest,
     @Req() request: Request,
   ): Observable<BulkGetResponse> {
     const user = request.user as User;
     return this.httpService
-      .post<BulkGetResponse>(
-        `${this.databaseUrl}/${this.databaseName}/_bulk_get`,
-        body,
-        { params: queryParams },
-      )
+      .post<BulkGetResponse>(`${this.databaseUrl}/${db}/_bulk_get`, body, {
+        params: queryParams,
+      })
       .pipe(
         map((response) => response.data),
         map((response) =>
@@ -85,24 +87,24 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
    * Fetch a bulk of documents specified by the ID's in the body.
    * See {@link https://docs.couchdb.org/en/stable/api/database/bulk-api.html?highlight=all_docs#post--db-_all_docs}
    *
+   * @param db name of the database from which the documents are fetched
    * @param queryParams
    * @param request holding information about the current user
-   * @param body (optional) a object containing document ID's to be fetched
+   * @param body a object containing document ID's to be fetched
    * @returns list of documents
    */
   @Post('/:db/_all_docs')
   allDocs(
+    @Param('db') db: string,
     @Query() queryParams: any,
     @Req() request: Request,
-    @Body() body?: AllDocsRequest,
+    @Body() body: AllDocsRequest,
   ): Observable<AllDocsResponse> {
     const user = request.user as User;
     return this.httpService
-      .post<AllDocsResponse>(
-        `${this.databaseUrl}/${this.databaseName}/_all_docs`,
-        body,
-        { params: queryParams },
-      )
+      .post<AllDocsResponse>(`${this.databaseUrl}/${db}/_all_docs`, body, {
+        params: queryParams,
+      })
       .pipe(
         map((response) => response.data),
         map((response) =>
@@ -112,13 +114,16 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
   }
 
   @Get('/:db/_all_docs')
-  allDocsGet(@Query() queryParams: any, @Req() request: Request) {
+  allDocsGet(
+    @Param('db') db: string,
+    @Query() queryParams: any,
+    @Req() request: Request,
+  ) {
     const user = request.user as User;
     return this.httpService
-      .get<AllDocsResponse>(
-        `${this.databaseUrl}/${this.databaseName}/_all_docs`,
-        { params: queryParams },
-      )
+      .get<AllDocsResponse>(`${this.databaseUrl}/${db}/_all_docs`, {
+        params: queryParams,
+      })
       .pipe(
         map((response) => response.data),
         map((response) =>

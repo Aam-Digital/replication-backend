@@ -125,7 +125,7 @@ describe('DocumentFilterService', () => {
       .spyOn(mockHttpService, 'post')
       .mockReturnValue(of({ data: { rows: [] } } as any));
 
-    const result = await service.filterBulkDocsRequest(request, normalUser);
+    const result = await service.filterBulkDocsRequest(request, normalUser, '');
 
     expect(result).toEqual({
       new_edits: true,
@@ -148,7 +148,7 @@ describe('DocumentFilterService', () => {
         of({ data: createAllDocsResponse(childDoc, schoolDoc) } as any),
       );
 
-    const result = await service.filterBulkDocsRequest(request, normalUser);
+    const result = await service.filterBulkDocsRequest(request, normalUser, '');
 
     expect(result).toEqual({
       new_edits: false,
@@ -175,7 +175,7 @@ describe('DocumentFilterService', () => {
         of({ data: createAllDocsResponse(childDoc, schoolDoc) } as any),
       );
 
-    const result = await service.filterBulkDocsRequest(request, normalUser);
+    const result = await service.filterBulkDocsRequest(request, normalUser, '');
 
     expect(result).toEqual({
       new_edits: false,
@@ -218,7 +218,7 @@ describe('DocumentFilterService', () => {
       docs: [updatedPrivateSchool, deletedPublicSchool],
     };
 
-    const result = await service.filterBulkDocsRequest(request, normalUser);
+    const result = await service.filterBulkDocsRequest(request, normalUser, '');
 
     expect(result).toEqual({
       new_edits: false,

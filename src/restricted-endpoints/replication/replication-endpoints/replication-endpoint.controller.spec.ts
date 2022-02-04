@@ -74,7 +74,7 @@ describe('ReplicationEndpointsController', () => {
     const user = new User('username', ['user']);
 
     const result = await firstValueFrom(
-      controller.bulkGetPost(null, null, { user: user } as any),
+      controller.bulkGetPost(null, null, null, { user: user } as any),
     );
 
     expect(documentFilter.filterBulkGetResponse).toHaveBeenCalledWith(
@@ -126,7 +126,7 @@ describe('ReplicationEndpointsController', () => {
     const user = new User('username', ['user']);
 
     const result = await firstValueFrom(
-      controller.allDocs(null, { user: user } as any, null),
+      controller.allDocs('db', null, { user: user } as any, null),
     );
 
     expect(documentFilter.filterAllDocsResponse).toHaveBeenCalledWith(
@@ -171,14 +171,17 @@ describe('ReplicationEndpointsController', () => {
       .mockReturnValue(Promise.resolve(filteredRequest));
     const user = new User('username', ['admin']);
 
-    await firstValueFrom(controller.bulkDocs(request, { user: user } as any));
+    await firstValueFrom(
+      controller.bulkDocs('db', request, { user: user } as any),
+    );
 
     expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(
       request,
       user,
+      'db',
     );
     expect(mockHttpService.post).toHaveBeenCalledWith(
-      `${DATABASE_URL}/${DATABASE_NAME}/_bulk_docs`,
+      `${DATABASE_URL}/db/_bulk_docs`,
       filteredRequest,
     );
   });
