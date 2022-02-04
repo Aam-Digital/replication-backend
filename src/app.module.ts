@@ -1,15 +1,13 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { ReplicationModule } from './replication/replication.module';
-import { DocumentModule } from './document/document.module';
 import { SentryModule } from '@ntegral/nestjs-sentry';
 import { Severity } from '@sentry/types';
+import { ProxyModule } from './proxy/proxy.module';
+import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
-    ReplicationModule,
-    DocumentModule,
     SentryModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -34,6 +32,8 @@ import { Severity } from '@sentry/types';
         };
       },
     }),
+    ProxyModule,
+    RestrictedEndpointsModule,
   ],
 })
 export class AppModule {}

@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
-import { COUCHDB_USER_DOC, User } from '../../session/session/user-auth.dto';
+import {
+  COUCHDB_USER_DOC,
+  User,
+} from '../../restricted-endpoints/session/user-auth.dto';
 import { HttpService } from '@nestjs/axios';
 import { CouchDBInteracter } from '../../utils/couchdb-interacter';
 import { ConfigService } from '@nestjs/config';
@@ -33,7 +36,7 @@ export class RulesService extends CouchDBInteracter {
 
   constructor(httpService: HttpService, configService: ConfigService) {
     super(httpService, configService);
-    this.loadRules();
+    this.loadRules().subscribe({ complete: () => undefined });
   }
 
   loadRules(): Observable<Permission> {

@@ -1,8 +1,8 @@
 import { Injectable } from '@nestjs/common';
-import { User } from '../../session/session/user-auth.dto';
+import { User } from '../../restricted-endpoints/session/user-auth.dto';
 import { RulesService } from '../rules/rules.service';
 import { Ability, AbilityClass, InferSubjects } from '@casl/ability';
-import { DatabaseDocument } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { DatabaseDocument } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
 
 const actions = [
   'read',

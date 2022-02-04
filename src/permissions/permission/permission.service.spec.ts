@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PermissionService } from './permission.service';
 import { DocumentRule, RulesService } from '../rules/rules.service';
-import { User } from '../../session/session/user-auth.dto';
-import { DatabaseDocument } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { User } from '../../restricted-endpoints/session/user-auth.dto';
+import { DatabaseDocument } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
 
 describe('PermissionService', () => {
   let service: PermissionService;
