@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { HttpException } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { CouchDBInteracter } from './utils/couchdb-interacter';
+import { VALIDATED_ENV_PROPNAME } from '@nestjs/config/dist/config.constants';
 
 describe('AppModule', () => {
   let module: AppModule;
@@ -24,14 +25,15 @@ describe('AppModule', () => {
       },
     } as any;
 
-    const config = {};
-    config[CouchDBInteracter.DATABASE_USER_ENV] = username;
-    config[CouchDBInteracter.DATABASE_PASSWORD_ENV] = password;
-    console.log('config', config);
+    // This ensures that the mock config is looked up before the environment variables
+    const config = {
+      [VALIDATED_ENV_PROPNAME]: {
+        [CouchDBInteracter.DATABASE_USER_ENV]: username,
+        [CouchDBInteracter.DATABASE_PASSWORD_ENV]: password,
+      },
+    };
     const configService = new ConfigService(config);
-    console.log('test', configService['internalConfig']);
     module = new AppModule(mockHttpService, configService);
-    console.log('equal', configService === module.configService);
   });
 
   it('should set the default auth header', () => {

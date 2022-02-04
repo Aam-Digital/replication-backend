@@ -49,11 +49,6 @@ import { AuthModule } from './auth/auth.module';
 })
 export class AppModule implements NestModule {
   constructor(httpService: HttpService, public configService: ConfigService) {
-    console.log(
-      'test',
-      configService.get<string>(CouchDBInteracter.DATABASE_USER_ENV),
-      configService.get<string>(CouchDBInteracter.DATABASE_PASSWORD_ENV),
-    );
     // TODO maybe introduce HttpModule wrapper
     // Send the basic auth header with every request
     httpService.axiosRef.defaults.auth = {
