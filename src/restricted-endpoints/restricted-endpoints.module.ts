@@ -6,7 +6,7 @@ import { SessionController } from './session/session.controller';
 import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [DocumentModule, ReplicationModule, AuthModule],
+  imports: [ReplicationModule, AuthModule, DocumentModule],
   controllers: [SessionController],
 })
 export class RestrictedEndpointsModule {

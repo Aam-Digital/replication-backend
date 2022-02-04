@@ -29,10 +29,12 @@ export class ProxyModule implements NestModule {
       )
       .exclude(
         { path: '_session', method: RequestMethod.POST },
-        { path: '(.*)/_bulk_docs', method: RequestMethod.POST },
-        { path: '(.*)/_bulk_get', method: RequestMethod.POST },
-        { path: '(.*)/_all_docs', method: RequestMethod.POST },
-        { path: '(.*)/_all_docs', method: RequestMethod.GET },
+        { path: ':db/_bulk_docs', method: RequestMethod.POST },
+        { path: ':db/_bulk_get', method: RequestMethod.POST },
+        { path: ':db/_all_docs', method: RequestMethod.POST },
+        { path: ':db/_all_docs', method: RequestMethod.GET },
+        { path: ':db/:docId', method: RequestMethod.GET },
+        { path: ':db/:docId', method: RequestMethod.PUT },
         { path: 'clear_local', method: RequestMethod.POST },
         { path: 'rules/reload', method: RequestMethod.POST },
       )

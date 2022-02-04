@@ -123,7 +123,18 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
 
   @Get('/:db/_all_docs')
   allDocsGet(@Query() queryParams: any, @Req() request: Request) {
-    return this.allDocs(queryParams, request);
+    const user = request.user as User;
+    return this.httpService
+      .get<AllDocsResponse>(
+        `${this.databaseUrl}/${this.databaseName}/_all_docs`,
+        { params: queryParams },
+      )
+      .pipe(
+        map((response) => response.data),
+        map((response) =>
+          this.documentFilter.filterAllDocsResponse(response, user),
+        ),
+      );
   }
 
   /**

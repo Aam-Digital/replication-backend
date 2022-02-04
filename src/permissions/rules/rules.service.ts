@@ -36,6 +36,7 @@ export class RulesService extends CouchDBInteracter {
 
   constructor(httpService: HttpService, configService: ConfigService) {
     super(httpService, configService);
+    // Somehow this only executes when it is subscribed to
     this.loadRules().subscribe({ complete: () => undefined });
   }
 
@@ -67,6 +68,7 @@ export class RulesService extends CouchDBInteracter {
         .flat();
       return this.interpolateUser(userRules, user);
     } else {
+      console.log('returning default');
       return [{ subject: 'all', action: 'manage' }];
     }
   }
