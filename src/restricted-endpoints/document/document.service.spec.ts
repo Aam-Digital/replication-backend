@@ -105,10 +105,11 @@ describe('DocumentService', () => {
       databaseName,
       userDoc._id,
       requestingUser,
+      {},
     );
 
     await expect(response).resolves.toBe(userDoc);
-    expect(mockHttpService.get).toHaveBeenCalledWith(userURL);
+    expect(mockHttpService.get).toHaveBeenCalledWith(userURL, { params: {} });
   });
 
   it('should throw unauthorized exception if user does not have read permission', async () => {

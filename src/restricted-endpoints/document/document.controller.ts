@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Body, Put, Req } from '@nestjs/common';
+import { Controller, Get, Param, Body, Put, Req, Query } from '@nestjs/common';
 import { User } from '../session/user-auth.dto';
 import {
   DatabaseDocument,
@@ -25,15 +25,22 @@ export class DocumentController {
    * @param db the name of the database from which the document should be fetched
    * @param docId the name of the document
    * @param request the request object holding the user executing the request
+   * @param queryParams additional params that will be forwarded
    */
   @Get('/:docId')
   getDocument(
     @Param('db') db: string,
     @Param('docId') docId: string,
     @Req() request: Request,
+    @Query() queryParams: any,
   ): Promise<DatabaseDocument> {
     const authenticatedUser = request.user as User;
-    return this.documentService.getDocument(db, docId, authenticatedUser);
+    return this.documentService.getDocument(
+      db,
+      docId,
+      authenticatedUser,
+      queryParams,
+    );
   }
 
   /**

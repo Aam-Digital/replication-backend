@@ -39,20 +39,27 @@ describe('DocumentController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should call getDocument with the ID and database name', async () => {
+  it('should call getDocument with the ID, the database name and the query params', async () => {
     jest
       .spyOn(mockDocumentService, 'getDocument')
       .mockReturnValue(Promise.resolve(document));
+    const params = { first: 1, second: 2 };
 
-    const response = controller.getDocument(databaseName, documentID, {
-      user: requestingUser,
-    } as any);
+    const response = controller.getDocument(
+      databaseName,
+      documentID,
+      {
+        user: requestingUser,
+      } as any,
+      params,
+    );
 
     await expect(response).resolves.toBe(document);
     expect(mockDocumentService.getDocument).toHaveBeenCalledWith(
       databaseName,
       documentID,
       requestingUser,
+      params,
     );
   });
 

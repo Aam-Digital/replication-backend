@@ -29,9 +29,14 @@ export class DocumentService extends CouchDBInteracter {
     databaseName: string,
     documentID: string,
     requestingUser: User,
+    queryParams?: any,
   ): Promise<DatabaseDocument> {
     const userAbility = this.permissionService.getAbilityFor(requestingUser);
-    const document = await this.getDocumentFromDB(databaseName, documentID);
+    const document = await this.getDocumentFromDB(
+      databaseName,
+      documentID,
+      queryParams,
+    );
     if (userAbility.can('read', document)) {
       return document;
     } else {
@@ -39,10 +44,16 @@ export class DocumentService extends CouchDBInteracter {
     }
   }
 
-  private getDocumentFromDB(databaseName: string, documentID: string) {
+  private getDocumentFromDB(
+    databaseName: string,
+    documentID: string,
+    queryParams?: any,
+  ) {
     return firstValueFrom(
       this.httpService
-        .get<DatabaseDocument>(this.buildDocUrl(databaseName, documentID))
+        .get<DatabaseDocument>(this.buildDocUrl(databaseName, documentID), {
+          params: queryParams,
+        })
         .pipe(map((response) => response.data)),
     );
   }
