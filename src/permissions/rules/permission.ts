@@ -1,4 +1,4 @@
-import { DatabaseDocument } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { DatabaseDocument } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
 import { DocumentRule } from './rules.service';
 
 export class Permission extends DatabaseDocument {

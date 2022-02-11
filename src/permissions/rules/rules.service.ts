@@ -1,7 +1,10 @@
 import { Injectable } from '@nestjs/common';
 import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
-import { COUCHDB_USER_DOC, User } from '../../session/session/user-auth.dto';
+import {
+  COUCHDB_USER_DOC,
+  User,
+} from '../../restricted-endpoints/session/user-auth.dto';
 import { HttpService } from '@nestjs/axios';
 import { CouchDBInteracter } from '../../utils/couchdb-interacter';
 import { ConfigService } from '@nestjs/config';
@@ -18,23 +21,29 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
  */
 @Injectable()
 export class RulesService extends CouchDBInteracter {
-  private readonly permissionWriteRestriction: DocumentRule = {
-    subject: 'Permission',
-    action: ['create', 'update', 'delete'],
-    inverted: true,
-  };
+  private readonly DEFAULT_DB = 'app';
+  private readonly permissionEntityRules: DocumentRule[] = [
+    {
+      subject: 'Permission',
+      action: ['create', 'update', 'delete'],
+      inverted: true,
+    },
+    {
+      subject: 'Permission',
+      action: 'read',
+    },
+  ];
   private permission: Permission;
 
   constructor(httpService: HttpService, configService: ConfigService) {
     super(httpService, configService);
-    this.loadRules();
+    // Somehow this only executes when it is subscribed to
+    this.loadRules(this.DEFAULT_DB).subscribe({ complete: () => undefined });
   }
 
-  loadRules(): Observable<Permission> {
+  loadRules(db: string): Observable<Permission> {
     return this.httpService
-      .get<Permission>(
-        `${this.databaseUrl}/${this.databaseName}/${Permission.DOC_ID}`,
-      )
+      .get<Permission>(`${this.databaseUrl}/${db}/${Permission.DOC_ID}`)
       .pipe(
         catchError(() => of({ data: undefined } as AxiosResponse<Permission>)),
         map((response) => (this.permission = response.data)),
@@ -63,7 +72,7 @@ export class RulesService extends CouchDBInteracter {
   }
 
   private getDefaultRules(user: User): DocumentRule[] {
-    const presetRules: DocumentRule[] = [this.permissionWriteRestriction];
+    const presetRules: DocumentRule[] = [...this.permissionEntityRules];
     if (!user.roles.includes('_admin')) {
       // normal users can only read their own user object and update their password
       presetRules.push({
@@ -80,6 +89,11 @@ export class RulesService extends CouchDBInteracter {
         subject: COUCHDB_USER_DOC,
         action: 'update',
         fields: 'password',
+        conditions: { name: user.name },
+      });
+      presetRules.push({
+        subject: 'User',
+        action: ['read', 'update'],
         conditions: { name: user.name },
       });
     }

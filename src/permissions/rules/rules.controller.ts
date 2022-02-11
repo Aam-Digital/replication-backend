@@ -1,19 +1,19 @@
-import { Controller, Post, UseGuards } from '@nestjs/common';
-import { JwtGuard } from '../../session/guards/jwt/jwt.guard';
+import { Controller, Param, Post } from '@nestjs/common';
 import { RulesService } from './rules.service';
 import { Observable } from 'rxjs';
 import { Permission } from './permission';
 
-@UseGuards(JwtGuard)
 @Controller('rules')
 export class RulesController {
   constructor(private rulesService: RulesService) {}
 
   /**
    * Reload the rules object from the database to apply changed permissions.
+   *
+   * @param db name of database from which the rules should be fetched
    */
-  @Post('reload')
-  reloadRules(): Observable<Permission> {
-    return this.rulesService.loadRules();
+  @Post('/:db/reload')
+  reloadRules(@Param('db') db: string): Observable<Permission> {
+    return this.rulesService.loadRules(db);
   }
 }

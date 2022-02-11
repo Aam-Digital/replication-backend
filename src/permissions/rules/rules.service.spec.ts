@@ -1,16 +1,19 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentRule, RulesService } from './rules.service';
-import { COUCHDB_USER_DOC, User } from '../../session/session/user-auth.dto';
+import {
+  COUCHDB_USER_DOC,
+  User,
+} from '../../restricted-endpoints/session/user-auth.dto';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom, of, throwError } from 'rxjs';
 import { Permission } from './permission';
-import { CouchProxyController } from '../../replication/couch-proxy/couch-proxy.controller';
 import { ConfigService } from '@nestjs/config';
-import { DatabaseDocument } from '../../replication/couch-proxy/couchdb-dtos/bulk-docs.dto';
+import { DatabaseDocument } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
 import {
   detectDocumentType,
   DocumentAbility,
 } from '../permission/permission.service';
+import { CouchDBInteracter } from '../../utils/couchdb-interacter';
 
 describe('RulesService', () => {
   let service: RulesService;
@@ -36,8 +39,7 @@ describe('RulesService', () => {
     jest.spyOn(mockHttpService, 'get');
 
     const config = {};
-    config[CouchProxyController.DATABASE_URL_ENV] = DATABASE_URL;
-    config[CouchProxyController.DATABASE_NAME_ENV] = DATABASE_NAME;
+    config[CouchDBInteracter.DATABASE_URL_ENV] = DATABASE_URL;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -48,7 +50,7 @@ describe('RulesService', () => {
     }).compile();
 
     service = module.get<RulesService>(RulesService);
-    await firstValueFrom(service.loadRules());
+    await firstValueFrom(service.loadRules(DATABASE_NAME));
 
     userRules = testPermission.rulesConfig['user_app'];
     adminRules = testPermission.rulesConfig['admin_app'];
@@ -69,7 +71,7 @@ describe('RulesService', () => {
       .spyOn(mockHttpService, 'get')
       .mockReturnValue(throwError(() => new Error()));
 
-    await firstValueFrom(service.loadRules());
+    await firstValueFrom(service.loadRules(DATABASE_NAME));
 
     expect(service.getRulesForUser(new User('some-user', []))).toContainEqual({
       subject: 'all',
@@ -161,7 +163,7 @@ describe('RulesService', () => {
       .spyOn(mockHttpService, 'get')
       .mockReturnValue(of({ data: permissionWithVariable } as any));
 
-    await firstValueFrom(service.loadRules());
+    await firstValueFrom(service.loadRules(DATABASE_NAME));
     const rules = service.getRulesForUser(user);
 
     expect(rules).toContainEqual({
