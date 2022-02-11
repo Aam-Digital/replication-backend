@@ -29,8 +29,9 @@ export class ProxyModule implements NestModule {
         { path: ':db/_all_docs', method: RequestMethod.POST },
         { path: ':db/_all_docs', method: RequestMethod.GET },
         { path: ':db/clear_local', method: RequestMethod.POST },
-        { path: ':db/:docId', method: RequestMethod.GET },
-        { path: ':db/:docId', method: RequestMethod.PUT },
+        // First character of ID has to be letter or number, otherwise potential collision with `_changes` request
+        { path: ':db/:docId([A-Za-b0-9]*)', method: RequestMethod.GET },
+        { path: ':db/:docId([A-Za-b0-9]*)', method: RequestMethod.PUT },
         { path: 'rules/:db/reload', method: RequestMethod.POST },
       )
       .forRoutes('*');
