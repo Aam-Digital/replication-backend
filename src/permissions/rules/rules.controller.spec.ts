@@ -23,8 +23,8 @@ describe('RulesController', () => {
   it('should trigger a reload of the rules', () => {
     jest.spyOn(mockRulesService, 'loadRules');
 
-    controller.reloadRules();
+    controller.reloadRules('database');
 
-    expect(mockRulesService.loadRules).toHaveBeenCalled();
+    expect(mockRulesService.loadRules).toHaveBeenCalledWith('database');
   });
 });

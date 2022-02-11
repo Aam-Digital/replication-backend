@@ -2,7 +2,7 @@ import { ExecutionContext, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '../../restricted-endpoints/session/user-auth.dto';
 
-export const TOKEN_KEY = 'AuthSession';
+export const TOKEN_KEY = 'access_token';
 export const COOKIE_EXPIRATION_TIME = 1000 * 60 * 60 * 2; // 2h expiration time
 
 @Injectable()

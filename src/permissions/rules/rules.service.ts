@@ -21,6 +21,7 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
  */
 @Injectable()
 export class RulesService extends CouchDBInteracter {
+  private readonly DEFAULT_DB = 'app';
   private readonly permissionEntityRules: DocumentRule[] = [
     {
       subject: 'Permission',
@@ -37,14 +38,12 @@ export class RulesService extends CouchDBInteracter {
   constructor(httpService: HttpService, configService: ConfigService) {
     super(httpService, configService);
     // Somehow this only executes when it is subscribed to
-    this.loadRules().subscribe({ complete: () => undefined });
+    this.loadRules(this.DEFAULT_DB).subscribe({ complete: () => undefined });
   }
 
-  loadRules(): Observable<Permission> {
+  loadRules(db: string): Observable<Permission> {
     return this.httpService
-      .get<Permission>(
-        `${this.databaseUrl}/${this.databaseName}/${Permission.DOC_ID}`,
-      )
+      .get<Permission>(`${this.databaseUrl}/${db}/${Permission.DOC_ID}`)
       .pipe(
         catchError(() => of({ data: undefined } as AxiosResponse<Permission>)),
         map((response) => (this.permission = response.data)),

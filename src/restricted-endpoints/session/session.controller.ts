@@ -1,8 +1,16 @@
-import { Controller, Post, Req, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Delete,
+  Post,
+  Req,
+  Response,
+  UseGuards,
+} from '@nestjs/common';
 import { User, UserCredentials } from './user-auth.dto';
 import { CouchAuthGuard } from '../../auth/guards/session-auth/couch-auth.guard';
 import { ApiBody } from '@nestjs/swagger';
 import { Request } from 'express';
+import { TOKEN_KEY } from '../../auth/cookie/cookie.service';
 
 @Controller('/_session')
 export class SessionController {
@@ -15,5 +23,16 @@ export class SessionController {
   @Post()
   login(@Req() request: Request): User {
     return request.user as any;
+  }
+
+  /**
+   * Logout endpoint. This only tells the browser to set a invalid cookie.
+   * It does not un-validate existing cookies.
+   * @param response
+   */
+  @Delete()
+  logout(@Response() response) {
+    response.cookie(TOKEN_KEY, '', { httpOnly: true });
+    response.send({ ok: true });
   }
 }

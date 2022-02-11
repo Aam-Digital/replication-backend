@@ -23,7 +23,6 @@ describe('DocumentFilterService', () => {
   let mockHttpService: HttpService;
   let mockConfigService: ConfigService;
   const databaseUrl = 'https://couchdb.com';
-  const databaseName = 'test-db';
 
   beforeEach(async () => {
     mockRulesService = {
@@ -36,7 +35,6 @@ describe('DocumentFilterService', () => {
 
     const config = {};
     config[CouchDBInteracter.DATABASE_URL_ENV] = databaseUrl;
-    config[CouchDBInteracter.DATABASE_NAME_ENV] = databaseName;
     mockConfigService = {
       get: jest.fn((key) => config[key]),
     } as any;

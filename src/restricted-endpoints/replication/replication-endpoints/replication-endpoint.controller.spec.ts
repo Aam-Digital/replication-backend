@@ -33,7 +33,6 @@ describe('ReplicationEndpointsController', () => {
 
     const config = {};
     config[CouchDBInteracter.DATABASE_URL_ENV] = DATABASE_URL;
-    config[CouchDBInteracter.DATABASE_NAME_ENV] = DATABASE_NAME;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ReplicationEndpointsController],
@@ -199,7 +198,7 @@ describe('ReplicationEndpointsController', () => {
       .mockReturnValue(of({ data: mockAllDocsResponse } as any));
     jest.spyOn(mockHttpService, 'delete').mockReturnValue(of(undefined));
 
-    const result = await controller.clearLocal();
+    const result = await controller.clearLocal(DATABASE_NAME);
 
     expect(mockHttpService.get).toHaveBeenCalledWith(
       `${DATABASE_URL}/${DATABASE_NAME}/_local_docs`,

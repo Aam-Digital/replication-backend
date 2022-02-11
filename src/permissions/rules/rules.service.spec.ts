@@ -40,7 +40,6 @@ describe('RulesService', () => {
 
     const config = {};
     config[CouchDBInteracter.DATABASE_URL_ENV] = DATABASE_URL;
-    config[CouchDBInteracter.DATABASE_NAME_ENV] = DATABASE_NAME;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -51,7 +50,7 @@ describe('RulesService', () => {
     }).compile();
 
     service = module.get<RulesService>(RulesService);
-    await firstValueFrom(service.loadRules());
+    await firstValueFrom(service.loadRules(DATABASE_NAME));
 
     userRules = testPermission.rulesConfig['user_app'];
     adminRules = testPermission.rulesConfig['admin_app'];
@@ -72,7 +71,7 @@ describe('RulesService', () => {
       .spyOn(mockHttpService, 'get')
       .mockReturnValue(throwError(() => new Error()));
 
-    await firstValueFrom(service.loadRules());
+    await firstValueFrom(service.loadRules(DATABASE_NAME));
 
     expect(service.getRulesForUser(new User('some-user', []))).toContainEqual({
       subject: 'all',
@@ -164,7 +163,7 @@ describe('RulesService', () => {
       .spyOn(mockHttpService, 'get')
       .mockReturnValue(of({ data: permissionWithVariable } as any));
 
-    await firstValueFrom(service.loadRules());
+    await firstValueFrom(service.loadRules(DATABASE_NAME));
     const rules = service.getRulesForUser(user);
 
     expect(rules).toContainEqual({

@@ -48,7 +48,7 @@ import { AuthModule } from './auth/auth.module';
   ],
 })
 export class AppModule implements NestModule {
-  constructor(httpService: HttpService, public configService: ConfigService) {
+  constructor(httpService: HttpService, configService: ConfigService) {
     // TODO maybe introduce HttpModule wrapper
     // Send the basic auth header with every request
     httpService.axiosRef.defaults.auth = {

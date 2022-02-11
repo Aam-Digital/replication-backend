@@ -138,27 +138,32 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
    * Deleting them forces clients to re-run sync and check which documents are different.
    * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#retrieve-replication-logs-from-source-and-target}
    *
+   * @param db name of the database where the local documents should be deleted from
+   *
    * This function should be called whenever the permissions change to re-trigger sync
    * TODO do this automatically
    * TODO move this out
    */
-  @Post('/clear_local')
-  async clearLocal(): Promise<any> {
+  @Post('/:db/clear_local')
+  async clearLocal(@Param('db') db: string): Promise<any> {
     const localDocsResponse = await firstValueFrom(
       this.httpService
-        .get<AllDocsResponse>(
-          `${this.databaseUrl}/${this.databaseName}/_local_docs`,
-        )
+        .get<AllDocsResponse>(`${this.databaseUrl}/${db}/_local_docs`)
         .pipe(map((response) => response.data)),
     );
-    const ids = localDocsResponse.rows.map((doc) => doc.id);
+
+    // Get IDs of the replication checkpoints
+    const ids = localDocsResponse.rows
+      .map((doc) => doc.id)
+      .filter(
+        (id) => !id.includes('purge-mrview') && !id.includes('shard-sync'),
+      );
     const deletePromises = ids.map((id) =>
       firstValueFrom(
-        this.httpService.delete(
-          `${this.databaseUrl}/${this.databaseName}/${id}`,
-        ),
+        this.httpService.delete(`${this.databaseUrl}/${db}/${id}`),
       ),
     );
+
     await Promise.all(deletePromises);
     return true;
   }
