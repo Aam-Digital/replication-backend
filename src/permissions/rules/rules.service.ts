@@ -22,7 +22,7 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
 @Injectable()
 export class RulesService extends CouchDBInteracter {
   private readonly DEFAULT_DB = 'app';
-  private readonly permissionEntityRules: DocumentRule[] = [
+  private readonly defaultRulesForEveryone: DocumentRule[] = [
     {
       subject: 'Permission',
       action: ['create', 'update', 'delete'],
@@ -32,6 +32,15 @@ export class RulesService extends CouchDBInteracter {
       subject: 'Permission',
       action: 'read',
     },
+    {
+      subject: 'Config',
+      action: ['create', 'update', 'delete'],
+      inverted: true
+    },
+    {
+      subject: 'Config',
+      action: 'read'
+    }
   ];
   private permission: Permission;
 
@@ -72,7 +81,7 @@ export class RulesService extends CouchDBInteracter {
   }
 
   private getDefaultRules(user: User): DocumentRule[] {
-    const presetRules: DocumentRule[] = [...this.permissionEntityRules];
+    const presetRules: DocumentRule[] = [...this.defaultRulesForEveryone];
     if (!user.roles.includes('_admin')) {
       // normal users can only read their own user object and update their password
       presetRules.push({
