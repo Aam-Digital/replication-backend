@@ -52,13 +52,13 @@ COPY --from=builder /app/dist ./dist
 
 # The url of the CouchDB instance
 ENV DATABASE_URL="https://dev.aam-digital.com/db"
-# The name of the database in the CouchDB instance
-ENV DATABASE_NAME="app"
 # The user credentials which can access ALL data on the database
 ENV DATABASE_USER="demo"
 ENV DATABASE_PASSWORD="pass"
 # A secret which is used to generate the cookies for user authentication
 ENV JWT_SECRET="jwtSecret"
+# (optional) The sentry DSN in order to send the error messages to sentry
+ENV SENTRY_DSN=""
 
 CMD ["node", "dist/main"]
 
