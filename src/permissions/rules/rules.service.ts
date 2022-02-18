@@ -40,6 +40,10 @@ export class RulesService extends CouchDBInteracter {
     {
       subject: 'Config',
       action: 'read'
+    },
+    {
+      subject: 'User',
+      action: 'read'
     }
   ];
   private permission: Permission;
@@ -102,7 +106,7 @@ export class RulesService extends CouchDBInteracter {
       });
       presetRules.push({
         subject: 'User',
-        action: ['read', 'update'],
+        action: 'update',
         conditions: { name: user.name },
       });
     }
