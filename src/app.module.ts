@@ -31,7 +31,7 @@ import { AuthModule } from './auth/auth.module';
           dsn: configService.get('SENTRY_DSN'),
           debug: true,
           environment: 'prod',
-          release: 'backend@latest',
+          release: 'backend@' + process.env.npm_package_version,
           whitelistUrls: [/https?:\/\/(.*)\.?aam-digital\.com/],
           beforeSend: (event) => {
             if ([Severity.Log, Severity.Info].includes(event.level)) {
@@ -48,18 +48,28 @@ import { AuthModule } from './auth/auth.module';
   ],
 })
 export class AppModule implements NestModule {
-  constructor(httpService: HttpService, configService: ConfigService) {
+  constructor(
+    private httpService: HttpService,
+    private configService: ConfigService,
+  ) {
     // TODO maybe introduce HttpModule wrapper
-    // Send the basic auth header with every request
-    httpService.axiosRef.defaults.auth = {
-      username: configService.get<string>(CouchDBInteracter.DATABASE_USER_ENV),
-      password: configService.get<string>(
+    this.initAddBasicAuthHeaderByDefault();
+    this.initMapAxiosErrorsToNestjsExceptions();
+  }
+
+  private initAddBasicAuthHeaderByDefault() {
+    this.httpService.axiosRef.defaults.auth = {
+      username: this.configService.get<string>(
+        CouchDBInteracter.DATABASE_USER_ENV,
+      ),
+      password: this.configService.get<string>(
         CouchDBInteracter.DATABASE_PASSWORD_ENV,
       ),
     };
+  }
 
-    // Map the Axios errors to NestJS exceptions
-    httpService.axiosRef.interceptors.response.use(undefined, (err) => {
+  private initMapAxiosErrorsToNestjsExceptions() {
+    this.httpService.axiosRef.interceptors.response.use(undefined, (err) => {
       throw new HttpException(err.response.data, err.response.status);
     });
   }

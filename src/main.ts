@@ -10,7 +10,7 @@ async function bootstrap() {
     logger: false,
     bodyParser: false,
   });
-  // Proxy for CouchDB admin view
+  // Proxy for CouchDB admin view, CouchDB can be directly accessed through this path
   app.use(
     '/db',
     createProxyMiddleware({
@@ -26,9 +26,9 @@ async function bootstrap() {
 
   // SwaggerUI setup see https://docs.nestjs.com/openapi/introduction#bootstrap
   const config = new DocumentBuilder()
-    .setTitle('Replication Backend')
-    .setDescription('A proxy that implements the CouchDB replication protocol')
-    .setVersion('Beta')
+    .setTitle(process.env.npm_package_name)
+    .setDescription(process.env.npm_package_description)
+    .setVersion(process.env.npm_package_version)
     .addServer('/', 'local')
     .addServer('/db', 'deployed')
     .addBasicAuth(undefined, 'BasicAuth')

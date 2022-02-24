@@ -1,7 +1,7 @@
 {
   "name": "replication-backend",
   "version": "0.0.1",
-  "description": "",
+  "description": "A proxy that implements the CouchDB replication protocol",
   "author": "",
   "private": true,
   "license": "GPL-3.0",
