@@ -26,5 +26,6 @@ import { BasicAuthStrategy } from './guards/basic-auth/basic-auth.strategy';
   exports: [CookieService],
 })
 export class AuthModule {
+  /** name of the environment variable that defines the JWT secret */
   static readonly JWT_SECRET_ENV = 'JWT_SECRET';
 }

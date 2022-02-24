@@ -9,7 +9,6 @@ import { CouchDBInteracter } from '../../../utils/couchdb-interacter';
 describe('CouchAuthStrategy', () => {
   let strategy: CouchAuthStrategy;
   let mockHttpService: HttpService;
-  let mockConfigService: ConfigService;
   const DATABASE_URL = 'some.url';
 
   beforeEach(async () => {
@@ -19,15 +18,12 @@ describe('CouchAuthStrategy', () => {
 
     const config = {};
     config[CouchDBInteracter.DATABASE_URL_ENV] = DATABASE_URL;
-    mockConfigService = {
-      get: jest.fn((key) => config[key]),
-    } as any;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CouchAuthStrategy,
         { provide: HttpService, useValue: mockHttpService },
-        { provide: ConfigService, useValue: mockConfigService },
+        { provide: ConfigService, useValue: new ConfigService(config) },
       ],
     }).compile();
 
@@ -36,12 +32,6 @@ describe('CouchAuthStrategy', () => {
 
   it('should be defined', () => {
     expect(strategy).toBeDefined();
-  });
-
-  it('should read the url for the auth server from the config', () => {
-    expect(mockConfigService.get).toHaveBeenCalledWith(
-      CouchDBInteracter.DATABASE_URL_ENV,
-    );
   });
 
   it('should return the user after receiving success response', async () => {

@@ -21,7 +21,6 @@ describe('DocumentFilterService', () => {
   let childDoc: DatabaseDocument;
   let mockRulesService: RulesService;
   let mockHttpService: HttpService;
-  let mockConfigService: ConfigService;
   const databaseUrl = 'https://couchdb.com';
 
   beforeEach(async () => {
@@ -35,9 +34,6 @@ describe('DocumentFilterService', () => {
 
     const config = {};
     config[CouchDBInteracter.DATABASE_URL_ENV] = databaseUrl;
-    mockConfigService = {
-      get: jest.fn((key) => config[key]),
-    } as any;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -45,7 +41,7 @@ describe('DocumentFilterService', () => {
         PermissionService,
         { provide: RulesService, useValue: mockRulesService },
         { provide: HttpService, useValue: mockHttpService },
-        { provide: ConfigService, useValue: mockConfigService },
+        { provide: ConfigService, useValue: new ConfigService(config) },
       ],
     }).compile();
 

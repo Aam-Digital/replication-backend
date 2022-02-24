@@ -17,7 +17,6 @@ import { CouchDBInteracter } from '../../utils/couchdb-interacter';
 describe('DocumentService', () => {
   let service: DocumentService;
   let mockHttpService: HttpService;
-  let mockConfigService: ConfigService;
   let mockPermissionService: PermissionService;
   const DATABASE_URL = 'database.url';
   const USERNAME = 'demo';
@@ -58,9 +57,6 @@ describe('DocumentService', () => {
     config[CouchDBInteracter.DATABASE_USER_ENV] = USERNAME;
     config[CouchDBInteracter.DATABASE_PASSWORD_ENV] = PASSWORD;
     config[CouchDBInteracter.DATABASE_URL_ENV] = DATABASE_URL;
-    mockConfigService = {
-      get: jest.fn((key) => config[key]),
-    } as any;
 
     mockPermissionService = {
       getAbilityFor: () => undefined,
@@ -70,7 +66,7 @@ describe('DocumentService', () => {
       providers: [
         DocumentService,
         { provide: HttpService, useValue: mockHttpService },
-        { provide: ConfigService, useValue: mockConfigService },
+        { provide: ConfigService, useValue: new ConfigService(config) },
         { provide: PermissionService, useValue: mockPermissionService },
       ],
     }).compile();
