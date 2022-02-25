@@ -4,26 +4,25 @@ import {
   DatabaseDocument,
   DocSuccess,
 } from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
-import { firstValueFrom, map } from 'rxjs';
-import { CouchDBInteracter } from '../../utils/couchdb-interacter';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
 import {
   DocumentAbility,
   PermissionService,
 } from '../../permissions/permission/permission.service';
 import { permittedFieldsOf } from '@casl/ability/extra';
 import * as _ from 'lodash';
+import { CouchdbService } from '../couchdb/couchdb.service';
 
+/**
+ * Read and write individual documents with the remote CouchDB server
+ * enforcing the permissions of the given user.
+ */
 @Injectable()
-export class DocumentService extends CouchDBInteracter {
+export class DocumentService {
   constructor(
-    httpService: HttpService,
-    configService: ConfigService,
+    private couchdbService: CouchdbService,
     private permissionService: PermissionService,
-  ) {
-    super(httpService, configService);
-  }
+  ) {}
 
   async getDocument(
     databaseName: string,
@@ -32,10 +31,8 @@ export class DocumentService extends CouchDBInteracter {
     queryParams?: any,
   ): Promise<DatabaseDocument> {
     const userAbility = this.permissionService.getAbilityFor(requestingUser);
-    const document = await this.getDocumentFromDB(
-      databaseName,
-      documentID,
-      queryParams,
+    const document = await firstValueFrom(
+      this.couchdbService.get(databaseName, documentID, queryParams),
     );
     if (userAbility.can('read', document)) {
       return document;
@@ -44,37 +41,19 @@ export class DocumentService extends CouchDBInteracter {
     }
   }
 
-  private getDocumentFromDB(
-    databaseName: string,
-    documentID: string,
-    queryParams?: any,
-  ) {
-    return firstValueFrom(
-      this.httpService
-        .get<DatabaseDocument>(this.buildDocUrl(databaseName, documentID), {
-          params: queryParams,
-        })
-        .pipe(map((response) => response.data)),
-    );
-  }
-
-  private buildDocUrl(db: string, username: string): string {
-    return `${this.databaseUrl}/${db}/${username}`;
-  }
-
   async putDocument(
     databaseName: string,
     document: DatabaseDocument,
     requestingUser: User,
   ): Promise<DocSuccess> {
     const userAbility = this.permissionService.getAbilityFor(requestingUser);
-    const existingDoc = await this.getDocumentFromDB(
-      databaseName,
-      document._id,
+    const existingDoc = await firstValueFrom(
+      this.couchdbService.get(databaseName, document._id),
     ).catch(() => undefined); // Doc does not exist
+
     if (!existingDoc && userAbility.can('create', document)) {
       // Creating
-      return this.putDocumentToDB(databaseName, document);
+      return firstValueFrom(this.couchdbService.put(databaseName, document));
     } else if (userAbility.can('update', existingDoc)) {
       // Updating
       const finalDoc = this.applyPermissions(
@@ -82,24 +61,24 @@ export class DocumentService extends CouchDBInteracter {
         existingDoc,
         document,
       );
-      return this.putDocumentToDB(databaseName, finalDoc);
+      return firstValueFrom(this.couchdbService.put(databaseName, finalDoc));
     } else {
       throw new UnauthorizedException('unauthorized', 'User is not permitted');
     }
   }
 
-  private putDocumentToDB(
-    dbName: string,
-    document: DatabaseDocument,
-  ): Promise<DocSuccess> {
-    return firstValueFrom(
-      this.httpService
-        .put<DocSuccess>(this.buildDocUrl(dbName, document._id), document)
-        .pipe(map((response) => response.data)),
-    );
-  }
-
+  /**
+   * Selectively apply changed properties only if the user has permissions for that specific property.
+   *
+   * Properties that the given user is not allowed to change are simply omitted, no error is thrown if trying to change them.
+   *
+   * @param userAbility
+   * @param oldDoc
+   * @param newDoc
+   * @private
+   */
   private applyPermissions(
+    // TODO: (property-based write) what about bulkPost writes in replication-endpoint - they should also use these rules?
     userAbility: DocumentAbility,
     oldDoc: DatabaseDocument,
     newDoc: DatabaseDocument,

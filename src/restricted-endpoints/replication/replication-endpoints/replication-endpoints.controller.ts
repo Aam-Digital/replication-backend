@@ -1,5 +1,4 @@
 import { Body, Controller, Get, Param, Post, Query, Req } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
 import { firstValueFrom, from, map, Observable, switchMap } from 'rxjs';
 import {
   BulkDocsRequest,
@@ -7,22 +6,26 @@ import {
 } from './couchdb-dtos/bulk-docs.dto';
 import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
-import { DocumentFilterService } from '../document-filter/document-filter.service';
+import { BulkDocumentService } from '../bulk-document/bulk-document.service';
 import { User } from '../../session/user-auth.dto';
 import { Request } from 'express';
-import { ConfigService } from '@nestjs/config';
-import { CouchDBInteracter } from '../../../utils/couchdb-interacter';
 import { ApiOperation } from '@nestjs/swagger';
+import { CouchdbService } from '../../couchdb/couchdb.service';
 
+/**
+ * Handle endpoints for the CouchDB replication process and bulk actions
+ * which are required by PouchDB.
+ *
+ * Enforces permissions of the current user, filtering requests and responses
+ * between the connected CouchDB server and the client.
+ */
 @Controller()
-export class ReplicationEndpointsController extends CouchDBInteracter {
+export class ReplicationEndpointsController {
   constructor(
-    httpService: HttpService,
-    configService: ConfigService,
-    private documentFilter: DocumentFilterService,
-  ) {
-    super(httpService, configService);
-  }
+    private couchdbService: CouchdbService,
+    private documentFilter: BulkDocumentService,
+  ) {}
+
   /**
    * Upload multiple documents with a single request.
    * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#upload-batch-of-changed-documents}
@@ -44,12 +47,12 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
     const user = request.user as User;
     return from(this.documentFilter.filterBulkDocsRequest(body, user, db)).pipe(
       switchMap((filteredBody) =>
-        this.httpService.post(
-          `${this.databaseUrl}/${db}/_bulk_docs`,
+        this.couchdbService.post<BulkDocsResponse>(
+          db,
+          '_bulk_docs',
           filteredBody,
         ),
       ),
-      map((response) => response.data),
     );
   }
 
@@ -71,12 +74,9 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
     @Req() request: Request,
   ): Observable<BulkGetResponse> {
     const user = request.user as User;
-    return this.httpService
-      .post<BulkGetResponse>(`${this.databaseUrl}/${db}/_bulk_get`, body, {
-        params: queryParams,
-      })
+    return this.couchdbService
+      .post<BulkGetResponse>(db, '_bulk_get', body, queryParams)
       .pipe(
-        map((response) => response.data),
         map((response) =>
           this.documentFilter.filterBulkGetResponse(response, user),
         ),
@@ -101,12 +101,9 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
     @Body() body: AllDocsRequest,
   ): Observable<AllDocsResponse> {
     const user = request.user as User;
-    return this.httpService
-      .post<AllDocsResponse>(`${this.databaseUrl}/${db}/_all_docs`, body, {
-        params: queryParams,
-      })
+    return this.couchdbService
+      .post<AllDocsResponse>(db, '_all_docs', body, queryParams)
       .pipe(
-        map((response) => response.data),
         map((response) =>
           this.documentFilter.filterAllDocsResponse(response, user),
         ),
@@ -120,12 +117,9 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
     @Req() request: Request,
   ) {
     const user = request.user as User;
-    return this.httpService
-      .get<AllDocsResponse>(`${this.databaseUrl}/${db}/_all_docs`, {
-        params: queryParams,
-      })
+    return this.couchdbService
+      .get<AllDocsResponse>(db, '_all_docs', queryParams)
       .pipe(
-        map((response) => response.data),
         map((response) =>
           this.documentFilter.filterAllDocsResponse(response, user),
         ),
@@ -141,15 +135,12 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
    * @param db name of the database where the local documents should be deleted from
    *
    * This function should be called whenever the permissions change to re-trigger sync
-   * TODO do this automatically
    * TODO move this out
    */
   @Post('/:db/clear_local')
   async clearLocal(@Param('db') db: string): Promise<any> {
     const localDocsResponse = await firstValueFrom(
-      this.httpService
-        .get<AllDocsResponse>(`${this.databaseUrl}/${db}/_local_docs`)
-        .pipe(map((response) => response.data)),
+      this.couchdbService.get<AllDocsResponse>(db, '_local_docs'),
     );
 
     // Get IDs of the replication checkpoints
@@ -159,9 +150,7 @@ export class ReplicationEndpointsController extends CouchDBInteracter {
         (id) => !id.includes('purge-mrview') && !id.includes('shard-sync'),
       );
     const deletePromises = ids.map((id) =>
-      firstValueFrom(
-        this.httpService.delete(`${this.databaseUrl}/${db}/${id}`),
-      ),
+      firstValueFrom(this.couchdbService.delete(db, id)),
     );
 
     await Promise.all(deletePromises);

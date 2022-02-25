@@ -7,7 +7,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { User, UserCredentials } from './user-auth.dto';
-import { CouchAuthGuard } from '../../auth/guards/session-auth/couch-auth.guard';
+import { BodyAuthGuard } from '../../auth/guards/body-auth/body-auth.guard';
 import { ApiBody } from '@nestjs/swagger';
 import { Request } from 'express';
 import { TOKEN_KEY } from '../../auth/cookie/cookie.service';
@@ -16,10 +16,10 @@ import { TOKEN_KEY } from '../../auth/cookie/cookie.service';
 export class SessionController {
   /**
    * Login endpoint.
-   * Authenticates using the CouchAuthGuard.
+   * Authenticates using the BodyAuthGuard.
    */
   @ApiBody({ type: UserCredentials })
-  @UseGuards(CouchAuthGuard)
+  @UseGuards(BodyAuthGuard)
   @Post()
   login(@Req() request: Request): User {
     return request.user as any;

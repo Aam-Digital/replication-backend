@@ -1,16 +1,9 @@
-import {
-  HttpException,
-  MiddlewareConsumer,
-  Module,
-  NestModule,
-} from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SentryModule } from '@ntegral/nestjs-sentry';
 import { Severity } from '@sentry/types';
-import { ProxyModule } from './proxy/proxy.module';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
-import { HttpModule, HttpService } from '@nestjs/axios';
-import { CouchDBInteracter } from './utils/couchdb-interacter';
+import { HttpModule } from '@nestjs/axios';
 import { CombinedAuthMiddleware } from './auth/guards/combined-auth.middleware';
 import { AuthModule } from './auth/auth.module';
 
@@ -43,37 +36,10 @@ import { AuthModule } from './auth/auth.module';
         };
       },
     }),
-    ProxyModule,
     RestrictedEndpointsModule,
   ],
 })
 export class AppModule implements NestModule {
-  constructor(
-    private httpService: HttpService,
-    private configService: ConfigService,
-  ) {
-    // TODO maybe introduce HttpModule wrapper
-    this.initAddBasicAuthHeaderByDefault();
-    this.initMapAxiosErrorsToNestjsExceptions();
-  }
-
-  private initAddBasicAuthHeaderByDefault() {
-    this.httpService.axiosRef.defaults.auth = {
-      username: this.configService.get<string>(
-        CouchDBInteracter.DATABASE_USER_ENV,
-      ),
-      password: this.configService.get<string>(
-        CouchDBInteracter.DATABASE_PASSWORD_ENV,
-      ),
-    };
-  }
-
-  private initMapAxiosErrorsToNestjsExceptions() {
-    this.httpService.axiosRef.interceptors.response.use(undefined, (err) => {
-      throw new HttpException(err.response.data, err.response.status);
-    });
-  }
-
   configure(consumer: MiddlewareConsumer) {
     consumer.apply(CombinedAuthMiddleware).exclude('_session').forRoutes('*');
   }

@@ -1,7 +1,6 @@
 import { Controller, Param, Post } from '@nestjs/common';
 import { RulesService } from './rules.service';
-import { Observable } from 'rxjs';
-import { Permission } from './permission';
+import { RulesConfig } from './permission';
 
 @Controller('rules')
 export class RulesController {
@@ -13,7 +12,7 @@ export class RulesController {
    * @param db name of database from which the rules should be fetched
    */
   @Post('/:db/reload')
-  reloadRules(@Param('db') db: string): Observable<Permission> {
+  reloadRules(@Param('db') db: string): Promise<RulesConfig> {
     return this.rulesService.loadRules(db);
   }
 }

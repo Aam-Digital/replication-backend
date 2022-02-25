@@ -5,7 +5,7 @@ import {
   User,
 } from '../../restricted-endpoints/session/user-auth.dto';
 import { HttpService } from '@nestjs/axios';
-import { firstValueFrom, of, throwError } from 'rxjs';
+import { of, throwError } from 'rxjs';
 import { Permission } from './permission';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseDocument } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
@@ -13,7 +13,7 @@ import {
   detectDocumentType,
   DocumentAbility,
 } from '../permission/permission.service';
-import { CouchDBInteracter } from '../../utils/couchdb-interacter';
+import { CouchdbService } from '../../restricted-endpoints/couchdb/couchdb.service';
 
 describe('RulesService', () => {
   let service: RulesService;
@@ -27,22 +27,36 @@ describe('RulesService', () => {
   beforeEach(async () => {
     testPermission = new Permission({
       user_app: [
-        { action: 'read', subject: 'Aser' },
+        { action: 'read', subject: 'Note' },
         { action: 'read', subject: 'Child', inverted: true },
       ],
       admin_app: [{ action: 'manage', subject: 'all' }],
     });
+
     mockHttpService = {
-      get: () => of({ data: testPermission }),
-      axiosRef: { defaults: { auth: undefined } },
+      post: () => of({}),
+      get: () => of({}),
+      put: () => of({}),
+      delete: () => of({}),
+      axiosRef: {
+        defaults: {},
+        interceptors: {
+          response: {
+            use: () => null,
+          },
+        },
+      },
     } as any;
-    jest.spyOn(mockHttpService, 'get');
+    jest
+      .spyOn(mockHttpService, 'get')
+      .mockReturnValue(of({ data: testPermission } as any));
 
     const config = {};
-    config[CouchDBInteracter.DATABASE_URL_ENV] = DATABASE_URL;
+    config[CouchdbService.DATABASE_URL_ENV] = DATABASE_URL;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        CouchdbService,
         RulesService,
         { provide: HttpService, useValue: mockHttpService },
         { provide: ConfigService, useValue: new ConfigService(config) },
@@ -50,7 +64,7 @@ describe('RulesService', () => {
     }).compile();
 
     service = module.get<RulesService>(RulesService);
-    await firstValueFrom(service.loadRules(DATABASE_NAME));
+    await service.loadRules(DATABASE_NAME);
 
     userRules = testPermission.rulesConfig['user_app'];
     adminRules = testPermission.rulesConfig['admin_app'];
@@ -63,6 +77,7 @@ describe('RulesService', () => {
   it('should fetch the rules from the db', () => {
     expect(mockHttpService.get).toHaveBeenCalledWith(
       `${DATABASE_URL}/${DATABASE_NAME}/${Permission.DOC_ID}`,
+      { params: undefined },
     );
   });
 
@@ -71,7 +86,7 @@ describe('RulesService', () => {
       .spyOn(mockHttpService, 'get')
       .mockReturnValue(throwError(() => new Error()));
 
-    await firstValueFrom(service.loadRules(DATABASE_NAME));
+    await service.loadRules(DATABASE_NAME);
 
     expect(service.getRulesForUser(new User('some-user', []))).toContainEqual({
       subject: 'all',
@@ -95,12 +110,12 @@ describe('RulesService', () => {
 
   it('should not fail if no rules exist for a given role', () => {
     const result = service.getRulesForUser(
-      new User('specialUser', ['user_app', 'manager_app']),
+      new User('specialUser', ['user_app', 'non_existing_role']),
     );
     userRules.forEach((rule) => expect(result).toContainEqual(rule));
   });
 
-  it('should return a ability that does not allow to modify the permission document', () => {
+  it('should return an ability that does not allow to modify the permission document', () => {
     const rules = service.getRulesForUser(new User('someUser', ['admin_app']));
     const ability = new DocumentAbility(rules, {
       detectSubjectType: detectDocumentType,
@@ -117,7 +132,7 @@ describe('RulesService', () => {
     expect(ability.can('read', permissionDoc)).toBe(true);
   });
 
-  it('should return a ability where normal users can only read their own user doc and update their password', () => {
+  it('should return an ability where normal users can only read their own user doc and update their password', () => {
     const testUser = new User('someUser', []);
     const rules = service.getRulesForUser(testUser);
     const ability = new DocumentAbility(rules, {
@@ -163,7 +178,7 @@ describe('RulesService', () => {
       .spyOn(mockHttpService, 'get')
       .mockReturnValue(of({ data: permissionWithVariable } as any));
 
-    await firstValueFrom(service.loadRules(DATABASE_NAME));
+    await service.loadRules(DATABASE_NAME);
     const rules = service.getRulesForUser(user);
 
     expect(rules).toContainEqual({
@@ -172,4 +187,6 @@ describe('RulesService', () => {
       conditions: { name: user.name },
     });
   });
+
+  // TODO: what should happen if an unknown variable $ is part of the rule?
 });

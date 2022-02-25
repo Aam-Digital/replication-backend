@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DocumentFilterService } from './document-filter.service';
+import { BulkDocumentService } from './bulk-document.service';
 import { BulkGetResponse } from '../replication-endpoints/couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from '../replication-endpoints/couchdb-dtos/all-docs.dto';
 import {
@@ -12,10 +12,10 @@ import { RulesService } from '../../../permissions/rules/rules.service';
 import { HttpService } from '@nestjs/axios';
 import { of } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
-import { CouchDBInteracter } from '../../../utils/couchdb-interacter';
+import { CouchdbService } from '../../couchdb/couchdb.service';
 
-describe('DocumentFilterService', () => {
-  let service: DocumentFilterService;
+describe('BulkDocumentService', () => {
+  let service: BulkDocumentService;
   let normalUser: User;
   let schoolDoc: DatabaseDocument;
   let childDoc: DatabaseDocument;
@@ -28,24 +28,35 @@ describe('DocumentFilterService', () => {
       getRulesForUser: () => undefined,
     } as any;
     mockHttpService = {
-      post: () => of(undefined),
-      axiosRef: { defaults: { auth: undefined } },
+      post: () => of({}),
+      get: () => of({}),
+      put: () => of({}),
+      delete: () => of({}),
+      axiosRef: {
+        defaults: {},
+        interceptors: {
+          response: {
+            use: () => null,
+          },
+        },
+      },
     } as any;
 
     const config = {};
-    config[CouchDBInteracter.DATABASE_URL_ENV] = databaseUrl;
+    config[CouchdbService.DATABASE_URL_ENV] = databaseUrl;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        DocumentFilterService,
+        BulkDocumentService,
         PermissionService,
+        CouchdbService,
         { provide: RulesService, useValue: mockRulesService },
         { provide: HttpService, useValue: mockHttpService },
         { provide: ConfigService, useValue: new ConfigService(config) },
       ],
     }).compile();
 
-    service = module.get<DocumentFilterService>(DocumentFilterService);
+    service = module.get<BulkDocumentService>(BulkDocumentService);
     normalUser = new User('normalUser', ['user']);
 
     schoolDoc = getSchoolDoc();

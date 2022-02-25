@@ -22,7 +22,8 @@ In both cases the following environment variables should be defined:
 - `DATABASE_URL` the URL where the CouchDB instance can be accessed
 - `DATABASE_USER` the name of a user that is a `member` of all databases inside the CouchDB instance. In case the proxy is also used to create new entries in the `_users` database, then this user needs to be `admin` in this database.
 - `DATABASE_PASSWORD` the password for the `DATABASE_USER`
-- `JWT_SECRET` a secret to create JWT tokens. They are used in the JWT auth wich works similar to CouchDB`s `_session` endpoint. This should be changed to prevent others to create fake JWT tokens.
+- `PERMISSION_DB` the database name where the permissions definition document is stored
+- `JWT_SECRET` a secret to create JWT tokens. They are used in the JWT auth which works similar to CouchDB's `_session` endpoint. This should be changed to prevent others to create fake JWT tokens.
 - `SENTRY_DSN` (optional) the [Sentry DSN](https://docs.sentry.io/product/sentry-basics/dsn-explainer/). If defined, error messages are sent to the sentry.io application monitoring & logging service.
 
 In case the backend is run through Docker, the args can be provided like this
@@ -33,8 +34,8 @@ In case the backend is run through npm, the `.env` file can be adjusted.
 
 ## Defining permissions
 The permissions are also stored in a CouchDB database (default database name `app`).
-This can be the same database used for normal application data managed by users
-(access is restricted to ?TODO?).
+This can be the same database used for normal application data managed by users.
+The permissions document by default can be read by every authenticated user but edited only by the "_admin" role.
 
 The structure of the permission document is as follows:
 ```json
@@ -81,4 +82,4 @@ This system is Node.js application built with the [NestJS](https://nestjs.com/) 
 To run and test this project locally:
 1. `npm install` to download and set up all dependencies
 2. `npm start` to run the application locally (see above for required environment variables)
-3. `npm run test` to execute unit tests
+3. `npm test` to execute unit tests

@@ -7,7 +7,6 @@ import { JwtStrategy } from './guards/jwt/jwt.strategy';
 import { COOKIE_EXPIRATION_TIME, CookieService } from './cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
 import { BasicAuthStrategy } from './guards/basic-auth/basic-auth.strategy';
-import { CouchdbAuthService } from './couchdb-auth/couchdb-auth.service';
 
 @Module({
   imports: [
@@ -23,13 +22,7 @@ import { CouchdbAuthService } from './couchdb-auth/couchdb-auth.service';
       }),
     }),
   ],
-  providers: [
-    BodyAuthStrategy,
-    JwtStrategy,
-    CookieService,
-    BasicAuthStrategy,
-    CouchdbAuthService,
-  ],
+  providers: [BodyAuthStrategy, JwtStrategy, CookieService, BasicAuthStrategy],
   exports: [CookieService],
 })
 export class AuthModule {

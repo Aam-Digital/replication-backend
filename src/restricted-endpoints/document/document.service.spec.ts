@@ -12,7 +12,7 @@ import { DocumentRule } from '../../permissions/rules/rules.service';
 import { UnauthorizedException } from '@nestjs/common';
 import { DocSuccess } from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
 import { COUCHDB_USER_DOC, User } from '../session/user-auth.dto';
-import { CouchDBInteracter } from '../../utils/couchdb-interacter';
+import { CouchdbService } from '../couchdb/couchdb.service';
 
 describe('DocumentService', () => {
   let service: DocumentService;
@@ -42,9 +42,18 @@ describe('DocumentService', () => {
 
   beforeEach(async () => {
     mockHttpService = {
-      put: () => of(undefined),
-      get: () => of(undefined),
-      axiosRef: { defaults: { auth: undefined } },
+      post: () => of({}),
+      get: () => of({}),
+      put: () => of({}),
+      delete: () => of({}),
+      axiosRef: {
+        defaults: {},
+        interceptors: {
+          response: {
+            use: () => null,
+          },
+        },
+      },
     } as any;
     jest
       .spyOn(mockHttpService, 'get')
@@ -54,9 +63,9 @@ describe('DocumentService', () => {
       .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
 
     const config = {};
-    config[CouchDBInteracter.DATABASE_USER_ENV] = USERNAME;
-    config[CouchDBInteracter.DATABASE_PASSWORD_ENV] = PASSWORD;
-    config[CouchDBInteracter.DATABASE_URL_ENV] = DATABASE_URL;
+    config[CouchdbService.DATABASE_USER_ENV] = USERNAME;
+    config[CouchdbService.DATABASE_PASSWORD_ENV] = PASSWORD;
+    config[CouchdbService.DATABASE_URL_ENV] = DATABASE_URL;
 
     mockPermissionService = {
       getAbilityFor: () => undefined,
@@ -65,6 +74,7 @@ describe('DocumentService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DocumentService,
+        CouchdbService,
         { provide: HttpService, useValue: mockHttpService },
         { provide: ConfigService, useValue: new ConfigService(config) },
         { provide: PermissionService, useValue: mockPermissionService },

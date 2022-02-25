@@ -12,9 +12,9 @@ async function bootstrap() {
   });
   // Proxy for CouchDB admin view, CouchDB can be directly accessed through this path
   app.use(
-    '/db',
+    '/couchdb',
     createProxyMiddleware({
-      pathRewrite: { '/db/': '/' },
+      pathRewrite: { '/couchdb/': '/' },
       target: process.env.DATABASE_URL,
       secure: true,
       changeOrigin: true,
@@ -30,7 +30,7 @@ async function bootstrap() {
     .setDescription(process.env.npm_package_description)
     .setVersion(process.env.npm_package_version)
     .addServer('/', 'local')
-    .addServer('/db', 'deployed')
+    .addServer('/db', 'deployed') // used when this runs as part of the [ndb-setup](https://github.com/Aam-Digital/ndb-setup) docker-compose
     .addBasicAuth(undefined, 'BasicAuth')
     .addSecurityRequirements('BasicAuth')
     .build();

@@ -2,18 +2,18 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ReplicationEndpointsController } from './replication-endpoints.controller';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom, of } from 'rxjs';
-import { DocumentFilterService } from '../document-filter/document-filter.service';
+import { BulkDocumentService } from '../bulk-document/bulk-document.service';
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
 import { User } from '../../session/user-auth.dto';
 import { ConfigService } from '@nestjs/config';
-import { CouchDBInteracter } from '../../../utils/couchdb-interacter';
+import { CouchdbService } from '../../couchdb/couchdb.service';
 
 describe('ReplicationEndpointsController', () => {
   let controller: ReplicationEndpointsController;
   let mockHttpService: HttpService;
-  let documentFilter: DocumentFilterService;
+  let documentFilter: BulkDocumentService;
   const DATABASE_URL = 'database.url';
   const DATABASE_NAME = 'app';
 
@@ -23,6 +23,14 @@ describe('ReplicationEndpointsController', () => {
       get: () => of({}),
       put: () => of({}),
       delete: () => of({}),
+      axiosRef: {
+        defaults: {},
+        interceptors: {
+          response: {
+            use: () => null,
+          },
+        },
+      },
     } as any;
 
     documentFilter = {
@@ -32,13 +40,14 @@ describe('ReplicationEndpointsController', () => {
     } as any;
 
     const config = {};
-    config[CouchDBInteracter.DATABASE_URL_ENV] = DATABASE_URL;
+    config[CouchdbService.DATABASE_URL_ENV] = DATABASE_URL;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ReplicationEndpointsController],
       providers: [
+        CouchdbService,
         { provide: HttpService, useValue: mockHttpService },
-        { provide: DocumentFilterService, useValue: documentFilter },
+        { provide: BulkDocumentService, useValue: documentFilter },
         { provide: ConfigService, useValue: new ConfigService(config) },
       ],
     }).compile();
@@ -182,6 +191,7 @@ describe('ReplicationEndpointsController', () => {
     expect(mockHttpService.post).toHaveBeenCalledWith(
       `${DATABASE_URL}/db/_bulk_docs`,
       filteredRequest,
+      { params: undefined },
     );
   });
 
@@ -202,6 +212,7 @@ describe('ReplicationEndpointsController', () => {
 
     expect(mockHttpService.get).toHaveBeenCalledWith(
       `${DATABASE_URL}/${DATABASE_NAME}/_local_docs`,
+      { params: undefined },
     );
     mockAllDocsResponse.rows.forEach((row) => {
       expect(mockHttpService.delete).toHaveBeenCalledWith(
