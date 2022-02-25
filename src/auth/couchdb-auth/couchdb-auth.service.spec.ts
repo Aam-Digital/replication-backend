@@ -1,13 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { CouchdbAuthService } from './couchdb-auth.service';
 import { HttpService } from '@nestjs/axios';
 import { of, throwError } from 'rxjs';
-import { HttpException, UnauthorizedException } from '@nestjs/common';
+import { CouchDBInteracter } from '../../utils/couchdb-interacter';
 import { ConfigService } from '@nestjs/config';
-import { BasicAuthStrategy } from './basic-auth.strategy';
-import { CouchDBInteracter } from '../../../utils/couchdb-interacter';
+import { HttpException, UnauthorizedException } from '@nestjs/common';
 
-describe('BasicAuthStrategy', () => {
-  let strategy: BasicAuthStrategy;
+describe('CouchdbAuthService', () => {
+  let service: CouchdbAuthService;
+
   let mockHttpService: HttpService;
   const DATABASE_URL = 'some.url';
 
@@ -21,30 +22,28 @@ describe('BasicAuthStrategy', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        BasicAuthStrategy,
+        CouchdbAuthService,
         { provide: HttpService, useValue: mockHttpService },
         { provide: ConfigService, useValue: new ConfigService(config) },
       ],
     }).compile();
 
-    strategy = module.get<BasicAuthStrategy>(BasicAuthStrategy);
+    service = module.get<CouchdbAuthService>(CouchdbAuthService);
   });
 
   it('should be defined', () => {
-    expect(strategy).toBeDefined();
+    expect(service).toBeDefined();
   });
 
   it('should return the user after receiving success response', async () => {
     const credentials = { username: 'username', password: 'somePass' };
     jest.spyOn(mockHttpService, 'get').mockReturnValue(
       of({
-        data: {
-          userCtx: { name: credentials.username, roles: ['user_app'] },
-        },
+        data: { userCtx: { name: credentials.username, roles: ['user_app'] } },
       } as any),
     );
 
-    const response = await strategy.validate(
+    const response = await service.login(
       credentials.username,
       credentials.password,
     );
@@ -61,7 +60,7 @@ describe('BasicAuthStrategy', () => {
       .spyOn(mockHttpService, 'get')
       .mockReturnValue(throwError(() => new HttpException('error', 400)));
 
-    return expect(strategy.validate('user', 'wrong_pw')).rejects.toBeInstanceOf(
+    return expect(service.login('user', 'wrong_pw')).rejects.toBeInstanceOf(
       UnauthorizedException,
     );
   });

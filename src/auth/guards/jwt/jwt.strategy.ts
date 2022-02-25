@@ -6,6 +6,9 @@ import { User } from '../../../restricted-endpoints/session/user-auth.dto';
 import { TOKEN_KEY } from '../../cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
 
+/**
+ * Authenticate a user using an existing JWT from a cookie in the request.
+ */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(configService: ConfigService) {

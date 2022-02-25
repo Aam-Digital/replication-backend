@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CouchAuthStrategy } from './guards/session-auth/couch-auth.strategy';
+import { BodyAuthStrategy } from './guards/body-auth/body-auth.strategy';
 import { HttpModule } from '@nestjs/axios';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
@@ -7,6 +7,7 @@ import { JwtStrategy } from './guards/jwt/jwt.strategy';
 import { COOKIE_EXPIRATION_TIME, CookieService } from './cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
 import { BasicAuthStrategy } from './guards/basic-auth/basic-auth.strategy';
+import { CouchdbAuthService } from './couchdb-auth/couchdb-auth.service';
 
 @Module({
   imports: [
@@ -22,7 +23,13 @@ import { BasicAuthStrategy } from './guards/basic-auth/basic-auth.strategy';
       }),
     }),
   ],
-  providers: [CouchAuthStrategy, JwtStrategy, CookieService, BasicAuthStrategy],
+  providers: [
+    BodyAuthStrategy,
+    JwtStrategy,
+    CookieService,
+    BasicAuthStrategy,
+    CouchdbAuthService,
+  ],
   exports: [CookieService],
 })
 export class AuthModule {

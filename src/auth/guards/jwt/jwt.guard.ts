@@ -2,6 +2,9 @@ import { AuthGuard } from '@nestjs/passport';
 import { ExecutionContext, Injectable } from '@nestjs/common';
 import { CookieService } from '../../cookie/cookie.service';
 
+/**
+ * Use the {@link JwtStrategy} for validation and sets a new user cookie.
+ */
 @Injectable()
 export class JwtGuard extends AuthGuard('jwt') {
   constructor(private cookieService: CookieService) {

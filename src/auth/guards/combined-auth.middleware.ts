@@ -1,5 +1,5 @@
 import { ExecutionContext, Injectable, NestMiddleware } from '@nestjs/common';
-import { BasicAuthGuard } from './basic-auth/basic-auth-guard.service';
+import { BasicAuthGuard } from './basic-auth/basic-auth.guard';
 import { JwtGuard } from './jwt/jwt.guard';
 import { CookieService } from '../cookie/cookie.service';
 
