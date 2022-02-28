@@ -1,36 +1,24 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ReplicationEndpointsController } from './replication-endpoints.controller';
-import { HttpService } from '@nestjs/axios';
 import { firstValueFrom, of } from 'rxjs';
 import { BulkDocumentService } from '../bulk-document/bulk-document.service';
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
 import { User } from '../../session/user-auth.dto';
-import { ConfigService } from '@nestjs/config';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 
 describe('ReplicationEndpointsController', () => {
   let controller: ReplicationEndpointsController;
-  let mockHttpService: HttpService;
+  let mockCouchDBService: CouchdbService;
   let documentFilter: BulkDocumentService;
-  const DATABASE_URL = 'database.url';
   const DATABASE_NAME = 'app';
 
   beforeEach(async () => {
-    mockHttpService = {
+    mockCouchDBService = {
       post: () => of({}),
       get: () => of({}),
-      put: () => of({}),
       delete: () => of({}),
-      axiosRef: {
-        defaults: {},
-        interceptors: {
-          response: {
-            use: () => null,
-          },
-        },
-      },
     } as any;
 
     documentFilter = {
@@ -39,16 +27,12 @@ describe('ReplicationEndpointsController', () => {
       filterBulkDocsRequest: () => null,
     } as any;
 
-    const config = {};
-    config[CouchdbService.DATABASE_URL_ENV] = DATABASE_URL;
-
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ReplicationEndpointsController],
       providers: [
         CouchdbService,
-        { provide: HttpService, useValue: mockHttpService },
+        { provide: CouchdbService, useValue: mockCouchDBService },
         { provide: BulkDocumentService, useValue: documentFilter },
-        { provide: ConfigService, useValue: new ConfigService(config) },
       ],
     }).compile();
 
@@ -62,17 +46,13 @@ describe('ReplicationEndpointsController', () => {
   });
 
   it('should use the document filter service in bulkGet', async () => {
-    const httpServiceResponse = {
-      data: {
-        results: [
-          { id: 'someID', doc: [] },
-          { id: 'otherID', doc: [] },
-        ],
-      },
+    const bulkGetResponse = {
+      results: [
+        { id: 'someID', doc: [] },
+        { id: 'otherID', doc: [] },
+      ],
     };
-    jest
-      .spyOn(mockHttpService, 'post')
-      .mockReturnValue(of(httpServiceResponse as any));
+    jest.spyOn(mockCouchDBService, 'post').mockReturnValue(of(bulkGetResponse));
     const filteredResponse: BulkGetResponse = {
       results: [{ id: 'someID', docs: [] }],
     };
@@ -86,36 +66,32 @@ describe('ReplicationEndpointsController', () => {
     );
 
     expect(documentFilter.filterBulkGetResponse).toHaveBeenCalledWith(
-      httpServiceResponse.data,
+      bulkGetResponse,
       user,
     );
     expect(result).toEqual(filteredResponse);
   });
 
   it('should use the document filter service in allDocs', async () => {
-    const httpServiceResponse = {
-      data: {
-        total_rows: 10,
-        offset: 0,
-        rows: [
-          {
-            id: 'someID',
-            key: 'someKey',
-            value: { rev: 'someRev' },
-            doc: null,
-          },
-          {
-            id: 'otherID',
-            key: 'otherKey',
-            value: { rev: 'otherRev' },
-            doc: null,
-          },
-        ],
-      },
+    const allDocsResponse = {
+      total_rows: 10,
+      offset: 0,
+      rows: [
+        {
+          id: 'someID',
+          key: 'someKey',
+          value: { rev: 'someRev' },
+          doc: null,
+        },
+        {
+          id: 'otherID',
+          key: 'otherKey',
+          value: { rev: 'otherRev' },
+          doc: null,
+        },
+      ],
     };
-    jest
-      .spyOn(mockHttpService, 'post')
-      .mockReturnValue(of(httpServiceResponse as any));
+    jest.spyOn(mockCouchDBService, 'post').mockReturnValue(of(allDocsResponse));
     const filteredResponse: AllDocsResponse = {
       total_rows: 10,
       offset: 0,
@@ -138,7 +114,7 @@ describe('ReplicationEndpointsController', () => {
     );
 
     expect(documentFilter.filterAllDocsResponse).toHaveBeenCalledWith(
-      httpServiceResponse.data,
+      allDocsResponse,
       user,
     );
     expect(result).toEqual(filteredResponse);
@@ -162,7 +138,7 @@ describe('ReplicationEndpointsController', () => {
         },
       ],
     };
-    jest.spyOn(mockHttpService, 'post');
+    jest.spyOn(mockCouchDBService, 'post');
     const filteredRequest: BulkDocsRequest = {
       new_edits: false,
       docs: [
@@ -188,10 +164,10 @@ describe('ReplicationEndpointsController', () => {
       user,
       'db',
     );
-    expect(mockHttpService.post).toHaveBeenCalledWith(
-      `${DATABASE_URL}/db/_bulk_docs`,
+    expect(mockCouchDBService.post).toHaveBeenCalledWith(
+      'db',
+      '_bulk_docs',
       filteredRequest,
-      { params: undefined },
     );
   });
 
@@ -204,19 +180,20 @@ describe('ReplicationEndpointsController', () => {
       ],
     };
     jest
-      .spyOn(mockHttpService, 'get')
-      .mockReturnValue(of({ data: mockAllDocsResponse } as any));
-    jest.spyOn(mockHttpService, 'delete').mockReturnValue(of(undefined));
+      .spyOn(mockCouchDBService, 'get')
+      .mockReturnValue(of(mockAllDocsResponse));
+    jest.spyOn(mockCouchDBService, 'delete').mockReturnValue(of(undefined));
 
     const result = await controller.clearLocal(DATABASE_NAME);
 
-    expect(mockHttpService.get).toHaveBeenCalledWith(
-      `${DATABASE_URL}/${DATABASE_NAME}/_local_docs`,
-      { params: undefined },
+    expect(mockCouchDBService.get).toHaveBeenCalledWith(
+      DATABASE_NAME,
+      '_local_docs',
     );
     mockAllDocsResponse.rows.forEach((row) => {
-      expect(mockHttpService.delete).toHaveBeenCalledWith(
-        `${DATABASE_URL}/${DATABASE_NAME}/${row.id}`,
+      expect(mockCouchDBService.delete).toHaveBeenCalledWith(
+        DATABASE_NAME,
+        row.id,
       );
     });
     expect(result).toBe(true);
