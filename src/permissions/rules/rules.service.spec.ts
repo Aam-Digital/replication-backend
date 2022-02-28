@@ -4,7 +4,6 @@ import {
   COUCHDB_USER_DOC,
   User,
 } from '../../restricted-endpoints/session/user-auth.dto';
-import { HttpService } from '@nestjs/axios';
 import { of, throwError } from 'rxjs';
 import { Permission } from './permission';
 import { ConfigService } from '@nestjs/config';
@@ -19,9 +18,8 @@ describe('RulesService', () => {
   let service: RulesService;
   let adminRules: DocumentRule[];
   let userRules: DocumentRule[];
-  let mockHttpService: HttpService;
+  let mockCouchDBService: CouchdbService;
   let testPermission: Permission;
-  const DATABASE_URL = 'database.url';
   const DATABASE_NAME = 'app';
 
   beforeEach(async () => {
@@ -32,58 +30,43 @@ describe('RulesService', () => {
       ],
       admin_app: [{ action: 'manage', subject: 'all' }],
     });
-
-    mockHttpService = {
-      post: () => of({}),
-      get: () => of({}),
-      put: () => of({}),
-      delete: () => of({}),
-      axiosRef: {
-        defaults: {},
-        interceptors: {
-          response: {
-            use: () => null,
-          },
-        },
-      },
+    userRules = testPermission.rulesConfig['user_app'];
+    adminRules = testPermission.rulesConfig['admin_app'];
+    mockCouchDBService = {
+      get: () => undefined,
     } as any;
-    jest
-      .spyOn(mockHttpService, 'get')
-      .mockReturnValue(of({ data: testPermission } as any));
-
-    const config = {};
-    config[CouchdbService.DATABASE_URL_ENV] = DATABASE_URL;
+    jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(testPermission));
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        CouchdbService,
         RulesService,
-        { provide: HttpService, useValue: mockHttpService },
-        { provide: ConfigService, useValue: new ConfigService(config) },
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({
+            [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
+          }),
+        },
+        { provide: CouchdbService, useValue: mockCouchDBService },
       ],
     }).compile();
 
     service = module.get<RulesService>(RulesService);
-    await service.loadRules(DATABASE_NAME);
-
-    userRules = testPermission.rulesConfig['user_app'];
-    adminRules = testPermission.rulesConfig['admin_app'];
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it('should fetch the rules from the db', () => {
-    expect(mockHttpService.get).toHaveBeenCalledWith(
-      `${DATABASE_URL}/${DATABASE_NAME}/${Permission.DOC_ID}`,
-      { params: undefined },
+  it('should fetch the rules from the db on startup', async () => {
+    expect(mockCouchDBService.get).toHaveBeenCalledWith(
+      DATABASE_NAME,
+      Permission.DOC_ID,
     );
   });
 
   it('should allow everything in case no rules object could be found', async () => {
     jest
-      .spyOn(mockHttpService, 'get')
+      .spyOn(mockCouchDBService, 'get')
       .mockReturnValue(throwError(() => new Error()));
 
     await service.loadRules(DATABASE_NAME);
@@ -175,8 +158,8 @@ describe('RulesService', () => {
       ],
     });
     jest
-      .spyOn(mockHttpService, 'get')
-      .mockReturnValue(of({ data: permissionWithVariable } as any));
+      .spyOn(mockCouchDBService, 'get')
+      .mockReturnValue(of(permissionWithVariable));
 
     await service.loadRules(DATABASE_NAME);
     const rules = service.getRulesForUser(user);

@@ -19,7 +19,7 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
  */
 @Injectable()
 export class RulesService {
-  private static readonly ENV_PERMISSION_DB = 'PERMISSION_DB';
+  static readonly ENV_PERMISSION_DB = 'PERMISSION_DB';
   private readonly defaultRulesForEveryone: DocumentRule[] = [
     {
       subject: 'Permission',
