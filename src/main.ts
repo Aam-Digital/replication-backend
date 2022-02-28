@@ -6,10 +6,7 @@ import { createProxyMiddleware } from 'http-proxy-middleware';
 import { SentryService } from '@ntegral/nestjs-sentry';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, {
-    logger: false,
-    bodyParser: false,
-  });
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
   // Proxy for CouchDB admin view, CouchDB can be directly accessed through this path
   app.use(
     '/couchdb',
