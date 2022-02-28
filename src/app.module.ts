@@ -24,8 +24,10 @@ import * as Sentry from '@sentry/node';
           debug: true,
           environment: 'prod',
           release: 'backend@' + process.env.npm_package_version,
+          whitelistUrls: [/https?:\/\/(.*)\.?aam-digital\.com/],
           initialScope: {
             tags: {
+              // ID of the docker container in which this is run
               hostname: process.env.HOSTNAME || 'unknown',
             },
           },

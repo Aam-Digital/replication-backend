@@ -81,11 +81,11 @@ export class CouchdbService {
     dbName: string,
     documentID: string,
     body: any,
-    params?: any,
+    queryParams?: any,
   ): Observable<T> {
     return this.httpService
       .post<T>(this.buildDocUrl(dbName, documentID), body, {
-        params: params,
+        params: queryParams,
       })
       .pipe(map((res) => res.data));
   }

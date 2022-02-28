@@ -30,7 +30,6 @@ describe('ReplicationEndpointsController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ReplicationEndpointsController],
       providers: [
-        CouchdbService,
         { provide: CouchdbService, useValue: mockCouchDBService },
         { provide: BulkDocumentService, useValue: documentFilter },
       ],
@@ -46,10 +45,10 @@ describe('ReplicationEndpointsController', () => {
   });
 
   it('should use the document filter service in bulkGet', async () => {
-    const bulkGetResponse = {
+    const bulkGetResponse: BulkGetResponse = {
       results: [
-        { id: 'someID', doc: [] },
-        { id: 'otherID', doc: [] },
+        { id: 'someID', docs: [] },
+        { id: 'otherID', docs: [] },
       ],
     };
     jest.spyOn(mockCouchDBService, 'post').mockReturnValue(of(bulkGetResponse));
@@ -73,7 +72,7 @@ describe('ReplicationEndpointsController', () => {
   });
 
   it('should use the document filter service in allDocs', async () => {
-    const allDocsResponse = {
+    const allDocsResponse: AllDocsResponse = {
       total_rows: 10,
       offset: 0,
       rows: [
