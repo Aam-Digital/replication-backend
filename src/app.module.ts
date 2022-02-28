@@ -6,6 +6,7 @@ import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-end
 import { CombinedAuthMiddleware } from './auth/guards/combined-auth.middleware';
 import { AuthModule } from './auth/auth.module';
 import { CouchdbModule } from './couchdb/couchdb.module';
+import * as Sentry from '@sentry/node';
 
 @Module({
   imports: [
@@ -23,7 +24,11 @@ import { CouchdbModule } from './couchdb/couchdb.module';
           debug: true,
           environment: 'prod',
           release: 'backend@' + process.env.npm_package_version,
-          whitelistUrls: [/https?:\/\/(.*)\.?aam-digital\.com/],
+          initialScope: {
+            tags: {
+              hostname: process.env.HOSTNAME || 'unknown',
+            },
+          },
           beforeSend: (event) => {
             if ([Severity.Log, Severity.Info].includes(event.level)) {
               return null;
@@ -41,6 +46,13 @@ import { CouchdbModule } from './couchdb/couchdb.module';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply((req, res, next) => {
+        // reset user before processing a request
+        Sentry.setUser({ username: 'unknown' });
+        next();
+      })
+      .forRoutes('*');
     consumer.apply(CombinedAuthMiddleware).exclude('_session').forRoutes('*');
   }
 }

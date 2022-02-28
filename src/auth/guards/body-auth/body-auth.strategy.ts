@@ -4,6 +4,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-local';
 import { firstValueFrom } from 'rxjs';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
+import * as Sentry from '@sentry/node';
 
 /**
  * Authenticate a user from credentials in the body payload of a request.
@@ -16,7 +17,11 @@ export class BodyAuthStrategy extends PassportStrategy(Strategy) {
     super({ usernameField: 'name' });
   }
 
-  validate(username: string, password: string): Promise<User> {
-    return firstValueFrom(this.couchdbService.login(username, password));
+  async validate(username: string, password: string): Promise<User> {
+    const user = await firstValueFrom(
+      this.couchdbService.login(username, password),
+    );
+    Sentry.setUser({ username: user.name });
+    return user;
   }
 }

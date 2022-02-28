@@ -5,6 +5,7 @@ import { AuthModule } from '../../auth.module';
 import { User } from '../../../restricted-endpoints/session/user-auth.dto';
 import { TOKEN_KEY } from '../../cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
+import * as Sentry from '@sentry/node';
 
 /**
  * Authenticate a user using an existing JWT from a cookie in the request.
@@ -20,6 +21,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(data: any): Promise<User> {
-    return new User(data.name, data.sub);
+    const user = new User(data.name, data.sub);
+    Sentry.setUser({ username: user.name });
+    return user;
   }
 }
