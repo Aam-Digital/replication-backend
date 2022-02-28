@@ -9,9 +9,7 @@ import {
 import { User } from '../../session/user-auth.dto';
 import { PermissionService } from '../../../permissions/permission/permission.service';
 import { RulesService } from '../../../permissions/rules/rules.service';
-import { HttpService } from '@nestjs/axios';
 import { of } from 'rxjs';
-import { ConfigService } from '@nestjs/config';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 
 describe('BulkDocumentService', () => {
@@ -20,47 +18,29 @@ describe('BulkDocumentService', () => {
   let schoolDoc: DatabaseDocument;
   let childDoc: DatabaseDocument;
   let mockRulesService: RulesService;
-  let mockHttpService: HttpService;
-  const databaseUrl = 'https://couchdb.com';
+  let mockCouchDBService: CouchdbService;
 
   beforeEach(async () => {
     mockRulesService = {
       getRulesForUser: () => undefined,
     } as any;
-    mockHttpService = {
+    mockCouchDBService = {
       post: () => of({}),
-      get: () => of({}),
-      put: () => of({}),
-      delete: () => of({}),
-      axiosRef: {
-        defaults: {},
-        interceptors: {
-          response: {
-            use: () => null,
-          },
-        },
-      },
     } as any;
-
-    const config = {};
-    config[CouchdbService.DATABASE_URL_ENV] = databaseUrl;
+    normalUser = new User('normalUser', ['user']);
+    schoolDoc = getSchoolDoc();
+    childDoc = getChildDoc();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BulkDocumentService,
         PermissionService,
-        CouchdbService,
         { provide: RulesService, useValue: mockRulesService },
-        { provide: HttpService, useValue: mockHttpService },
-        { provide: ConfigService, useValue: new ConfigService(config) },
+        { provide: CouchdbService, useValue: mockCouchDBService },
       ],
     }).compile();
 
     service = module.get<BulkDocumentService>(BulkDocumentService);
-    normalUser = new User('normalUser', ['user']);
-
-    schoolDoc = getSchoolDoc();
-    childDoc = getChildDoc();
   });
 
   it('should be defined', () => {
@@ -126,9 +106,7 @@ describe('BulkDocumentService', () => {
       { action: 'create', subject: 'Child' },
       { action: ['read', 'update'], subject: 'School' },
     ]);
-    jest
-      .spyOn(mockHttpService, 'post')
-      .mockReturnValue(of({ data: { rows: [] } } as any));
+    jest.spyOn(mockCouchDBService, 'post').mockReturnValue(of({ rows: [] }));
 
     const result = await service.filterBulkDocsRequest(request, normalUser, '');
 
@@ -148,10 +126,8 @@ describe('BulkDocumentService', () => {
       { action: 'read', subject: 'School' },
     ]);
     jest
-      .spyOn(mockHttpService, 'post')
-      .mockReturnValue(
-        of({ data: createAllDocsResponse(childDoc, schoolDoc) } as any),
-      );
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValue(of(createAllDocsResponse(childDoc, schoolDoc)));
 
     const result = await service.filterBulkDocsRequest(request, normalUser, '');
 
@@ -175,10 +151,8 @@ describe('BulkDocumentService', () => {
       { action: ['read', 'update'], subject: 'School' },
     ]);
     jest
-      .spyOn(mockHttpService, 'post')
-      .mockReturnValue(
-        of({ data: createAllDocsResponse(childDoc, schoolDoc) } as any),
-      );
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValue(of(createAllDocsResponse(childDoc, schoolDoc)));
 
     const result = await service.filterBulkDocsRequest(request, normalUser, '');
 
@@ -203,10 +177,8 @@ describe('BulkDocumentService', () => {
       },
     ]);
     jest
-      .spyOn(mockHttpService, 'post')
-      .mockReturnValue(
-        of({ data: createAllDocsResponse(privateSchool, publicSchool) } as any),
-      );
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValue(of(createAllDocsResponse(privateSchool, publicSchool)));
     // User makes change to a document on which no permissions are given
     const updatedPrivateSchool = getSchoolDoc();
     updatedPrivateSchool.privateSchool = false;
