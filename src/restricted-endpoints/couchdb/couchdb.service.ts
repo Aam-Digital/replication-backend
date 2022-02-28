@@ -24,8 +24,8 @@ export class CouchdbService {
   readonly databaseUrl: string;
 
   constructor(
-    public httpService: HttpService,
-    public configService: ConfigService,
+    private httpService: HttpService,
+    private configService: ConfigService,
   ) {
     this.databaseUrl = this.configService.get<string>(
       CouchdbService.DATABASE_URL_ENV,
