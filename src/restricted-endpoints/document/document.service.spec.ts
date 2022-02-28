@@ -1,8 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentService } from './document.service';
 import { of, throwError } from 'rxjs';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
 import {
   detectDocumentType,
   DocumentAbility,
@@ -12,16 +10,12 @@ import { DocumentRule } from '../../permissions/rules/rules.service';
 import { UnauthorizedException } from '@nestjs/common';
 import { DocSuccess } from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
 import { COUCHDB_USER_DOC, User } from '../session/user-auth.dto';
-import { CouchDBInteracter } from '../../utils/couchdb-interacter';
+import { CouchdbService } from '../../couchdb/couchdb.service';
 
 describe('DocumentService', () => {
   let service: DocumentService;
-  let mockHttpService: HttpService;
-  let mockConfigService: ConfigService;
   let mockPermissionService: PermissionService;
-  const DATABASE_URL = 'database.url';
-  const USERNAME = 'demo';
-  const PASSWORD = 'pass';
+  let mockCouchDBService: CouchdbService;
   const databaseName = '_users';
   const userDoc = {
     _id: `${COUCHDB_USER_DOC}:testUser`,
@@ -30,7 +24,6 @@ describe('DocumentService', () => {
     roles: [],
     type: 'user',
   };
-  const userURL = `${DATABASE_URL}/${databaseName}/${userDoc._id}`;
   const requestingUser: User = {
     name: 'testUser',
     roles: [],
@@ -42,25 +35,12 @@ describe('DocumentService', () => {
   };
 
   beforeEach(async () => {
-    mockHttpService = {
-      put: () => of(undefined),
-      get: () => of(undefined),
-      axiosRef: { defaults: { auth: undefined } },
+    mockCouchDBService = {
+      get: () => of({}),
+      put: () => of({}),
     } as any;
-    jest
-      .spyOn(mockHttpService, 'get')
-      .mockReturnValue(of({ data: userDoc } as any));
-    jest
-      .spyOn(mockHttpService, 'put')
-      .mockReturnValue(of({ data: SUCCESS_RESPONSE } as any));
-
-    const config = {};
-    config[CouchDBInteracter.DATABASE_USER_ENV] = USERNAME;
-    config[CouchDBInteracter.DATABASE_PASSWORD_ENV] = PASSWORD;
-    config[CouchDBInteracter.DATABASE_URL_ENV] = DATABASE_URL;
-    mockConfigService = {
-      get: jest.fn((key) => config[key]),
-    } as any;
+    jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(userDoc));
+    jest.spyOn(mockCouchDBService, 'put').mockReturnValue(of(SUCCESS_RESPONSE));
 
     mockPermissionService = {
       getAbilityFor: () => undefined,
@@ -69,8 +49,7 @@ describe('DocumentService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DocumentService,
-        { provide: HttpService, useValue: mockHttpService },
-        { provide: ConfigService, useValue: mockConfigService },
+        { provide: CouchdbService, useValue: mockCouchDBService },
         { provide: PermissionService, useValue: mockPermissionService },
       ],
     }).compile();
@@ -105,11 +84,14 @@ describe('DocumentService', () => {
       databaseName,
       userDoc._id,
       requestingUser,
-      {},
     );
 
     await expect(response).resolves.toBe(userDoc);
-    expect(mockHttpService.get).toHaveBeenCalledWith(userURL, { params: {} });
+    expect(mockCouchDBService.get).toHaveBeenCalledWith(
+      databaseName,
+      userDoc._id,
+      undefined,
+    );
   });
 
   it('should throw unauthorized exception if user does not have read permission', async () => {
@@ -132,19 +114,19 @@ describe('DocumentService', () => {
 
   it('should allow create operation if user has permission', async () => {
     jest
-      .spyOn(mockHttpService, 'get')
+      .spyOn(mockCouchDBService, 'get')
       .mockReturnValue(throwError(() => new Error()));
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['create', 'read'] }]);
 
     const response = service.putDocument(databaseName, userDoc, requestingUser);
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
-    expect(mockHttpService.put).toHaveBeenCalledWith(userURL, userDoc);
+    expect(mockCouchDBService.put).toHaveBeenCalledWith(databaseName, userDoc);
   });
 
   it('should throw an unauthorized exception if user does not have create permission', () => {
     jest
-      .spyOn(mockHttpService, 'get')
+      .spyOn(mockCouchDBService, 'get')
       .mockReturnValue(throwError(() => new Error()));
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
 
@@ -165,8 +147,8 @@ describe('DocumentService', () => {
     );
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
-    expect(mockHttpService.put).toHaveBeenCalledWith(
-      userURL,
+    expect(mockCouchDBService.put).toHaveBeenCalledWith(
+      databaseName,
       userWithUpdatedRoles,
     );
   });
@@ -193,8 +175,8 @@ describe('DocumentService', () => {
     );
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
-    expect(mockHttpService.put).toHaveBeenCalledWith(
-      userURL,
+    expect(mockCouchDBService.put).toHaveBeenCalledWith(
+      databaseName,
       userWithUpdatedPassword,
     );
   });

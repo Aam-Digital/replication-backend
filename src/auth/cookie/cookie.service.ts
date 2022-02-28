@@ -5,6 +5,10 @@ import { User } from '../../restricted-endpoints/session/user-auth.dto';
 export const TOKEN_KEY = 'access_token';
 export const COOKIE_EXPIRATION_TIME = 1000 * 60 * 60 * 2; // 2h expiration time
 
+/**
+ * Utility service to create cookies after the authentication process
+ * containing our application specific user details.
+ */
 @Injectable()
 export class CookieService {
   constructor(private jwtService: JwtService) {}

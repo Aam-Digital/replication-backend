@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { CouchAuthStrategy } from './guards/session-auth/couch-auth.strategy';
+import { BodyAuthStrategy } from './guards/body-auth/body-auth.strategy';
 import { HttpModule } from '@nestjs/axios';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
@@ -22,9 +22,10 @@ import { BasicAuthStrategy } from './guards/basic-auth/basic-auth.strategy';
       }),
     }),
   ],
-  providers: [CouchAuthStrategy, JwtStrategy, CookieService, BasicAuthStrategy],
+  providers: [BodyAuthStrategy, JwtStrategy, CookieService, BasicAuthStrategy],
   exports: [CookieService],
 })
 export class AuthModule {
+  /** name of the environment variable that defines the JWT secret */
   static readonly JWT_SECRET_ENV = 'JWT_SECRET';
 }

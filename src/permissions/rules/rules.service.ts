@@ -5,13 +5,11 @@ import {
   COUCHDB_USER_DOC,
   User,
 } from '../../restricted-endpoints/session/user-auth.dto';
-import { HttpService } from '@nestjs/axios';
-import { CouchDBInteracter } from '../../utils/couchdb-interacter';
-import { ConfigService } from '@nestjs/config';
-import { Permission } from './permission';
-import { catchError, map, Observable, of } from 'rxjs';
-import { AxiosResponse } from 'axios';
+import { Permission, RulesConfig } from './permission';
+import { catchError, firstValueFrom, map, of } from 'rxjs';
 import * as _ from 'lodash';
+import { CouchdbService } from '../../couchdb/couchdb.service';
+import { ConfigService } from '@nestjs/config';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 
@@ -20,8 +18,8 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
  * The format of the rules is derived from CASL, see {@link https://casl.js.org/v5/en/guide/define-rules#json-objects}
  */
 @Injectable()
-export class RulesService extends CouchDBInteracter {
-  private readonly DEFAULT_DB = 'app';
+export class RulesService {
+  static readonly ENV_PERMISSION_DB = 'PERMISSION_DB';
   private readonly defaultRulesForEveryone: DocumentRule[] = [
     {
       subject: 'Permission',
@@ -35,32 +33,38 @@ export class RulesService extends CouchDBInteracter {
     {
       subject: 'Config',
       action: ['create', 'update', 'delete'],
-      inverted: true
+      inverted: true,
     },
     {
       subject: 'Config',
-      action: 'read'
+      action: 'read',
     },
     {
       subject: 'User',
-      action: 'read'
-    }
+      action: 'read',
+    },
   ];
-  private permission: Permission;
+  private permission: RulesConfig;
 
-  constructor(httpService: HttpService, configService: ConfigService) {
-    super(httpService, configService);
+  constructor(
+    private couchdbService: CouchdbService,
+    private configService: ConfigService,
+  ) {
     // Somehow this only executes when it is subscribed to
-    this.loadRules(this.DEFAULT_DB).subscribe({ complete: () => undefined });
+    const permissionDbName = this.configService.get(
+      RulesService.ENV_PERMISSION_DB,
+    );
+    this.loadRules(permissionDbName);
   }
 
-  loadRules(db: string): Observable<Permission> {
-    return this.httpService
-      .get<Permission>(`${this.databaseUrl}/${db}/${Permission.DOC_ID}`)
-      .pipe(
-        catchError(() => of({ data: undefined } as AxiosResponse<Permission>)),
-        map((response) => (this.permission = response.data)),
-      );
+  async loadRules(db: string): Promise<RulesConfig> {
+    this.permission = await firstValueFrom(
+      this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
+        map((data) => data.rulesConfig),
+        catchError(() => of(undefined)),
+      ),
+    );
+    return this.permission;
   }
 
   /**
@@ -73,12 +77,12 @@ export class RulesService extends CouchDBInteracter {
   }
 
   private getDBRules(user: User): DocumentRule[] {
-    if (this.permission && this.permission.rulesConfig) {
+    if (this.permission) {
       const userRules = user.roles
-        .filter((role) => this.permission.rulesConfig.hasOwnProperty(role))
-        .map((role) => this.permission.rulesConfig[role])
+        .filter((role) => this.permission.hasOwnProperty(role))
+        .map((role) => this.permission[role])
         .flat();
-      return this.interpolateUser(userRules, user);
+      return this.injectUserVariablesIntoRules(userRules, user);
     } else {
       return [{ subject: 'all', action: 'manage' }];
     }
@@ -113,7 +117,7 @@ export class RulesService extends CouchDBInteracter {
     return presetRules;
   }
 
-  private interpolateUser(rules: DocumentRule[], user: User) {
+  private injectUserVariablesIntoRules(rules: DocumentRule[], user: User) {
     return JSON.parse(JSON.stringify(rules), (that, rawValue) => {
       if (rawValue[0] !== '$') {
         return rawValue;

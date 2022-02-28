@@ -46,8 +46,11 @@ describe('CookieService', () => {
 
     service.addResponseCookie(context);
 
-    expect(setCookieMock.mock.calls[0][0]).toBe(TOKEN_KEY);
-    expect(setCookieMock.mock.calls[0][1]).toBe(jwtToken);
+    expect(setCookieMock).toHaveBeenCalledWith(
+      TOKEN_KEY,
+      jwtToken,
+      expect.anything(),
+    );
     expect(mockJwtService.sign).toHaveBeenCalledWith({
       name: 'Username',
       sub: ['user_app'],

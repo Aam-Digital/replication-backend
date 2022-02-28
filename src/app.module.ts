@@ -1,23 +1,15 @@
-import {
-  HttpException,
-  MiddlewareConsumer,
-  Module,
-  NestModule,
-} from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SentryModule } from '@ntegral/nestjs-sentry';
 import { Severity } from '@sentry/types';
-import { ProxyModule } from './proxy/proxy.module';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
-import { HttpModule, HttpService } from '@nestjs/axios';
-import { CouchDBInteracter } from './utils/couchdb-interacter';
 import { CombinedAuthMiddleware } from './auth/guards/combined-auth.middleware';
 import { AuthModule } from './auth/auth.module';
+import { CouchdbModule } from './couchdb/couchdb.module';
+import * as Sentry from '@sentry/node';
 
 @Module({
   imports: [
-    AuthModule,
-    HttpModule,
     ConfigModule.forRoot({ isGlobal: true }),
     SentryModule.forRootAsync({
       imports: [ConfigModule],
@@ -31,8 +23,14 @@ import { AuthModule } from './auth/auth.module';
           dsn: configService.get('SENTRY_DSN'),
           debug: true,
           environment: 'prod',
-          release: 'backend@latest',
+          release: 'backend@' + process.env.npm_package_version,
           whitelistUrls: [/https?:\/\/(.*)\.?aam-digital\.com/],
+          initialScope: {
+            tags: {
+              // ID of the docker container in which this is run
+              hostname: process.env.HOSTNAME || 'unknown',
+            },
+          },
           beforeSend: (event) => {
             if ([Severity.Log, Severity.Info].includes(event.level)) {
               return null;
@@ -43,28 +41,20 @@ import { AuthModule } from './auth/auth.module';
         };
       },
     }),
-    ProxyModule,
+    CouchdbModule,
+    AuthModule,
     RestrictedEndpointsModule,
   ],
 })
 export class AppModule implements NestModule {
-  constructor(httpService: HttpService, configService: ConfigService) {
-    // TODO maybe introduce HttpModule wrapper
-    // Send the basic auth header with every request
-    httpService.axiosRef.defaults.auth = {
-      username: configService.get<string>(CouchDBInteracter.DATABASE_USER_ENV),
-      password: configService.get<string>(
-        CouchDBInteracter.DATABASE_PASSWORD_ENV,
-      ),
-    };
-
-    // Map the Axios errors to NestJS exceptions
-    httpService.axiosRef.interceptors.response.use(undefined, (err) => {
-      throw new HttpException(err.response.data, err.response.status);
-    });
-  }
-
   configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply((req, res, next) => {
+        // reset user before processing a request
+        Sentry.setUser({ username: 'unknown' });
+        next();
+      })
+      .forRoutes('*');
     consumer.apply(CombinedAuthMiddleware).exclude('_session').forRoutes('*');
   }
 }

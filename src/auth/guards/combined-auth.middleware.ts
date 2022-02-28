@@ -1,8 +1,12 @@
 import { ExecutionContext, Injectable, NestMiddleware } from '@nestjs/common';
-import { BasicAuthGuard } from './basic-auth/basic-auth-guard.service';
+import { BasicAuthGuard } from './basic-auth/basic-auth.guard';
 import { JwtGuard } from './jwt/jwt.guard';
 import { CookieService } from '../cookie/cookie.service';
 
+/**
+ * This middleware allows users to use multiple alternative authentication modes.
+ * If one mode fails the system tries to fall back on another modes.
+ */
 @Injectable()
 export class CombinedAuthMiddleware implements NestMiddleware {
   private basicAuthGuard: BasicAuthGuard;

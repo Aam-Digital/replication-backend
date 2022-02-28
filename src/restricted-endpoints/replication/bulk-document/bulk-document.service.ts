@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import {
   BulkGetResponse,
   BulkGetResult,
+  ErrorDoc,
   OkDoc,
 } from '../replication-endpoints/couchdb-dtos/bulk-get.dto';
 import {
@@ -18,44 +19,46 @@ import {
   DocumentAbility,
   PermissionService,
 } from '../../../permissions/permission/permission.service';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
-import { firstValueFrom, map } from 'rxjs';
-import { CouchDBInteracter } from '../../../utils/couchdb-interacter';
+import { firstValueFrom } from 'rxjs';
+import { Ability } from '@casl/ability';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
 
+/**
+ * Handle bulk document requests with the remote CouchDB server
+ * enforcing the permissions of the given user.
+ */
 @Injectable()
-export class DocumentFilterService extends CouchDBInteracter {
+export class BulkDocumentService {
   constructor(
     private permissionService: PermissionService,
-    httpService: HttpService,
-    configService: ConfigService,
-  ) {
-    super(httpService, configService);
-  }
+    private couchdbService: CouchdbService,
+  ) {}
 
   filterBulkGetResponse(
     response: BulkGetResponse,
     user: User,
   ): BulkGetResponse {
     const ability = this.permissionService.getAbilityFor(user);
-    const withPermissions: BulkGetResult[] = response.results.map((result) => {
-      return {
-        id: result.id,
-        docs: result.docs.filter((docResult) => {
-          if (docResult.hasOwnProperty('ok')) {
-            const document = (docResult as OkDoc).ok;
-            return document._deleted || ability.can('read', document);
-          } else {
-            // error
-            return true;
-          }
-        }),
-      };
-    });
+    const withPermissions: BulkGetResult[] = response.results.map((result) => ({
+      id: result.id,
+      docs: result.docs.filter((doc) =>
+        this.isPermittedBulkGetDoc(doc, ability),
+      ),
+    }));
     // Only return results where at least one document is left
     return {
       results: withPermissions.filter((result) => result.docs.length > 0),
     };
+  }
+
+  private isPermittedBulkGetDoc(docResult: OkDoc | ErrorDoc, ability: Ability) {
+    if (docResult.hasOwnProperty('ok')) {
+      const document = (docResult as OkDoc).ok;
+      return document._deleted || ability.can('read', document);
+    } else {
+      // error - always return these
+      return true;
+    }
   }
 
   filterAllDocsResponse(
@@ -82,15 +85,14 @@ export class DocumentFilterService extends CouchDBInteracter {
       keys: request.docs.map((doc) => doc._id),
     };
     const response = await firstValueFrom(
-      this.httpService
-        .post<AllDocsResponse>(
-          `${this.databaseUrl}/${db}/_all_docs`,
-          allDocsRequest,
-          {
-            params: { include_docs: true },
-          },
-        )
-        .pipe(map((res) => res.data)),
+      this.couchdbService.post<AllDocsResponse>(
+        db,
+        '_all_docs',
+        allDocsRequest,
+        {
+          include_docs: true,
+        },
+      ),
     );
     return {
       new_edits: request.new_edits,

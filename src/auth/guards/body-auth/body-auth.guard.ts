@@ -2,8 +2,11 @@ import { ExecutionContext, Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { CookieService } from '../../cookie/cookie.service';
 
+/**
+ * Use the {@link BodyAuthStrategy} for validation and sets a user cookie.
+ */
 @Injectable()
-export class CouchAuthGuard extends AuthGuard('local') {
+export class BodyAuthGuard extends AuthGuard('local') {
   constructor(private cookieService: CookieService) {
     super();
   }
