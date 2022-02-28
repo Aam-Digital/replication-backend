@@ -22,7 +22,10 @@ describe('BulkDocumentService', () => {
 
   beforeEach(async () => {
     mockRulesService = {
-      getRulesForUser: () => undefined,
+      getRulesForUser: () => [
+        { action: 'update', subject: 'Child' },
+        { action: 'read', subject: 'School' },
+      ],
     } as any;
     mockCouchDBService = {
       post: () => of({}),
@@ -49,10 +52,6 @@ describe('BulkDocumentService', () => {
 
   it('should filter out docs without read permissions in BulkGet', () => {
     const bulkGetResponse = createBulkGetResponse(schoolDoc, childDoc);
-    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: 'update', subject: 'Child' },
-      { action: 'read', subject: 'School' },
-    ]);
 
     const result = service.filterBulkGetResponse(bulkGetResponse, normalUser);
 
@@ -63,10 +62,6 @@ describe('BulkDocumentService', () => {
     const bulkGetResponse = createBulkGetResponse(childDoc, schoolDoc);
     childDoc._deleted = true;
     schoolDoc._deleted = true;
-    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: 'update', subject: 'Child' },
-      { action: 'read', subject: 'School' },
-    ]);
 
     const result = service.filterBulkGetResponse(bulkGetResponse, normalUser);
 
@@ -121,10 +116,6 @@ describe('BulkDocumentService', () => {
       new_edits: false,
       docs: [childDoc, schoolDoc],
     };
-    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: 'update', subject: 'Child' },
-      { action: 'read', subject: 'School' },
-    ]);
     jest
       .spyOn(mockCouchDBService, 'post')
       .mockReturnValue(of(createAllDocsResponse(childDoc, schoolDoc)));
