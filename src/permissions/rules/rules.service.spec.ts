@@ -20,6 +20,8 @@ describe('RulesService', () => {
   let userRules: DocumentRule[];
   let mockCouchDBService: CouchdbService;
   let testPermission: Permission;
+  const normalUser = new User('normalUser', ['user_app']);
+  const adminUser = new User('superUser', ['user_app', 'admin_app']);
   const DATABASE_NAME = 'app';
 
   beforeEach(async () => {
@@ -30,8 +32,8 @@ describe('RulesService', () => {
       ],
       admin_app: [{ action: 'manage', subject: 'all' }],
     });
-    userRules = testPermission.rulesConfig['user_app'];
-    adminRules = testPermission.rulesConfig['admin_app'];
+    userRules = testPermission.rulesConfig[normalUser.roles[0]];
+    adminRules = testPermission.rulesConfig[adminUser.roles[1]];
     mockCouchDBService = {
       get: () => undefined,
     } as any;
@@ -71,21 +73,19 @@ describe('RulesService', () => {
 
     await service.loadRules(DATABASE_NAME);
 
-    expect(service.getRulesForUser(new User('some-user', []))).toContainEqual({
+    expect(service.getRulesForUser(normalUser)).toContainEqual({
       subject: 'all',
       action: 'manage',
     });
   });
 
   it('should return the rules for every passed user role', () => {
-    let result = service.getRulesForUser(new User('normalUser', ['user_app']));
+    let result = service.getRulesForUser(normalUser);
 
     userRules.forEach((rule) => expect(result).toContainEqual(rule));
     adminRules.forEach((rule) => expect(result).not.toContainEqual(rule));
 
-    result = service.getRulesForUser(
-      new User('superUser', ['user_app', 'admin_app']),
-    );
+    result = service.getRulesForUser(adminUser);
     userRules
       .concat(adminRules)
       .forEach((rule) => expect(result).toContainEqual(rule));
@@ -99,7 +99,7 @@ describe('RulesService', () => {
   });
 
   it('should return an ability that does not allow to modify the permission document', () => {
-    const rules = service.getRulesForUser(new User('someUser', ['admin_app']));
+    const rules = service.getRulesForUser(adminUser);
     const ability = new DocumentAbility(rules, {
       detectSubjectType: detectDocumentType,
     });
@@ -116,16 +116,15 @@ describe('RulesService', () => {
   });
 
   it('should return an ability where normal users can only read their own user doc and update their password', () => {
-    const testUser = new User('someUser', []);
-    const rules = service.getRulesForUser(testUser);
+    const rules = service.getRulesForUser(normalUser);
     const ability = new DocumentAbility(rules, {
       detectSubjectType: detectDocumentType,
     });
 
     const userDoc: DatabaseDocument = {
-      _id: `${COUCHDB_USER_DOC}:${testUser.name}`,
+      _id: `${COUCHDB_USER_DOC}:${normalUser.name}`,
       _rev: 'someRev',
-      name: testUser.name,
+      name: normalUser.name,
     };
 
     const otherUserDoc: DatabaseDocument = {
@@ -147,9 +146,8 @@ describe('RulesService', () => {
   });
 
   it('should inject user properties', async () => {
-    const user = new User('some-user', ['another_role']);
-    const permissionWithVariable: Permission = new Permission({
-      another_role: [
+    const permissionWithVariable = new Permission({
+      [normalUser.roles[0]]: [
         {
           subject: 'User',
           action: 'read',
@@ -162,14 +160,27 @@ describe('RulesService', () => {
       .mockReturnValue(of(permissionWithVariable));
 
     await service.loadRules(DATABASE_NAME);
-    const rules = service.getRulesForUser(user);
+    const rules = service.getRulesForUser(normalUser);
 
     expect(rules).toContainEqual({
       subject: 'User',
       action: 'read',
-      conditions: { name: user.name },
+      conditions: { name: normalUser.name },
     });
   });
 
-  // TODO: what should happen if an unknown variable $ is part of the rule?
+  it('should throw an error if a unknown variable is encountered', async () => {
+    const permission = new Permission({
+      [normalUser.roles[0]]: [
+        {
+          subject: 'User',
+          action: 'update',
+          conditions: { name: '${user.notExistingProperty}' },
+        },
+      ],
+    });
+    jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(permission));
+    await service.loadRules(DATABASE_NAME);
+    expect(() => service.getRulesForUser(normalUser)).toThrow(ReferenceError);
+  });
 });
