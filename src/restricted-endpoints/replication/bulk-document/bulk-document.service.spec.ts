@@ -10,7 +10,7 @@ import { User } from '../../session/user-auth.dto';
 import { PermissionService } from '../../../permissions/permission/permission.service';
 import { RulesService } from '../../../permissions/rules/rules.service';
 import { of } from 'rxjs';
-import { CouchdbService } from '../../couchdb/couchdb.service';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
 
 describe('BulkDocumentService', () => {
   let service: BulkDocumentService;

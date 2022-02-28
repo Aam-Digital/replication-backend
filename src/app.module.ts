@@ -3,14 +3,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SentryModule } from '@ntegral/nestjs-sentry';
 import { Severity } from '@sentry/types';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
-import { HttpModule } from '@nestjs/axios';
 import { CombinedAuthMiddleware } from './auth/guards/combined-auth.middleware';
 import { AuthModule } from './auth/auth.module';
+import { CouchdbModule } from './couchdb/couchdb.module';
 
 @Module({
   imports: [
-    AuthModule,
-    HttpModule,
     ConfigModule.forRoot({ isGlobal: true }),
     SentryModule.forRootAsync({
       imports: [ConfigModule],
@@ -36,6 +34,8 @@ import { AuthModule } from './auth/auth.module';
         };
       },
     }),
+    CouchdbModule,
+    AuthModule,
     RestrictedEndpointsModule,
   ],
 })

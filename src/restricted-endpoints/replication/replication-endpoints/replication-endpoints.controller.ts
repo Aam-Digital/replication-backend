@@ -10,7 +10,7 @@ import { BulkDocumentService } from '../bulk-document/bulk-document.service';
 import { User } from '../../session/user-auth.dto';
 import { Request } from 'express';
 import { ApiOperation } from '@nestjs/swagger';
-import { CouchdbService } from '../../couchdb/couchdb.service';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
 
 /**
  * Handle endpoints for the CouchDB replication process and bulk actions

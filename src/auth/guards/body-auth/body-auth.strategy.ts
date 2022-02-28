@@ -2,8 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { User } from '../../../restricted-endpoints/session/user-auth.dto';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-local';
-import { CouchdbService } from '../../../restricted-endpoints/couchdb/couchdb.service';
 import { firstValueFrom } from 'rxjs';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
 
 /**
  * Authenticate a user from credentials in the body payload of a request.

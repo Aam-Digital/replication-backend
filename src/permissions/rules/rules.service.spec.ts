@@ -12,7 +12,7 @@ import {
   detectDocumentType,
   DocumentAbility,
 } from '../permission/permission.service';
-import { CouchdbService } from '../../restricted-endpoints/couchdb/couchdb.service';
+import { CouchdbService } from '../../couchdb/couchdb.service';
 
 describe('RulesService', () => {
   let service: RulesService;

@@ -21,7 +21,7 @@ import {
 } from '../../../permissions/permission/permission.service';
 import { firstValueFrom } from 'rxjs';
 import { Ability } from '@casl/ability';
-import { CouchdbService } from '../../couchdb/couchdb.service';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
 
 /**
  * Handle bulk document requests with the remote CouchDB server

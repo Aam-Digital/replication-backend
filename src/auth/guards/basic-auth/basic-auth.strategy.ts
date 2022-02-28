@@ -2,8 +2,8 @@ import { BasicStrategy as Strategy } from 'passport-http';
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { User } from '../../../restricted-endpoints/session/user-auth.dto';
-import { CouchdbService } from '../../../restricted-endpoints/couchdb/couchdb.service';
 import { firstValueFrom } from 'rxjs';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
 
 /**
  * Authenticate a user from the BasicAuth header of a request.

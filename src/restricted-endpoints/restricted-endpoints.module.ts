@@ -4,13 +4,11 @@ import { DocumentModule } from './document/document.module';
 import { ReplicationModule } from './replication/replication.module';
 import { SessionController } from './session/session.controller';
 import { AuthModule } from '../auth/auth.module';
-import { CouchdbService } from './couchdb/couchdb.service';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 
 @Module({
   imports: [ReplicationModule, AuthModule, DocumentModule],
   controllers: [SessionController],
-  providers: [CouchdbService],
 })
 export class RestrictedEndpointsModule {
   configure(consumer: MiddlewareConsumer): any {

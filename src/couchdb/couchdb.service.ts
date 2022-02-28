@@ -9,8 +9,11 @@ import { catchError, map, Observable } from 'rxjs';
 import {
   DatabaseDocument,
   DocSuccess,
-} from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
-import { SessionResponse, User } from '../session/user-auth.dto';
+} from '../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
+import {
+  SessionResponse,
+  User,
+} from '../restricted-endpoints/session/user-auth.dto';
 
 @Injectable()
 export class CouchdbService {

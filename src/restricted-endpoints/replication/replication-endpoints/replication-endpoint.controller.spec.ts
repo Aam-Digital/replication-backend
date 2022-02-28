@@ -6,7 +6,7 @@ import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
 import { User } from '../../session/user-auth.dto';
-import { CouchdbService } from '../../couchdb/couchdb.service';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
 
 describe('ReplicationEndpointsController', () => {
   let controller: ReplicationEndpointsController;

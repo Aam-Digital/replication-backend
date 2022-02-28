@@ -8,7 +8,7 @@ import {
 import { Permission, RulesConfig } from './permission';
 import { catchError, firstValueFrom, map, of } from 'rxjs';
 import * as _ from 'lodash';
-import { CouchdbService } from '../../restricted-endpoints/couchdb/couchdb.service';
+import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;

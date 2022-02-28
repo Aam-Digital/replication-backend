@@ -11,7 +11,7 @@ import {
 } from '../../permissions/permission/permission.service';
 import { permittedFieldsOf } from '@casl/ability/extra';
 import * as _ from 'lodash';
-import { CouchdbService } from '../couchdb/couchdb.service';
+import { CouchdbService } from '../../couchdb/couchdb.service';
 
 /**
  * Read and write individual documents with the remote CouchDB server
