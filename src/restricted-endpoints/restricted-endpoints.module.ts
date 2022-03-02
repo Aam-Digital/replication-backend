@@ -34,8 +34,14 @@ export class RestrictedEndpointsModule {
           followRedirects: false,
           xfwd: true,
           autoRewrite: true,
-          auth: `${process.env.DATABASE_USER}:${process.env.DATABASE_PASSWORD}`,
-          onProxyReq: (proxyReq) => proxyReq.removeHeader('cookie'),
+          onProxyReq: (proxyReq) => {
+            // Removing existing cookie and overwriting header with authorized credentials
+            const authHeader = Buffer.from(
+              `${process.env.DATABASE_USER}:${process.env.DATABASE_PASSWORD}`,
+            ).toString('base64');
+            proxyReq.setHeader('authorization', `Basic ${authHeader}`);
+            proxyReq.removeHeader('cookie');
+          },
         }),
       )
       .exclude(
