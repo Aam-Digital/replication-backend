@@ -32,8 +32,8 @@ describe('RulesService', () => {
       ],
       admin_app: [{ action: 'manage', subject: 'all' }],
     });
-    userRules = testPermission.rulesConfig[normalUser.roles[0]];
-    adminRules = testPermission.rulesConfig[adminUser.roles[1]];
+    userRules = testPermission.data[normalUser.roles[0]];
+    adminRules = testPermission.data[adminUser.roles[1]];
     mockCouchDBService = {
       get: () => undefined,
     } as any;
@@ -107,7 +107,7 @@ describe('RulesService', () => {
     const permissionDoc: Permission = {
       _id: `Permission:${Permission.DOC_ID}`,
       _rev: 'someRev',
-      rulesConfig: {},
+      data: {},
     };
     expect(ability.cannot('create', permissionDoc)).toBe(true);
     expect(ability.cannot('update', permissionDoc)).toBe(true);

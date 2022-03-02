@@ -41,7 +41,7 @@ The structure of the permission document is as follows:
 ```json
 {
   "_id": "Config:Permissions",
-  "rulesConfig": {
+  "data": {
     "role_1": [
       { "subject":  "all", "action":  "manage"},
       ...
@@ -53,7 +53,7 @@ The structure of the permission document is as follows:
 ```
 Important is the exact `_id` as this is how the backend can find this document and that the rules config has the correct structure.
 
-The keys of the `rulesConfig` object reference to roles that the different users can have and the values are arrays containing valid CASL [JSON rules](https://casl.js.org/v5/en/guide/define-rules#json-objects).
+The keys of the `data` object reference to roles that the different users can have and the values are arrays containing valid CASL [JSON rules](https://casl.js.org/v5/en/guide/define-rules#json-objects).
 Subjects refer to the prefixes of the `_id` properties of documents e.g. `_id: Child:123` refers to subject `Child`.
 The `all` subject is a wildcard that refers to all documents.
 

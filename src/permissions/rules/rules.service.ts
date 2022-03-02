@@ -60,7 +60,7 @@ export class RulesService {
   async loadRules(db: string): Promise<RulesConfig> {
     this.permission = await firstValueFrom(
       this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
-        map((data) => data.rulesConfig),
+        map((doc) => doc.data),
         catchError(() => of(undefined)),
       ),
     );

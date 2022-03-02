@@ -8,11 +8,11 @@ export type RulesConfig = { [key in string]: DocumentRule[] };
  */
 export class Permission extends DatabaseDocument {
   static DOC_ID = 'Config:Permissions';
-  rulesConfig: RulesConfig;
+  data: RulesConfig;
 
   constructor(rules: RulesConfig) {
     super();
     this._id = Permission.DOC_ID;
-    this.rulesConfig = rules;
+    this.data = rules;
   }
 }
