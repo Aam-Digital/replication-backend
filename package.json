@@ -34,7 +34,7 @@
     "@sentry/node": "^6.17.1",
     "@sentry/types": "^6.17.2",
     "cookie-parser": "^1.4.6",
-    "http-proxy-middleware": "^2.0.2",
+    "http-proxy-middleware": "^2.0.3",
     "lodash": "^4.17.21",
     "passport": "^0.5.2",
     "passport-http": "^0.3.0",
@@ -42,7 +42,7 @@
     "passport-local": "^1.0.0",
     "reflect-metadata": "^0.1.13",
     "rimraf": "^3.0.2",
-    "rxjs": "^7.5.2",
+    "rxjs": "^7.5.3",
     "swagger-ui-express": "^4.3.0"
   },
   "devDependencies": {
