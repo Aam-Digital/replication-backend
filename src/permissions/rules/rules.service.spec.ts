@@ -1,17 +1,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentRule, RulesService } from './rules.service';
-import {
-  COUCHDB_USER_DOC,
-  User,
-} from '../../restricted-endpoints/session/user-auth.dto';
+import { User } from '../../restricted-endpoints/session/user-auth.dto';
 import { of, throwError } from 'rxjs';
 import { Permission } from './permission';
 import { ConfigService } from '@nestjs/config';
-import { DatabaseDocument } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
-import {
-  detectDocumentType,
-  DocumentAbility,
-} from '../permission/permission.service';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 
 describe('RulesService', () => {
@@ -73,10 +65,12 @@ describe('RulesService', () => {
 
     await service.loadRules(DATABASE_NAME);
 
-    expect(service.getRulesForUser(normalUser)).toContainEqual({
-      subject: 'all',
-      action: 'manage',
-    });
+    expect(service.getRulesForUser(normalUser)).toEqual([
+      {
+        subject: 'all',
+        action: 'manage',
+      },
+    ]);
   });
 
   it('should return the rules for every passed user role', () => {
@@ -86,63 +80,25 @@ describe('RulesService', () => {
     adminRules.forEach((rule) => expect(result).not.toContainEqual(rule));
 
     result = service.getRulesForUser(adminUser);
-    userRules
-      .concat(adminRules)
-      .forEach((rule) => expect(result).toContainEqual(rule));
+    expect(result).toEqual(userRules.concat(adminRules));
   });
 
   it('should not fail if no rules exist for a given role', () => {
     const result = service.getRulesForUser(
       new User('specialUser', ['user_app', 'non_existing_role']),
     );
-    userRules.forEach((rule) => expect(result).toContainEqual(rule));
+    expect(result).toEqual(userRules);
   });
 
-  it('should return an ability that does not allow to modify the permission document', () => {
-    const rules = service.getRulesForUser(adminUser);
-    const ability = new DocumentAbility(rules, {
-      detectSubjectType: detectDocumentType,
-    });
+  it('should prepend the default rules', () => {
+    const defaultRule: DocumentRule = { subject: 'Config', action: 'read' };
+    testPermission.data.default = [defaultRule];
 
-    const permissionDoc: Permission = {
-      _id: `Permission:${Permission.DOC_ID}`,
-      _rev: 'someRev',
-      data: {},
-    };
-    expect(ability.cannot('create', permissionDoc)).toBe(true);
-    expect(ability.cannot('update', permissionDoc)).toBe(true);
-    expect(ability.cannot('delete', permissionDoc)).toBe(true);
-    expect(ability.can('read', permissionDoc)).toBe(true);
-  });
+    let result = service.getRulesForUser(normalUser);
+    expect(result).toEqual([defaultRule].concat(userRules));
 
-  it('should return an ability where normal users can only read their own user doc and update their password', () => {
-    const rules = service.getRulesForUser(normalUser);
-    const ability = new DocumentAbility(rules, {
-      detectSubjectType: detectDocumentType,
-    });
-
-    const userDoc: DatabaseDocument = {
-      _id: `${COUCHDB_USER_DOC}:${normalUser.name}`,
-      _rev: 'someRev',
-      name: normalUser.name,
-    };
-
-    const otherUserDoc: DatabaseDocument = {
-      _id: `${COUCHDB_USER_DOC}:otherUser`,
-      _rev: 'otherRev',
-      name: 'otherUser',
-    };
-
-    expect(ability.can('read', userDoc)).toBe(true);
-    expect(ability.can('update', userDoc, 'password')).toBe(true);
-    expect(ability.cannot('update', userDoc, 'roles')).toBe(true);
-    expect(ability.cannot('create', userDoc)).toBe(true);
-    expect(ability.cannot('delete', userDoc)).toBe(true);
-    expect(ability.cannot('read', otherUserDoc)).toBe(true);
-    expect(ability.cannot('update', otherUserDoc)).toBe(true);
-    expect(ability.cannot('update', otherUserDoc, 'password')).toBe(true);
-    expect(ability.cannot('create', otherUserDoc)).toBe(true);
-    expect(ability.cannot('delete', otherUserDoc)).toBe(true);
+    result = service.getRulesForUser(adminUser);
+    expect(result).toEqual([defaultRule].concat(userRules, adminRules));
   });
 
   it('should inject user properties', async () => {
@@ -162,11 +118,13 @@ describe('RulesService', () => {
     await service.loadRules(DATABASE_NAME);
     const rules = service.getRulesForUser(normalUser);
 
-    expect(rules).toContainEqual({
-      subject: 'User',
-      action: 'read',
-      conditions: { name: normalUser.name },
-    });
+    expect(rules).toEqual([
+      {
+        subject: 'User',
+        action: 'read',
+        conditions: { name: normalUser.name },
+      },
+    ]);
   });
 
   it('should throw an error if a unknown variable is encountered', async () => {
