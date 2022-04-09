@@ -34,7 +34,7 @@
     "@sentry/node": "^6.18.0",
     "@sentry/types": "^6.17.2",
     "cookie-parser": "^1.4.6",
-    "http-proxy-middleware": "^2.0.3",
+    "http-proxy-middleware": "^2.0.4",
     "lodash": "^4.17.21",
     "passport": "^0.5.2",
     "passport-http": "^0.3.0",
