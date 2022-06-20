@@ -7,6 +7,7 @@ import { JwtStrategy } from './guards/jwt/jwt.strategy';
 import { COOKIE_EXPIRATION_TIME, CookieService } from './cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
 import { BasicAuthStrategy } from './guards/basic-auth/basic-auth.strategy';
+import { CombinedAuthMiddleware } from './guards/combined-auth.middleware';
 
 @Module({
   imports: [
@@ -22,8 +23,14 @@ import { BasicAuthStrategy } from './guards/basic-auth/basic-auth.strategy';
       }),
     }),
   ],
-  providers: [BodyAuthStrategy, JwtStrategy, CookieService, BasicAuthStrategy],
-  exports: [CookieService],
+  providers: [
+    BodyAuthStrategy,
+    JwtStrategy,
+    CookieService,
+    BasicAuthStrategy,
+    CombinedAuthMiddleware,
+  ],
+  exports: [CookieService, CombinedAuthMiddleware],
 })
 export class AuthModule {
   /** name of the environment variable that defines the JWT secret */
