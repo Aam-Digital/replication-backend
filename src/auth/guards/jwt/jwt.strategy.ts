@@ -1,5 +1,5 @@
 import { PassportStrategy } from '@nestjs/passport';
-import { Strategy } from 'passport-jwt';
+import { ExtractJwt, Strategy } from 'passport-jwt';
 import { Injectable } from '@nestjs/common';
 import { AuthModule } from '../../auth.module';
 import { User } from '../../../restricted-endpoints/session/user-auth.dto';
@@ -14,7 +14,13 @@ import * as Sentry from '@sentry/node';
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(configService: ConfigService) {
     super({
-      jwtFromRequest: (req) => req?.cookies[TOKEN_KEY],
+      jwtFromRequest: (req) => {
+        const token =
+          req?.cookies[TOKEN_KEY] ||
+          ExtractJwt.fromAuthHeaderAsBearerToken()(req);
+        console.log('token', token);
+        return token;
+      },
       ignoreExpiration: false,
       secretOrKey: configService.get<string>(AuthModule.JWT_SECRET_ENV),
     });
