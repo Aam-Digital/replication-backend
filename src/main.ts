@@ -30,6 +30,7 @@ async function bootstrap() {
     .addServer('/db', 'deployed') // used when this runs as part of the [ndb-setup](https://github.com/Aam-Digital/ndb-setup) docker-compose
     .addBasicAuth(undefined, 'BasicAuth')
     .addSecurityRequirements('BasicAuth')
+    .addBearerAuth()
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api', app, document, {
