@@ -1,12 +1,14 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SentryModule } from '@ntegral/nestjs-sentry';
-import { Severity } from '@sentry/types';
+import { SeverityLevel } from '@sentry/types';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
 import { CombinedAuthMiddleware } from './auth/guards/combined-auth.middleware';
 import { AuthModule } from './auth/auth.module';
 import { CouchdbModule } from './couchdb/couchdb.module';
 import * as Sentry from '@sentry/node';
+
+const lowSeverityLevels: SeverityLevel[] = ['log', 'info'];
 
 @Module({
   imports: [
@@ -32,7 +34,7 @@ import * as Sentry from '@sentry/node';
             },
           },
           beforeSend: (event) => {
-            if ([Severity.Log, Severity.Info].includes(event.level)) {
+            if (lowSeverityLevels.includes(event.level)) {
               return null;
             } else {
               return event;
