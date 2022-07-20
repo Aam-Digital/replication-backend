@@ -5,13 +5,15 @@ import { AuthModule } from '../../auth.module';
 import { User } from '../../../restricted-endpoints/session/user-auth.dto';
 import { TOKEN_KEY } from '../../cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
-import * as Sentry from '@sentry/node';
 
 /**
  * Authenticate a user using an existing JWT from a cookie in the request.
  */
 @Injectable()
-export class JwtStrategy extends PassportStrategy(Strategy) {
+export class JwtCookieStrategy extends PassportStrategy(
+  Strategy,
+  'jwt-cookie',
+) {
   constructor(configService: ConfigService) {
     super({
       jwtFromRequest: (req) => req?.cookies[TOKEN_KEY],
@@ -21,8 +23,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(data: any): Promise<User> {
-    const user = new User(data.name, data.sub);
-    Sentry.setUser({ username: user.name });
-    return user;
+    return new User(data.name, data.sub);
   }
 }
