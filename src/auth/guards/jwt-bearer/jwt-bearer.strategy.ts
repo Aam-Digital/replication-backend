@@ -16,7 +16,6 @@ export class JwtBearerStrategy extends PassportStrategy(
   constructor(configService: ConfigService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-      ignoreExpiration: false,
       secretOrKey: configService.get<string>(AuthModule.JWT_PUBLIC_KEY),
     });
   }

@@ -1,6 +1,6 @@
 import { ExecutionContext, Injectable, NestMiddleware } from '@nestjs/common';
 import { BasicAuthGuard } from './basic-auth/basic-auth.guard';
-import { JwtCookieGuard } from './jwt/jwt-cookie.guard';
+import { JwtCookieGuard } from './jwt-cookie/jwt-cookie.guard';
 import { JwtBearerGuard } from './jwt-bearer/jwt-bearer.guard';
 import { CookieService } from '../cookie/cookie.service';
 import * as Sentry from '@sentry/node';
@@ -10,9 +10,9 @@ import * as Sentry from '@sentry/node';
  * If one mode fails the system tries to fall back on other modes.
  *
  * The modes are checked in the following order and processing stops once the first one validates successfully:
- * 1. Basic Auth
- * 2. Cookie
- * 3. Bearer
+ * 1. Basic - using CouchDB
+ * 2. Cookie - using the JWT_SECRET env
+ * 3. Bearer - using the JWT_PUBLIC_KEY env
  */
 @Injectable()
 export class CombinedAuthMiddleware implements NestMiddleware {

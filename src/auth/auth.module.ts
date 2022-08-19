@@ -3,7 +3,7 @@ import { BodyAuthStrategy } from './guards/body-auth/body-auth.strategy';
 import { HttpModule } from '@nestjs/axios';
 import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
-import { JwtCookieStrategy } from './guards/jwt/jwt-cookie-strategy.service';
+import { JwtCookieStrategy } from './guards/jwt-cookie/jwt-cookie-strategy.service';
 import { COOKIE_EXPIRATION_TIME, CookieService } from './cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
 import { BasicAuthStrategy } from './guards/basic-auth/basic-auth.strategy';
