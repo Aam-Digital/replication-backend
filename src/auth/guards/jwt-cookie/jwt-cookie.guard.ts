@@ -3,10 +3,10 @@ import { ExecutionContext, Injectable } from '@nestjs/common';
 import { CookieService } from '../../cookie/cookie.service';
 
 /**
- * Use the {@link JwtStrategy} for validation and sets a new user cookie.
+ * Use the {@link JwtCookieStrategy} for validation and sets a new user cookie.
  */
 @Injectable()
-export class JwtGuard extends AuthGuard('jwt') {
+export class JwtCookieGuard extends AuthGuard('jwt-cookie') {
   constructor(private cookieService: CookieService) {
     super();
   }

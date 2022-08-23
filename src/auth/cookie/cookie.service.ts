@@ -18,6 +18,7 @@ export class CookieService {
     const user = request.user as User;
     const response = context.switchToHttp().getResponse();
 
+    // TODO align structure with CouchDB's JWT structure
     const payload = { name: user.name, sub: user.roles };
     const jwtToken = this.jwtService.sign(payload);
 
