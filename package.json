@@ -32,7 +32,6 @@
     "@nestjs/swagger": "^6.0.4",
     "@ntegral/nestjs-sentry": "^3.0.7",
     "@sentry/node": "^7.7.0",
-    "@sentry/types": "^7.7.0",
     "cookie-parser": "^1.4.6",
     "http-proxy-middleware": "^2.0.6",
     "lodash": "^4.17.21",
