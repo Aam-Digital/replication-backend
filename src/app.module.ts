@@ -1,16 +1,20 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { SentryModule } from '@ntegral/nestjs-sentry';
+import { SentryInterceptor, SentryModule } from '@ntegral/nestjs-sentry';
 import { SeverityLevel } from '@sentry/types';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
 import { CombinedAuthMiddleware } from './auth/guards/combined-auth.middleware';
 import { AuthModule } from './auth/auth.module';
 import { CouchdbModule } from './couchdb/couchdb.module';
 import * as Sentry from '@sentry/node';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 
 const lowSeverityLevels: SeverityLevel[] = ['log', 'info'];
 
 @Module({
+  providers: [
+    { provide: APP_INTERCEPTOR, useFactory: () => new SentryInterceptor() },
+  ],
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     SentryModule.forRootAsync({
