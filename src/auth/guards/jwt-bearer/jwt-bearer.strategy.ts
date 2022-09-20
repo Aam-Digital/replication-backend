@@ -21,6 +21,6 @@ export class JwtBearerStrategy extends PassportStrategy(
   }
 
   async validate(data: any): Promise<User> {
-    return new User(data.sub, data['_couchdb.roles']);
+    return new User(data.username, data['_couchdb.roles']);
   }
 }
