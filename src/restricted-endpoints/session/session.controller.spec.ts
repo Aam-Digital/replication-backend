@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SessionController } from './session.controller';
 import { UserInfo } from './user-auth.dto';
 import { CombinedAuthMiddleware } from '../../auth/guards/combined-auth/combined-auth.middleware';
+import { CookieService } from '../../auth/cookie/cookie.service';
 
 describe('SessionController', () => {
   let controller: SessionController;
@@ -12,6 +13,7 @@ describe('SessionController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SessionController],
       providers: [
+        { provide: CookieService, useValue: {} },
         { provide: CombinedAuthMiddleware, useValue: mockCombinedAuth },
       ],
     }).compile();
@@ -26,7 +28,7 @@ describe('SessionController', () => {
   it('should return the user object on the request', () => {
     const user = new UserInfo('user', ['user_app']);
 
-    const response = controller.login({ user: user } as any);
+    const response = controller.login(user);
 
     expect(response).toBe(user);
   });
@@ -36,6 +38,6 @@ describe('SessionController', () => {
 
     const res = await controller.session(user);
 
-    expect(res).toHaveBeenCalledWith({ ok: true, userCtx: user });
+    expect(res).toEqual({ ok: true, userCtx: user });
   });
 });

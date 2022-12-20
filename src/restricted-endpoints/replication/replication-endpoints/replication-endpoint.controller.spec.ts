@@ -7,6 +7,7 @@ import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
+import { CookieService } from '../../../auth/cookie/cookie.service';
 
 describe('ReplicationEndpointsController', () => {
   let controller: ReplicationEndpointsController;
@@ -28,6 +29,7 @@ describe('ReplicationEndpointsController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ReplicationEndpointsController],
       providers: [
+        { provide: CookieService, useValue: {} },
         { provide: CouchdbService, useValue: mockCouchDBService },
         { provide: BulkDocumentService, useValue: documentFilter },
       ],
@@ -59,7 +61,7 @@ describe('ReplicationEndpointsController', () => {
     const user = new UserInfo('username', ['user']);
 
     const result = await firstValueFrom(
-      controller.bulkGetPost(null, null, null, { user: user } as any),
+      controller.bulkGetPost(null, null, null, user),
     );
 
     expect(documentFilter.filterBulkGetResponse).toHaveBeenCalledWith(
@@ -107,7 +109,7 @@ describe('ReplicationEndpointsController', () => {
     const user = new UserInfo('username', ['user']);
 
     const result = await firstValueFrom(
-      controller.allDocs('db', null, { user: user } as any, null),
+      controller.allDocs('db', null, user, null),
     );
 
     expect(documentFilter.filterAllDocsResponse).toHaveBeenCalledWith(
@@ -152,9 +154,7 @@ describe('ReplicationEndpointsController', () => {
       .mockReturnValue(Promise.resolve(filteredRequest));
     const user = new UserInfo('username', ['admin']);
 
-    await firstValueFrom(
-      controller.bulkDocs('db', request, { user: user } as any),
-    );
+    await firstValueFrom(controller.bulkDocs('db', request, user));
 
     expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(
       request,
