@@ -141,4 +141,13 @@ describe('RulesService', () => {
     await service.loadRules(DATABASE_NAME);
     expect(() => service.getRulesForUser(normalUser)).toThrow(ReferenceError);
   });
+
+  it("should only return 'public' rules if no user object is passed", () => {
+    testPermission.data.default = [{ subject: 'Config', action: 'read' }];
+    const publicRule: DocumentRule = { subject: 'User', action: 'create' };
+    testPermission.data.public = [publicRule];
+
+    const result = service.getRulesForUser(undefined);
+    expect(result).toEqual([publicRule]);
+  });
 });

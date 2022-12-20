@@ -48,7 +48,7 @@ export class RulesService {
    */
   getRulesForUser(user: UserInfo): DocumentRule[] {
     if (!user) {
-      return [];
+      return this.permission?.public ?? [];
     }
     if (this.permission) {
       const userRules = user.roles
