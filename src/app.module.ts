@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { CouchdbModule } from './couchdb/couchdb.module';
 import * as Sentry from '@sentry/node';
 import { APP_INTERCEPTOR } from '@nestjs/core';
+import { AdminModule } from './admin/admin.module';
 
 const lowSeverityLevels: SeverityLevel[] = ['log', 'info'];
 
@@ -46,6 +47,7 @@ const lowSeverityLevels: SeverityLevel[] = ['log', 'info'];
         };
       },
     }),
+    AdminModule,
     CouchdbModule,
     AuthModule,
     RestrictedEndpointsModule,
