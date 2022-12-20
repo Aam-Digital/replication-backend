@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SessionController } from './session.controller';
-import { User } from './user-auth.dto';
-import { CombinedAuthMiddleware } from '../../auth/guards/combined-auth.middleware';
+import { UserInfo } from './user-auth.dto';
+import { CombinedAuthMiddleware } from '../../auth/guards/combined-auth/combined-auth.middleware';
 
 describe('SessionController', () => {
   let controller: SessionController;
@@ -24,7 +24,7 @@ describe('SessionController', () => {
   });
 
   it('should return the user object on the request', () => {
-    const user = new User('user', ['user_app']);
+    const user = new UserInfo('user', ['user_app']);
 
     const response = controller.login({ user: user } as any);
 
@@ -32,15 +32,10 @@ describe('SessionController', () => {
   });
 
   it('should return user object from combinedAuth middleware if user is authenticated', async () => {
-    const user = new User('user', ['user_app']);
-    jest
-      .spyOn(mockCombinedAuth, 'use')
-      .mockImplementation(async (req) => (req.user = user) as any);
-    const response = { send: () => {} };
-    jest.spyOn(response, 'send');
+    const user = new UserInfo('user', ['user_app']);
 
-    await controller.session({}, response);
+    const res = await controller.session(user);
 
-    expect(response.send).toHaveBeenCalledWith({ ok: true, userCtx: user });
+    expect(res).toHaveBeenCalledWith({ ok: true, userCtx: user });
   });
 });

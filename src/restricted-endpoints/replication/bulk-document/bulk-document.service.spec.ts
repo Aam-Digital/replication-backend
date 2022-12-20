@@ -6,7 +6,7 @@ import {
   BulkDocsRequest,
   DatabaseDocument,
 } from '../replication-endpoints/couchdb-dtos/bulk-docs.dto';
-import { User } from '../../session/user-auth.dto';
+import { UserInfo } from '../../session/user-auth.dto';
 import { PermissionService } from '../../../permissions/permission/permission.service';
 import { RulesService } from '../../../permissions/rules/rules.service';
 import { of } from 'rxjs';
@@ -14,7 +14,7 @@ import { CouchdbService } from '../../../couchdb/couchdb.service';
 
 describe('BulkDocumentService', () => {
   let service: BulkDocumentService;
-  let normalUser: User;
+  let normalUser: UserInfo;
   let schoolDoc: DatabaseDocument;
   let childDoc: DatabaseDocument;
   let mockRulesService: RulesService;
@@ -30,7 +30,7 @@ describe('BulkDocumentService', () => {
     mockCouchDBService = {
       post: () => of({}),
     } as any;
-    normalUser = new User('normalUser', ['user']);
+    normalUser = new UserInfo('normalUser', ['user']);
     schoolDoc = getSchoolDoc();
     childDoc = getChildDoc();
 

@@ -3,7 +3,6 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SentryInterceptor, SentryModule } from '@ntegral/nestjs-sentry';
 import { SeverityLevel } from '@sentry/types';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
-import { CombinedAuthMiddleware } from './auth/guards/combined-auth.middleware';
 import { AuthModule } from './auth/auth.module';
 import { CouchdbModule } from './couchdb/couchdb.module';
 import * as Sentry from '@sentry/node';
@@ -61,6 +60,5 @@ export class AppModule implements NestModule {
         next();
       })
       .forRoutes('*');
-    consumer.apply(CombinedAuthMiddleware).exclude('_session').forRoutes('*');
   }
 }

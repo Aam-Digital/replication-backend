@@ -7,7 +7,7 @@ import { JwtCookieStrategy } from './guards/jwt-cookie/jwt-cookie-strategy.servi
 import { COOKIE_EXPIRATION_TIME, CookieService } from './cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
 import { BasicAuthStrategy } from './guards/basic-auth/basic-auth.strategy';
-import { CombinedAuthMiddleware } from './guards/combined-auth.middleware';
+import { CombinedAuthMiddleware } from './guards/combined-auth/combined-auth.middleware';
 import { JwtBearerStrategy } from './guards/jwt-bearer/jwt-bearer.strategy';
 
 @Module({

@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentRule, RulesService } from './rules.service';
-import { User } from '../../restricted-endpoints/session/user-auth.dto';
+import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { of, throwError } from 'rxjs';
 import { Permission } from './permission';
 import { ConfigService } from '@nestjs/config';
@@ -12,8 +12,8 @@ describe('RulesService', () => {
   let userRules: DocumentRule[];
   let mockCouchDBService: CouchdbService;
   let testPermission: Permission;
-  const normalUser = new User('normalUser', ['user_app']);
-  const adminUser = new User('superUser', ['user_app', 'admin_app']);
+  const normalUser = new UserInfo('normalUser', ['user_app']);
+  const adminUser = new UserInfo('superUser', ['user_app', 'admin_app']);
   const DATABASE_NAME = 'app';
 
   beforeEach(async () => {
@@ -85,7 +85,7 @@ describe('RulesService', () => {
 
   it('should not fail if no rules exist for a given role', () => {
     const result = service.getRulesForUser(
-      new User('specialUser', ['user_app', 'non_existing_role']),
+      new UserInfo('specialUser', ['user_app', 'non_existing_role']),
     );
     expect(result).toEqual(userRules);
   });

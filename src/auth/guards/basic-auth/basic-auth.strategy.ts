@@ -1,7 +1,7 @@
 import { BasicStrategy as Strategy } from 'passport-http';
 import { Injectable } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
-import { User } from '../../../restricted-endpoints/session/user-auth.dto';
+import { UserInfo } from '../../../restricted-endpoints/session/user-auth.dto';
 import { firstValueFrom } from 'rxjs';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import * as Sentry from '@sentry/node';
@@ -15,7 +15,7 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
     super();
   }
 
-  async validate(username: string, password: string): Promise<User> {
+  async validate(username: string, password: string): Promise<UserInfo> {
     const user = await firstValueFrom(
       this.couchdbService.login(username, password),
     );

@@ -3,21 +3,18 @@ import {
   Delete,
   Get,
   Post,
-  Req,
   Response,
   UseGuards,
 } from '@nestjs/common';
-import { User, UserCredentials } from './user-auth.dto';
+import { UserInfo, UserCredentials, SessionResponse } from './user-auth.dto';
 import { BodyAuthGuard } from '../../auth/guards/body-auth/body-auth.guard';
 import { ApiBody } from '@nestjs/swagger';
-import { Request } from 'express';
 import { TOKEN_KEY } from '../../auth/cookie/cookie.service';
-import { CombinedAuthMiddleware } from '../../auth/guards/combined-auth.middleware';
+import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
+import { User } from '../../auth/user.decorator';
 
 @Controller('/_session')
 export class SessionController {
-  constructor(private combinedAuth: CombinedAuthMiddleware) {}
-
   /**
    * Login endpoint.
    * Authenticates using the BodyAuthGuard.
@@ -25,8 +22,8 @@ export class SessionController {
   @ApiBody({ type: UserCredentials })
   @UseGuards(BodyAuthGuard)
   @Post()
-  login(@Req() request: Request): User {
-    return request.user as User;
+  login(@User() user: UserInfo): UserInfo {
+    return user;
   }
 
   /**
@@ -44,13 +41,9 @@ export class SessionController {
    * Retrieve information about currently logged-in user.
    * This supports cookie and basic auth.
    */
+  @UseGuards(CombinedAuthGuard)
   @Get()
-  async session(@Req() req, @Response() response) {
-    await this.combinedAuth
-      .use(req, response, () => {})
-      // unsuccessful login
-      .catch(() => (req.user = { name: null, roles: [] }))
-      // send back user object
-      .then(() => response.send({ ok: true, userCtx: req.user }));
+  session(@User() user: UserInfo): SessionResponse {
+    return { ok: true, userCtx: user };
   }
 }

@@ -1,8 +1,8 @@
 import { ExecutionContext, Injectable, NestMiddleware } from '@nestjs/common';
-import { BasicAuthGuard } from './basic-auth/basic-auth.guard';
-import { JwtCookieGuard } from './jwt-cookie/jwt-cookie.guard';
-import { JwtBearerGuard } from './jwt-bearer/jwt-bearer.guard';
-import { CookieService } from '../cookie/cookie.service';
+import { BasicAuthGuard } from '../basic-auth/basic-auth.guard';
+import { JwtCookieGuard } from '../jwt-cookie/jwt-cookie.guard';
+import { JwtBearerGuard } from '../jwt-bearer/jwt-bearer.guard';
+import { CookieService } from '../../cookie/cookie.service';
 import * as Sentry from '@sentry/node';
 
 /**
@@ -16,15 +16,11 @@ import * as Sentry from '@sentry/node';
  */
 @Injectable()
 export class CombinedAuthMiddleware implements NestMiddleware {
-  private basicAuthGuard: BasicAuthGuard;
-  private jwtCookieGuard: JwtCookieGuard;
-  private jwtBearerGuard: JwtBearerGuard;
+  private basicAuthGuard = new BasicAuthGuard();
+  private jwtCookieGuard = new JwtCookieGuard(this.cookieService);
+  private jwtBearerGuard = new JwtBearerGuard();
 
-  constructor(private cookieService: CookieService) {
-    this.basicAuthGuard = new BasicAuthGuard();
-    this.jwtCookieGuard = new JwtCookieGuard(cookieService);
-    this.jwtBearerGuard = new JwtBearerGuard();
-  }
+  constructor(private cookieService: CookieService) {}
 
   use(req: any, res: any, next: () => void) {
     // TODO this can probably be prettier

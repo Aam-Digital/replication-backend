@@ -5,7 +5,7 @@ import { BulkDocumentService } from '../bulk-document/bulk-document.service';
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
-import { User } from '../../session/user-auth.dto';
+import { UserInfo } from '../../session/user-auth.dto';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 
 describe('ReplicationEndpointsController', () => {
@@ -58,7 +58,7 @@ describe('ReplicationEndpointsController', () => {
     jest
       .spyOn(documentFilter, 'filterBulkGetResponse')
       .mockReturnValue(filteredResponse);
-    const user = new User('username', ['user']);
+    const user = new UserInfo('username', ['user']);
 
     const result = await firstValueFrom(
       controller.bulkGetPost(null, null, null, { user: user } as any),
@@ -106,7 +106,7 @@ describe('ReplicationEndpointsController', () => {
     jest
       .spyOn(documentFilter, 'filterAllDocsResponse')
       .mockReturnValue(filteredResponse);
-    const user = new User('username', ['user']);
+    const user = new UserInfo('username', ['user']);
 
     const result = await firstValueFrom(
       controller.allDocs('db', null, { user: user } as any, null),
@@ -152,7 +152,7 @@ describe('ReplicationEndpointsController', () => {
     jest
       .spyOn(documentFilter, 'filterBulkDocsRequest')
       .mockReturnValue(Promise.resolve(filteredRequest));
-    const user = new User('username', ['admin']);
+    const user = new UserInfo('username', ['admin']);
 
     await firstValueFrom(
       controller.bulkDocs('db', request, { user: user } as any),

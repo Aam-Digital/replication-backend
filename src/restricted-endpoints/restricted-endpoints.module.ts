@@ -1,16 +1,22 @@
-import { MiddlewareConsumer, Module, RequestMethod } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod,
+} from '@nestjs/common';
 import { json, urlencoded } from 'express';
 import { DocumentModule } from './document/document.module';
 import { ReplicationModule } from './replication/replication.module';
 import { SessionController } from './session/session.controller';
 import { AuthModule } from '../auth/auth.module';
 import { createProxyMiddleware } from 'http-proxy-middleware';
+import { CombinedAuthMiddleware } from '../auth/guards/combined-auth/combined-auth.middleware';
 
 @Module({
   imports: [ReplicationModule, AuthModule, DocumentModule],
   controllers: [SessionController],
 })
-export class RestrictedEndpointsModule {
+export class RestrictedEndpointsModule implements NestModule {
   configure(consumer: MiddlewareConsumer): any {
     this.applyProxyForPermissionlessCouchdbEndpoints(consumer);
 
@@ -27,6 +33,7 @@ export class RestrictedEndpointsModule {
   ) {
     consumer
       .apply(
+        CombinedAuthMiddleware,
         createProxyMiddleware({
           target: process.env.DATABASE_URL,
           secure: true,

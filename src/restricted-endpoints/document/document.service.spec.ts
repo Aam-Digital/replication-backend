@@ -9,7 +9,7 @@ import {
 import { DocumentRule } from '../../permissions/rules/rules.service';
 import { UnauthorizedException } from '@nestjs/common';
 import { DocSuccess } from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
-import { COUCHDB_USER_DOC, User } from '../session/user-auth.dto';
+import { COUCHDB_USER_DOC, UserInfo } from '../session/user-auth.dto';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 
 describe('DocumentService', () => {
@@ -24,7 +24,7 @@ describe('DocumentService', () => {
     roles: [],
     type: 'user',
   };
-  const requestingUser: User = {
+  const requestingUser: UserInfo = {
     name: 'testUser',
     roles: [],
   };

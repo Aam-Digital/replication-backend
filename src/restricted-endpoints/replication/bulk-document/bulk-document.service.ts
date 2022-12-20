@@ -14,7 +14,7 @@ import {
   BulkDocsRequest,
   DatabaseDocument,
 } from '../replication-endpoints/couchdb-dtos/bulk-docs.dto';
-import { User } from '../../session/user-auth.dto';
+import { UserInfo } from '../../session/user-auth.dto';
 import {
   DocumentAbility,
   PermissionService,
@@ -36,7 +36,7 @@ export class BulkDocumentService {
 
   filterBulkGetResponse(
     response: BulkGetResponse,
-    user: User,
+    user: UserInfo,
   ): BulkGetResponse {
     const ability = this.permissionService.getAbilityFor(user);
     const withPermissions: BulkGetResult[] = response.results.map((result) => ({
@@ -63,7 +63,7 @@ export class BulkDocumentService {
 
   filterAllDocsResponse(
     response: AllDocsResponse,
-    user: User,
+    user: UserInfo,
   ): AllDocsResponse {
     const ability = this.permissionService.getAbilityFor(user);
     return {
@@ -77,7 +77,7 @@ export class BulkDocumentService {
 
   async filterBulkDocsRequest(
     request: BulkDocsRequest,
-    user: User,
+    user: UserInfo,
     db: string,
   ): Promise<BulkDocsRequest> {
     const ability = this.permissionService.getAbilityFor(user);

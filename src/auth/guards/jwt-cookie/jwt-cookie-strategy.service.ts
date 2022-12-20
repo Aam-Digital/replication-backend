@@ -2,7 +2,7 @@ import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';
 import { Injectable } from '@nestjs/common';
 import { AuthModule } from '../../auth.module';
-import { User } from '../../../restricted-endpoints/session/user-auth.dto';
+import { UserInfo } from '../../../restricted-endpoints/session/user-auth.dto';
 import { TOKEN_KEY } from '../../cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
 
@@ -22,7 +22,7 @@ export class JwtCookieStrategy extends PassportStrategy(
     });
   }
 
-  async validate(data: any): Promise<User> {
-    return new User(data.name, data.sub);
+  async validate(data: any): Promise<UserInfo> {
+    return new UserInfo(data.name, data.sub);
   }
 }

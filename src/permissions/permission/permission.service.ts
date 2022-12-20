@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { User } from '../../restricted-endpoints/session/user-auth.dto';
+import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { RulesService } from '../rules/rules.service';
 import { Ability, AbilityClass, InferSubjects } from '@casl/ability';
 import { DatabaseDocument } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
@@ -37,7 +37,7 @@ export class PermissionService {
    * @param user for which the ability object should be created
    * @returns DocumentAbility that allows to check the users permissions on a given document and action
    */
-  getAbilityFor(user: User): DocumentAbility {
+  getAbilityFor(user: UserInfo): DocumentAbility {
     const rules = this.rulesService.getRulesForUser(user);
     return new DocumentAbility(rules, {
       detectSubjectType: detectDocumentType,
