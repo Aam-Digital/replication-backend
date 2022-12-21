@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentController } from './document.controller';
 import { DocumentService } from './document.service';
 import { DocSuccess } from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
-import { CookieService } from '../../auth/cookie/cookie.service';
 import { UserInfo } from '../session/user-auth.dto';
+import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
 
 describe('DocumentController', () => {
   let controller: DocumentController;
@@ -29,7 +29,7 @@ describe('DocumentController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DocumentController],
       providers: [
-        { provide: CookieService, useValue: {} },
+        ...authGuardMockProviders,
         { provide: DocumentService, useValue: mockDocumentService },
       ],
     }).compile();

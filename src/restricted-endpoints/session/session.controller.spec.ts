@@ -1,21 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SessionController } from './session.controller';
 import { UserInfo } from './user-auth.dto';
-import { CombinedAuthMiddleware } from '../../auth/guards/combined-auth/combined-auth.middleware';
-import { CookieService } from '../../auth/cookie/cookie.service';
+import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
 
 describe('SessionController', () => {
   let controller: SessionController;
-  let mockCombinedAuth: CombinedAuthMiddleware;
 
   beforeEach(async () => {
-    mockCombinedAuth = { use: () => Promise.resolve() } as any;
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SessionController],
-      providers: [
-        { provide: CookieService, useValue: {} },
-        { provide: CombinedAuthMiddleware, useValue: mockCombinedAuth },
-      ],
+      providers: [...authGuardMockProviders],
     }).compile();
 
     controller = module.get<SessionController>(SessionController);

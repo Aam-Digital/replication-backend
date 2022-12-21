@@ -7,7 +7,7 @@ import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
-import { CookieService } from '../../../auth/cookie/cookie.service';
+import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
 
 describe('ReplicationEndpointsController', () => {
   let controller: ReplicationEndpointsController;
@@ -29,7 +29,7 @@ describe('ReplicationEndpointsController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ReplicationEndpointsController],
       providers: [
-        { provide: CookieService, useValue: {} },
+        ...authGuardMockProviders,
         { provide: CouchdbService, useValue: mockCouchDBService },
         { provide: BulkDocumentService, useValue: documentFilter },
       ],

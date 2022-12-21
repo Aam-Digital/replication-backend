@@ -10,7 +10,7 @@ import { ReplicationModule } from './replication/replication.module';
 import { SessionController } from './session/session.controller';
 import { AuthModule } from '../auth/auth.module';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { CombinedAuthMiddleware } from '../auth/guards/combined-auth/combined-auth.middleware';
+import { CombinedAuthGuard } from '../auth/guards/combined-auth/combined-auth.guard';
 
 @Module({
   imports: [ReplicationModule, AuthModule, DocumentModule],
@@ -33,7 +33,7 @@ export class RestrictedEndpointsModule implements NestModule {
   ) {
     consumer
       .apply(
-        CombinedAuthMiddleware,
+        CombinedAuthGuard,
         createProxyMiddleware({
           target: process.env.DATABASE_URL,
           secure: true,

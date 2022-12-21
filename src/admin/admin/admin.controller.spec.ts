@@ -3,7 +3,7 @@ import { AdminController } from './admin.controller';
 import { RulesService } from '../../permissions/rules/rules.service';
 import { of } from 'rxjs';
 import { CouchdbService } from '../../couchdb/couchdb.service';
-import { CookieService } from '../../auth/cookie/cookie.service';
+import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
 
 describe('AdminController', () => {
   let controller: AdminController;
@@ -20,7 +20,7 @@ describe('AdminController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AdminController],
       providers: [
-        { provide: CookieService, useValue: {} },
+        ...authGuardMockProviders,
         { provide: CouchdbService, useValue: mockCouchDBService },
         { provide: RulesService, useValue: mockRulesService },
       ],
