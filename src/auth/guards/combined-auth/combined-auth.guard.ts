@@ -37,6 +37,12 @@ export class CombinedAuthGuard implements CanActivate, NestMiddleware {
     private reflector: Reflector,
   ) {}
 
+  /**
+   * This method is executed when used as a guard. On requests or controllers.
+   * On default, the guard will pass every request and set the `user` property on the request if authenticated.
+   * By using the `@OnlyAuthenticated()` decorator, unauthenticated requests will receive an error.
+   * @param context
+   */
   canActivate(context: ExecutionContext): Promise<boolean> {
     const onlyAuthenticated = this.reflector.getAllAndOverride(
       ONLY_AUTHENTICATED_KEY,
@@ -58,6 +64,13 @@ export class CombinedAuthGuard implements CanActivate, NestMiddleware {
       });
   }
 
+  /**
+   * This method is executed when used as middleware.
+   * Unauthenticated requests will receive an error.
+   * @param req
+   * @param res
+   * @param next
+   */
   use(req: any, res: any, next: () => void) {
     const context = {
       switchToHttp: () => ({
