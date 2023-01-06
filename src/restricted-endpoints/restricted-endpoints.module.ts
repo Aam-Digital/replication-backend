@@ -11,9 +11,10 @@ import { SessionController } from './session/session.controller';
 import { AuthModule } from '../auth/auth.module';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { CombinedAuthGuard } from '../auth/guards/combined-auth/combined-auth.guard';
+import { AttachmentModule } from './attachment/attachment.module';
 
 @Module({
-  imports: [ReplicationModule, AuthModule, DocumentModule],
+  imports: [ReplicationModule, AuthModule, DocumentModule, AttachmentModule],
   controllers: [SessionController],
 })
 export class RestrictedEndpointsModule implements NestModule {
@@ -25,6 +26,7 @@ export class RestrictedEndpointsModule implements NestModule {
         json({ limit: '10mb' }),
         urlencoded({ extended: true, limit: '10mb' }),
       )
+      .exclude({ path: ':db/:docId/:property', method: RequestMethod.PUT })
       .forRoutes('*');
   }
 

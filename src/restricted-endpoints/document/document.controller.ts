@@ -25,7 +25,7 @@ import { User } from '../../auth/user.decorator';
  * TODO DELETE is not supported yet
  */
 @UseGuards(CombinedAuthGuard)
-@Controller('/:db')
+@Controller('/:db/:docId')
 export class DocumentController {
   constructor(private documentService: DocumentService) {}
 
@@ -37,7 +37,7 @@ export class DocumentController {
    * @param user logged in user
    * @param queryParams additional params that will be forwarded
    */
-  @Get('/:docId')
+  @Get()
   getDocument(
     @Param('db') db: string,
     @Param('docId') docId: string,
@@ -55,7 +55,7 @@ export class DocumentController {
    * @param document the document to be put. This doc does not necessarily need a _id field.
    * @param user logged in user
    */
-  @Put('/:docId')
+  @Put()
   async putDocument(
     @Param('db') db: string,
     @Param('docId') docId: string,

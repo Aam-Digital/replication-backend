@@ -53,7 +53,7 @@ export class DocumentService {
 
     if (!existingDoc && userAbility.can('create', document)) {
       // Creating
-      return firstValueFrom(this.couchdbService.put(databaseName, document));
+      return firstValueFrom(this.couchdbService.putDoc(databaseName, document));
     } else if (userAbility.can('update', existingDoc)) {
       // Updating
       const finalDoc = this.applyPermissions(
@@ -61,7 +61,7 @@ export class DocumentService {
         existingDoc,
         document,
       );
-      return firstValueFrom(this.couchdbService.put(databaseName, finalDoc));
+      return firstValueFrom(this.couchdbService.putDoc(databaseName, finalDoc));
     } else {
       throw new UnauthorizedException('unauthorized', 'User is not permitted');
     }
