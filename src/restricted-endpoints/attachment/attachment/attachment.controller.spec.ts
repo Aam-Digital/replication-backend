@@ -7,6 +7,7 @@ import { Ability } from '@casl/ability';
 import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { UserInfo } from '../../session/user-auth.dto';
+import { RestrictedEndpointsModule } from '../../restricted-endpoints.module';
 
 describe('AttachmentController', () => {
   let controller: AttachmentController;
@@ -108,5 +109,44 @@ describe('AttachmentController', () => {
         );
         done();
       });
+  });
+
+  it('should throw ForbiddenException if user is not permitted', () => {
+    jest
+      .spyOn(mockPermissions, 'getAbilityFor')
+      .mockReturnValue(new Ability([{ subject: 'all', action: 'update' }]));
+
+    return expect(
+      controller.getAttachment(
+        'db',
+        'docId',
+        'prop',
+        new UserInfo('user', []),
+        undefined,
+        undefined,
+      ),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should call proxy if user is permitted', async () => {
+    jest
+      .spyOn(mockPermissions, 'getAbilityFor')
+      .mockReturnValue(new Ability([{ subject: 'all', action: 'read' }]));
+    RestrictedEndpointsModule.proxy = () => undefined;
+    jest.spyOn(RestrictedEndpointsModule, 'proxy');
+
+    await expect(
+      controller.getAttachment(
+        'db',
+        'docId',
+        'prop',
+        new UserInfo('user', []),
+        undefined,
+        undefined,
+      ),
+    ).resolves;
+
+    expect(RestrictedEndpointsModule.proxy).toHaveBeenCalled();
+    RestrictedEndpointsModule.proxy = undefined;
   });
 });

@@ -16,7 +16,7 @@ import { ApiQuery } from '@nestjs/swagger';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { PermissionService } from '../../../permissions/permission/permission.service';
-import { concatMap, map, Subject } from 'rxjs';
+import { concatMap, firstValueFrom, map, Subject } from 'rxjs';
 import { Request, Response } from 'express';
 import { RestrictedEndpointsModule } from '../../restricted-endpoints.module';
 
@@ -75,7 +75,7 @@ export class AttachmentController {
    * @param response
    */
   @Get()
-  getAttachment(
+  async getAttachment(
     @Param('db') db: string,
     @Param('docId') docId: string,
     @Param('property') property: string,
@@ -83,9 +83,10 @@ export class AttachmentController {
     @Req() request: Request,
     @Res() response: Response,
   ) {
-    this.ensurePermissions(user, 'read', db, docId, property).subscribe(() =>
-      RestrictedEndpointsModule.proxy(request, response, () => undefined),
+    await firstValueFrom(
+      this.ensurePermissions(user, 'read', db, docId, property),
     );
+    RestrictedEndpointsModule.proxy(request, response, () => undefined);
   }
 
   private ensurePermissions(
