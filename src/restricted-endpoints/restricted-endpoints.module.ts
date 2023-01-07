@@ -30,7 +30,6 @@ export class RestrictedEndpointsModule implements NestModule {
         json({ limit: '10mb' }),
         urlencoded({ extended: true, limit: '10mb' }),
       )
-      .exclude({ path: ':db/:docId/:property', method: RequestMethod.PUT })
       .forRoutes('*');
   }
 
