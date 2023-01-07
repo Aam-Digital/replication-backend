@@ -107,4 +107,24 @@ describe('CouchdbService', () => {
     const response = firstValueFrom(service.login('user', 'wrong_pw'));
     return expect(response).rejects.toBeInstanceOf(UnauthorizedException);
   });
+
+  it('should upload an attachment with the given config', async () => {
+    jest.spyOn(mockHttpService, 'put');
+    const config = {
+      params: { rev: '1-1' },
+      headers: { 'content-type': 'application/pdf' },
+      maxBodyLength: Infinity,
+      maxContentLength: Infinity,
+    };
+
+    await firstValueFrom(
+      service.putAttachment('db', 'doc/property', 'my file', config),
+    );
+
+    expect(mockHttpService.put).toHaveBeenCalledWith(
+      `${DATABASE_URL}/db/doc/property`,
+      'my file',
+      config,
+    );
+  });
 });
