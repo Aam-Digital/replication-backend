@@ -148,6 +148,8 @@ describe('RulesService', () => {
     testPermission.data.public = [publicRule];
 
     const result = service.getRulesForUser(undefined);
+
     expect(result).toEqual([publicRule]);
+    expect(result).not.toContain(testPermission.data.default);
   });
 });
