@@ -7,6 +7,7 @@ import {
   Query,
   Req,
   Res,
+  UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
 import { User } from '../../../auth/user.decorator';
@@ -43,11 +44,11 @@ export class AttachmentController {
    */
   @ApiQuery({})
   @Put()
-  async createAttachment(
+  createAttachment(
     @Param('db') db: string,
     @Param('docId') docId: string,
     @Param('property') property: string,
-    @Query() params: string,
+    @Query() params: any,
     @User() user: UserInfo,
     @Req() request: Request,
   ) {
@@ -96,10 +97,15 @@ export class AttachmentController {
   ) {
     return this.couchDB.get(db.replace('-attachments', ''), docId).pipe(
       map((doc) => {
-        if (
-          this.permissions.getAbilityFor(user).cannot(action, doc, property)
-        ) {
+        const ability = this.permissions.getAbilityFor(user);
+        const permitted = ability.can(action, doc, property);
+        if (!permitted && user) {
           throw new ForbiddenException('unauthorized', 'User is not permitted');
+        } else if (!permitted && !user) {
+          throw new UnauthorizedException(
+            'unauthorized',
+            'User is not authenticated',
+          );
         } else {
           return doc;
         }

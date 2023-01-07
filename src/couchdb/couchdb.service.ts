@@ -59,12 +59,10 @@ export class CouchdbService {
   get<T extends DatabaseDocument = DatabaseDocument>(
     databaseName: string,
     documentID: string,
-    queryParams?: any,
+    params?: any,
   ): Observable<T> {
     return this.httpService
-      .get<T>(this.buildDocUrl(databaseName, documentID), {
-        params: queryParams,
-      })
+      .get<T>(this.buildDocUrl(databaseName, documentID), { params })
       .pipe(map((response) => response.data));
   }
 
@@ -93,12 +91,10 @@ export class CouchdbService {
     dbName: string,
     documentID: string,
     body: any,
-    queryParams?: any,
+    params?: any,
   ): Observable<T> {
     return this.httpService
-      .post<T>(this.buildDocUrl(dbName, documentID), body, {
-        params: queryParams,
-      })
+      .post<T>(this.buildDocUrl(dbName, documentID), body, { params })
       .pipe(map((res) => res.data));
   }
 
