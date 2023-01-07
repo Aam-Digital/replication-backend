@@ -37,7 +37,7 @@ describe('DocumentService', () => {
   beforeEach(async () => {
     mockCouchDBService = {
       get: () => of({}),
-      put: () => of({}),
+      putDoc: () => of({}),
     } as any;
     jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(userDoc));
     jest
