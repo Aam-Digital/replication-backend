@@ -19,6 +19,11 @@ import { concatMap, map, Subject } from 'rxjs';
 import { Request, Response } from 'express';
 import { RestrictedEndpointsModule } from '../../restricted-endpoints.module';
 
+/**
+ * This controller handles uploading and downloading of attachments.
+ * The permissions are evaluated based on the `read` or `update` permission
+ * of the entity for which an attachment is saved.
+ */
 @UseGuards(CombinedAuthGuard)
 @Controller(':db/:docId/:property')
 export class AttachmentController {
@@ -27,6 +32,15 @@ export class AttachmentController {
     private permissions: PermissionService,
   ) {}
 
+  /**
+   * Upload an attachment using binary data if the user has `update` permissions.
+   * @param db name of the attachment database (`...-attachments`)
+   * @param docId ID of the doc
+   * @param property on the entity where the file name is stored
+   * @param params needs to include the rev of the attachment document
+   * @param user which makes the request
+   * @param request which holds the binary file data
+   */
   @ApiQuery({})
   @Put()
   async createAttachment(
@@ -35,14 +49,14 @@ export class AttachmentController {
     @Param('property') property: string,
     @Query() params: string,
     @User() user: UserInfo,
-    @Req() req: Request,
+    @Req() request: Request,
   ) {
     return this.ensurePermissions(user, 'update', db, docId, property).pipe(
-      concatMap(() => this.readDataAsBuffer(req)),
+      concatMap(() => this.readDataAsBuffer(request)),
       concatMap((file) =>
         this.couchDB.putAttachment(db, `${docId}/${property}`, file, {
           params,
-          headers: { 'content-type': req.headers['content-type'] },
+          headers: { 'content-type': request.headers['content-type'] },
           maxBodyLength: Infinity,
           maxContentLength: Infinity,
         }),
@@ -50,17 +64,26 @@ export class AttachmentController {
     );
   }
 
+  /**
+   * Returns an attachment if the user has `read` permissions.
+   * @param db name of the database
+   * @param docId name of the attachment database (`...-attachments`)
+   * @param property on the entity where the file name is stored
+   * @param user which makes the request
+   * @param request
+   * @param response
+   */
   @Get()
   getAttachment(
     @Param('db') db: string,
     @Param('docId') docId: string,
     @Param('property') property: string,
     @User() user: UserInfo,
-    @Res() res: Response,
-    @Req() req: Request,
+    @Req() request: Request,
+    @Res() response: Response,
   ) {
     this.ensurePermissions(user, 'read', db, docId, property).subscribe(() =>
-      RestrictedEndpointsModule.proxy(req, res, () => undefined),
+      RestrictedEndpointsModule.proxy(request, response, () => undefined),
     );
   }
 
