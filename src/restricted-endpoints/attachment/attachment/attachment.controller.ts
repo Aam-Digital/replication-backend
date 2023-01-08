@@ -16,7 +16,7 @@ import { ApiQuery } from '@nestjs/swagger';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { PermissionService } from '../../../permissions/permission/permission.service';
-import { concatMap, firstValueFrom, map, Subject } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 import { Request, Response } from 'express';
 import { RestrictedEndpointsModule } from '../../restricted-endpoints.module';
 
@@ -41,28 +41,21 @@ export class AttachmentController {
    * @param params needs to include the rev of the attachment document
    * @param user which makes the request
    * @param request which holds the binary file data
+   * @param response
    */
   @ApiQuery({})
   @Put()
-  createAttachment(
+  async createAttachment(
     @Param('db') db: string,
     @Param('docId') docId: string,
     @Param('property') property: string,
     @Query() params: any,
     @User() user: UserInfo,
     @Req() request: Request,
+    @Res() response: Response,
   ) {
-    return this.ensurePermissions(user, 'update', db, docId, property).pipe(
-      concatMap(() => this.readDataAsBuffer(request)),
-      concatMap((file) =>
-        this.couchDB.putAttachment(db, `${docId}/${property}`, file, {
-          params,
-          headers: { 'content-type': request.headers['content-type'] },
-          maxBodyLength: Infinity,
-          maxContentLength: Infinity,
-        }),
-      ),
-    );
+    await this.ensurePermissions(user, 'update', db, docId, property);
+    RestrictedEndpointsModule.proxy(request, response, () => undefined);
   }
 
   /**
@@ -83,48 +76,29 @@ export class AttachmentController {
     @Req() request: Request,
     @Res() response: Response,
   ) {
-    await firstValueFrom(
-      this.ensurePermissions(user, 'read', db, docId, property),
-    );
+    await this.ensurePermissions(user, 'read', db, docId, property);
     RestrictedEndpointsModule.proxy(request, response, () => undefined);
   }
 
-  private ensurePermissions(
+  private async ensurePermissions(
     user: UserInfo,
     action: 'read' | 'update',
     db: string,
     docId: string,
     property: string,
   ) {
-    return this.couchDB.get(db.replace('-attachments', ''), docId).pipe(
-      map((doc) => {
-        const ability = this.permissions.getAbilityFor(user);
-        const permitted = ability.can(action, doc, property);
-        if (!permitted && user) {
-          throw new ForbiddenException('unauthorized', 'User is not permitted');
-        } else if (!permitted && !user) {
-          throw new UnauthorizedException(
-            'unauthorized',
-            'User is not authenticated',
-          );
-        } else {
-          return doc;
-        }
-      }),
+    const doc = await firstValueFrom(
+      this.couchDB.get(db.replace('-attachments', ''), docId),
     );
-  }
-
-  private readDataAsBuffer(req: Request) {
-    const result = new Subject<Buffer>();
-    const res = [];
-    req.on('data', (chunk) => {
-      res.push(chunk);
-    });
-
-    req.on('end', () => {
-      result.next(Buffer.concat(res));
-      result.complete();
-    });
-    return result;
+    const ability = this.permissions.getAbilityFor(user);
+    const permitted = ability.can(action, doc, property);
+    if (!permitted && user) {
+      throw new ForbiddenException('unauthorized', 'User is not permitted');
+    } else if (!permitted && !user) {
+      throw new UnauthorizedException(
+        'unauthorized',
+        'User is not authenticated',
+      );
+    }
   }
 }

@@ -14,7 +14,6 @@ import {
   SessionResponse,
   UserInfo,
 } from '../restricted-endpoints/session/user-auth.dto';
-import { AxiosRequestConfig } from 'axios';
 
 @Injectable()
 export class CouchdbService {
@@ -70,20 +69,9 @@ export class CouchdbService {
     return `${this.databaseUrl}/${db}/${documentId}`;
   }
 
-  putDoc(dbName: string, document: DatabaseDocument): Observable<DocSuccess> {
+  put(dbName: string, document: DatabaseDocument): Observable<DocSuccess> {
     return this.httpService
       .put<DocSuccess>(this.buildDocUrl(dbName, document._id), document)
-      .pipe(map((response) => response.data));
-  }
-
-  putAttachment(
-    dbName: string,
-    attachmentId: string,
-    file: any,
-    config: AxiosRequestConfig,
-  ) {
-    return this.httpService
-      .put<DocSuccess>(this.buildDocUrl(dbName, attachmentId), file, config)
       .pipe(map((response) => response.data));
   }
 

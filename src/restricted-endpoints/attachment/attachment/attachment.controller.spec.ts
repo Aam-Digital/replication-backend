@@ -15,10 +15,7 @@ describe('AttachmentController', () => {
   let mockPermissions: PermissionService;
 
   beforeEach(async () => {
-    mockCouchDB = {
-      putAttachment: () => of(undefined),
-      get: () => of(undefined),
-    } as any;
+    mockCouchDB = { get: () => of(undefined) } as any;
     mockPermissions = { getAbilityFor: () => undefined } as any;
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AttachmentController],
@@ -36,79 +33,57 @@ describe('AttachmentController', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should throw UnauthorizedException if user is not logged in and not permitted', (done) => {
+  it('should throw UnauthorizedException if user is not logged in and not permitted', () => {
     jest.spyOn(mockPermissions, 'getAbilityFor').mockReturnValue(new Ability());
 
-    controller
-      .createAttachment(
+    return expect(
+      controller.createAttachment(
         'db',
         'docId',
         'prop',
         { rev: '1' },
         undefined,
         undefined,
-      )
-      .subscribe({
-        error: (err) => {
-          expect(err).toBeInstanceOf(UnauthorizedException);
-          done();
-        },
-      });
+        undefined,
+      ),
+    ).rejects.toThrow(UnauthorizedException);
   });
 
-  it('should throw ForbiddenException if user is authenticated but not permitted', (done) => {
+  it('should throw ForbiddenException if user is authenticated but not permitted', () => {
     jest.spyOn(mockPermissions, 'getAbilityFor').mockReturnValue(new Ability());
 
-    controller
-      .createAttachment(
+    return expect(
+      controller.createAttachment(
         'db',
         'docId',
         'prop',
         { rev: '1' },
         new UserInfo('user', []),
         undefined,
-      )
-      .subscribe({
-        error: (err) => {
-          expect(err).toBeInstanceOf(ForbiddenException);
-          done();
-        },
-      });
+        undefined,
+      ),
+    ).rejects.toThrow(ForbiddenException);
   });
 
-  it('should upload document if user is permitted', (done) => {
+  it('should upload document if user is permitted', async () => {
     jest
       .spyOn(mockPermissions, 'getAbilityFor')
       .mockReturnValue(new Ability([{ subject: 'all', action: 'manage' }]));
-    jest.spyOn(mockCouchDB, 'putAttachment').mockReturnValue(of(undefined));
-    const body = Buffer.alloc(2);
-    const request = {
-      on: (_, fun) => setTimeout(() => fun(body)),
-      headers: { 'content-type': 'application/pdf' },
-    };
-    controller
-      .createAttachment(
-        'db',
-        'docId',
-        'prop',
-        { rev: '1' },
-        new UserInfo('user', []),
-        request as any,
-      )
-      .subscribe(() => {
-        expect(mockCouchDB.putAttachment).toHaveBeenCalledWith(
-          'db',
-          `docId/prop`,
-          Buffer.concat([body]),
-          {
-            params: { rev: '1' },
-            headers: { 'content-type': 'application/pdf' },
-            maxBodyLength: Infinity,
-            maxContentLength: Infinity,
-          },
-        );
-        done();
-      });
+    RestrictedEndpointsModule.proxy = () => undefined;
+    jest.spyOn(RestrictedEndpointsModule, 'proxy');
+
+    await controller.createAttachment(
+      'db',
+      'docId',
+      'prop',
+      { rev: '1' },
+      new UserInfo('user', []),
+      undefined,
+      undefined,
+    );
+
+    expect(RestrictedEndpointsModule.proxy).toHaveBeenCalled();
+    RestrictedEndpointsModule.proxy = undefined;
   });
 
   it('should throw ForbiddenException if user is not permitted', () => {
@@ -135,16 +110,14 @@ describe('AttachmentController', () => {
     RestrictedEndpointsModule.proxy = () => undefined;
     jest.spyOn(RestrictedEndpointsModule, 'proxy');
 
-    await expect(
-      controller.getAttachment(
-        'db',
-        'docId',
-        'prop',
-        new UserInfo('user', []),
-        undefined,
-        undefined,
-      ),
-    ).resolves;
+    await controller.getAttachment(
+      'db',
+      'docId',
+      'prop',
+      new UserInfo('user', []),
+      undefined,
+      undefined,
+    );
 
     expect(RestrictedEndpointsModule.proxy).toHaveBeenCalled();
     RestrictedEndpointsModule.proxy = undefined;

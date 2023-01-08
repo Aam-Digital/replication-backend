@@ -37,12 +37,10 @@ describe('DocumentService', () => {
   beforeEach(async () => {
     mockCouchDBService = {
       get: () => of({}),
-      putDoc: () => of({}),
+      put: () => of({}),
     } as any;
     jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(userDoc));
-    jest
-      .spyOn(mockCouchDBService, 'putDoc')
-      .mockReturnValue(of(SUCCESS_RESPONSE));
+    jest.spyOn(mockCouchDBService, 'put').mockReturnValue(of(SUCCESS_RESPONSE));
 
     mockPermissionService = {
       getAbilityFor: () => undefined,
@@ -123,10 +121,7 @@ describe('DocumentService', () => {
     const response = service.putDocument(databaseName, userDoc, requestingUser);
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
-    expect(mockCouchDBService.putDoc).toHaveBeenCalledWith(
-      databaseName,
-      userDoc,
-    );
+    expect(mockCouchDBService.put).toHaveBeenCalledWith(databaseName, userDoc);
   });
 
   it('should throw an unauthorized exception if user does not have create permission', () => {
@@ -152,7 +147,7 @@ describe('DocumentService', () => {
     );
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
-    expect(mockCouchDBService.putDoc).toHaveBeenCalledWith(
+    expect(mockCouchDBService.put).toHaveBeenCalledWith(
       databaseName,
       userWithUpdatedRoles,
     );
@@ -180,7 +175,7 @@ describe('DocumentService', () => {
     );
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
-    expect(mockCouchDBService.putDoc).toHaveBeenCalledWith(
+    expect(mockCouchDBService.put).toHaveBeenCalledWith(
       databaseName,
       userWithUpdatedPassword,
     );
