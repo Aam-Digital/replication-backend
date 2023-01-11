@@ -1,11 +1,20 @@
-import { Controller, Get, Param, Body, Put, Req, Query } from '@nestjs/common';
-import { User } from '../session/user-auth.dto';
+import {
+  Controller,
+  Get,
+  Param,
+  Body,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { UserInfo } from '../session/user-auth.dto';
 import {
   DatabaseDocument,
   DocSuccess,
 } from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
 import { DocumentService } from './document.service';
-import { Request } from 'express';
+import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
+import { User } from '../../auth/user.decorator';
 
 /**
  * This controller implements endpoints to interact with single documents of a database.
@@ -15,7 +24,8 @@ import { Request } from 'express';
  *
  * TODO DELETE is not supported yet
  */
-@Controller('/:db')
+@UseGuards(CombinedAuthGuard)
+@Controller('/:db/:docId')
 export class DocumentController {
   constructor(private documentService: DocumentService) {}
 
@@ -24,23 +34,17 @@ export class DocumentController {
    * See {@link https://docs.couchdb.org/en/stable/api/document/common.html?highlight=put%20document#get--db-docid}
    * @param db the name of the database from which the document should be fetched
    * @param docId the name of the document
-   * @param request the request object holding the user executing the request
+   * @param user logged in user
    * @param queryParams additional params that will be forwarded
    */
-  @Get('/:docId')
+  @Get()
   getDocument(
     @Param('db') db: string,
     @Param('docId') docId: string,
-    @Req() request: Request,
+    @User() user: UserInfo,
     @Query() queryParams: any,
   ): Promise<DatabaseDocument> {
-    const authenticatedUser = request.user as User;
-    return this.documentService.getDocument(
-      db,
-      docId,
-      authenticatedUser,
-      queryParams,
-    );
+    return this.documentService.getDocument(db, docId, user, queryParams);
   }
 
   /**
@@ -49,17 +53,16 @@ export class DocumentController {
    * @param db the name of the database where the document should be put
    * @param docId the ID of the document which should be put
    * @param document the document to be put. This doc does not necessarily need a _id field.
-   * @param request the request object holding the user executing the request
+   * @param user logged in user
    */
-  @Put('/:docId')
+  @Put()
   async putDocument(
     @Param('db') db: string,
     @Param('docId') docId: string,
     @Body() document: DatabaseDocument,
-    @Req() request: Request,
+    @User() user: UserInfo,
   ): Promise<DocSuccess> {
     document._id = docId;
-    const requestingUser = request.user as User;
-    return this.documentService.putDocument(db, document, requestingUser);
+    return this.documentService.putDocument(db, document, user);
   }
 }

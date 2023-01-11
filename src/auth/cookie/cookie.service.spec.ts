@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CookieService, TOKEN_KEY } from './cookie.service';
 import { JwtService } from '@nestjs/jwt';
-import { User } from '../../restricted-endpoints/session/user-auth.dto';
+import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { ExecutionContext } from '@nestjs/common';
 
 describe('CookieService', () => {
@@ -26,7 +26,7 @@ describe('CookieService', () => {
   });
 
   it('should set a cookie containing the user info on the response', () => {
-    const user = new User('Username', ['user_app']);
+    const user = new UserInfo('Username', ['user_app']);
     const request = { user: user };
     const cookies = {};
     const setCookieMock = jest.fn(

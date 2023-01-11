@@ -9,7 +9,7 @@ export class UserCredentials {
 /**
  * User object as used by CouchDB
  */
-export class User {
+export class UserInfo {
   constructor(public name: string, public roles: string[]) {}
 }
 
@@ -17,7 +17,8 @@ export class User {
  * Response payload sent by CouchDB at /_session
  */
 export class SessionResponse {
-  userCtx: User;
+  ok: boolean;
+  userCtx: UserInfo;
 }
 
 export const COUCHDB_USER_DOC = 'org.couchdb.user';

@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentController } from './document.controller';
 import { DocumentService } from './document.service';
 import { DocSuccess } from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
+import { UserInfo } from '../session/user-auth.dto';
+import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
 
 describe('DocumentController', () => {
   let controller: DocumentController;
@@ -17,10 +19,7 @@ describe('DocumentController', () => {
     id: document._id,
     rev: document._rev,
   };
-  const requestingUser = {
-    name: 'username',
-    role: ['user_app'],
-  };
+  const requestingUser = new UserInfo('username', ['user_app']);
   beforeEach(async () => {
     mockDocumentService = {
       getDocument: () => Promise.resolve(undefined),
@@ -29,7 +28,10 @@ describe('DocumentController', () => {
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DocumentController],
-      providers: [{ provide: DocumentService, useValue: mockDocumentService }],
+      providers: [
+        ...authGuardMockProviders,
+        { provide: DocumentService, useValue: mockDocumentService },
+      ],
     }).compile();
 
     controller = module.get<DocumentController>(DocumentController);
@@ -48,9 +50,7 @@ describe('DocumentController', () => {
     const response = controller.getDocument(
       databaseName,
       documentID,
-      {
-        user: requestingUser,
-      } as any,
+      requestingUser,
       params,
     );
 
@@ -72,9 +72,7 @@ describe('DocumentController', () => {
       databaseName,
       documentID,
       { _rev: document._rev },
-      {
-        user: requestingUser,
-      } as any,
+      requestingUser,
     );
 
     await expect(response).resolves.toBe(successResponse);

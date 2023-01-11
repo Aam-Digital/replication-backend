@@ -42,6 +42,9 @@ The structure of the permission document is as follows:
 {
   "_id": "Config:Permissions",
   "data": {
+    "public": [
+      { "subject": "User", "action":  "create"}
+    ],
     "default": [
       { "subject":  "Config", "action": "read" }
     ],
@@ -60,6 +63,8 @@ The keys of the `data` object reference to roles that the different users can ha
 The rules at the value of the `default` key are prepended to other rules that are relevant for a user.
 This allows to set user-agnostic rules, e.g. allowing everyone to read the `Config` document.
 The default rules can be overwritten by user-specific rules.
+The `public` rules are used when a user is **not** authenticated.
+This allows to expose a public API, e.g. to integrate a public form.
 Subjects refer to the prefixes of the `_id` properties of documents e.g. `_id: Child:123` refers to subject `Child`.
 The `all` subject is a wildcard that refers to all documents.
 

@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PermissionService } from './permission.service';
 import { DocumentRule, RulesService } from '../rules/rules.service';
-import { User } from '../../restricted-endpoints/session/user-auth.dto';
+import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { DatabaseDocument } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
 
 describe('PermissionService', () => {
   let service: PermissionService;
   let mockRulesService: RulesService;
-  let normalUser: User;
+  let normalUser: UserInfo;
 
   beforeEach(async () => {
     mockRulesService = {
@@ -23,7 +23,7 @@ describe('PermissionService', () => {
 
     service = module.get<PermissionService>(PermissionService);
 
-    normalUser = new User('normalUser', ['user_app']);
+    normalUser = new UserInfo('normalUser', ['user_app']);
   });
 
   it('should be defined', () => {

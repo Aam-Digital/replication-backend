@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { User } from '../../../restricted-endpoints/session/user-auth.dto';
+import { UserInfo } from '../../../restricted-endpoints/session/user-auth.dto';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-local';
 import { firstValueFrom } from 'rxjs';
@@ -17,7 +17,7 @@ export class BodyAuthStrategy extends PassportStrategy(Strategy) {
     super({ usernameField: 'name' });
   }
 
-  async validate(username: string, password: string): Promise<User> {
+  async validate(username: string, password: string): Promise<UserInfo> {
     const user = await firstValueFrom(
       this.couchdbService.login(username, password),
     );

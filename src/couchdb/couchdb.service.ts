@@ -12,7 +12,7 @@ import {
 } from '../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
 import {
   SessionResponse,
-  User,
+  UserInfo,
 } from '../restricted-endpoints/session/user-auth.dto';
 
 @Injectable()
@@ -58,12 +58,10 @@ export class CouchdbService {
   get<T extends DatabaseDocument = DatabaseDocument>(
     databaseName: string,
     documentID: string,
-    queryParams?: any,
+    params?: any,
   ): Observable<T> {
     return this.httpService
-      .get<T>(this.buildDocUrl(databaseName, documentID), {
-        params: queryParams,
-      })
+      .get<T>(this.buildDocUrl(databaseName, documentID), { params })
       .pipe(map((response) => response.data));
   }
 
@@ -81,12 +79,10 @@ export class CouchdbService {
     dbName: string,
     documentID: string,
     body: any,
-    queryParams?: any,
+    params?: any,
   ): Observable<T> {
     return this.httpService
-      .post<T>(this.buildDocUrl(dbName, documentID), body, {
-        params: queryParams,
-      })
+      .post<T>(this.buildDocUrl(dbName, documentID), body, { params })
       .pipe(map((res) => res.data));
   }
 
@@ -94,7 +90,7 @@ export class CouchdbService {
     return this.httpService.delete(this.buildDocUrl(db, id));
   }
 
-  login(username: string, password: string): Observable<User> {
+  login(username: string, password: string): Observable<UserInfo> {
     return this.httpService
       .get<SessionResponse>(`${this.databaseUrl}/_session`, {
         auth: {

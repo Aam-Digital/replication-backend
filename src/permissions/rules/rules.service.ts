@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
-import { User } from '../../restricted-endpoints/session/user-auth.dto';
+import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { Permission, RulesConfig } from './permission';
 import { catchError, firstValueFrom, map, of } from 'rxjs';
 import * as _ from 'lodash';
@@ -46,7 +46,10 @@ export class RulesService {
    * @param user for which the rules should be retrieved
    * @returns DocumentRule[] rules that are related to the user
    */
-  getRulesForUser(user: User): DocumentRule[] {
+  getRulesForUser(user: UserInfo): DocumentRule[] {
+    if (!user) {
+      return this.permission?.public ?? [];
+    }
     if (this.permission) {
       const userRules = user.roles
         .filter((role) => this.permission.hasOwnProperty(role))
@@ -61,7 +64,7 @@ export class RulesService {
     }
   }
 
-  private injectUserVariablesIntoRules(rules: DocumentRule[], user: User) {
+  private injectUserVariablesIntoRules(rules: DocumentRule[], user: UserInfo) {
     return JSON.parse(JSON.stringify(rules), (that, rawValue) => {
       if (rawValue[0] !== '$') {
         return rawValue;

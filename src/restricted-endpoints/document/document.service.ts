@@ -1,5 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { User } from '../session/user-auth.dto';
+import { UserInfo } from '../session/user-auth.dto';
 import {
   DatabaseDocument,
   DocSuccess,
@@ -27,7 +27,7 @@ export class DocumentService {
   async getDocument(
     databaseName: string,
     documentID: string,
-    requestingUser: User,
+    requestingUser: UserInfo,
     queryParams?: any,
   ): Promise<DatabaseDocument> {
     const userAbility = this.permissionService.getAbilityFor(requestingUser);
@@ -44,7 +44,7 @@ export class DocumentService {
   async putDocument(
     databaseName: string,
     document: DatabaseDocument,
-    requestingUser: User,
+    requestingUser: UserInfo,
   ): Promise<DocSuccess> {
     const userAbility = this.permissionService.getAbilityFor(requestingUser);
     const existingDoc = await firstValueFrom(
