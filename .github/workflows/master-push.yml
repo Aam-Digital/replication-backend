@@ -25,9 +25,9 @@ jobs:
           file: ./build/Dockerfile
           builder: ${{ steps.buildx.outputs.name }}
           push: true
-          tags: aamdigital/replication-ms:latest
-          cache-from: type=registry,ref=aamdigital/replication-ms:cache
-          cache-to: type=registry,ref=aamdigital/replication-ms:cache,mode=max
+          tags: aamdigitaltravis/replication-ms:latest
+          cache-from: type=registry,ref=aamdigitaltravis/replication-ms:cache
+          cache-to: type=registry,ref=aamdigitaltravis/replication-ms:cache,mode=max
           build-args: |
             UPLOAD_COVERAGE=${{ true }}
             GIT_COMMIT_SHA=${{ github.sha }}
