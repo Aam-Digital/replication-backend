@@ -26,8 +26,8 @@ jobs:
           builder: ${{ steps.buildx.outputs.name }}
           push: true
           tags: aamdigitaltravis/replication-ms:latest
-          cache-from: type=registry,ref=aamdigitaltravis/replication-ms:cache
-          cache-to: type=registry,ref=aamdigitaltravis/replication-ms:cache,mode=max
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           build-args: |
             UPLOAD_COVERAGE=${{ true }}
             GIT_COMMIT_SHA=${{ github.sha }}

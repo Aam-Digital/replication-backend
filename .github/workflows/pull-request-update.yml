@@ -24,4 +24,5 @@ jobs:
             GIT_BRANCH=${{ github.head_ref }}
             GIT_COMMITTED_AT=${{ env.TIME }}
             CC_TEST_REPORTER_ID=${{ secrets.CODE_CLIMATE_ID }}
-          cache-from: type=registry,ref=aamdigitaltravis/replication-ms:cache
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
