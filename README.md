@@ -12,7 +12,7 @@ The permission rules are defined through [CASL](https://casl.js.org/v5/en/).
 This API functions as a proxy layer between a client (PouchDB) and a standard CouchDB instance.
 The backend can either be run as a docker container 
 ```
-> docker run aamdigitaltravis/replication-ms:latest
+> docker run aamdigital/replication-ms:latest
 ```
 or directly through npm
 ```
@@ -29,7 +29,7 @@ In both cases the following environment variables should be defined:
 
 In case the backend is run through Docker, the args can be provided like this
 ```
-> docker run -e DATABASE_URL=https://test.com/couchdb -e DATABASE_USER=replicator -e DATABASE_PASSWORD=securePassword -e JWT_SECRET=myJWTSecret -e JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nSomePublicKey\n-----END PUBLIC KEY-----" aamdigitaltravis/replication-ms:latest
+> docker run -e DATABASE_URL=https://test.com/couchdb -e DATABASE_USER=replicator -e DATABASE_PASSWORD=securePassword -e JWT_SECRET=myJWTSecret -e JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nSomePublicKey\n-----END PUBLIC KEY-----" aamdigital/replication-ms:latest
 ```
 In case the backend is run through npm, the `.env` file can be adjusted.
 
