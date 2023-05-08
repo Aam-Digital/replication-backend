@@ -63,7 +63,7 @@ describe('RulesService', () => {
       .spyOn(mockCouchDBService, 'get')
       .mockReturnValue(throwError(() => new Error()));
 
-    await service.loadRules(DATABASE_NAME);
+    await service.loadRules(DATABASE_NAME).catch(() => undefined);
 
     expect(service.getRulesForUser(normalUser)).toEqual([
       {

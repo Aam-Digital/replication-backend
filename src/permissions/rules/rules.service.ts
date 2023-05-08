@@ -3,7 +3,7 @@ import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { Permission, RulesConfig } from './permission';
-import { catchError, firstValueFrom, map, of } from 'rxjs';
+import { firstValueFrom, map, tap } from 'rxjs';
 import * as _ from 'lodash';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
@@ -31,13 +31,13 @@ export class RulesService {
   }
 
   async loadRules(db: string): Promise<RulesConfig> {
-    this.permission = await firstValueFrom(
+    this.permission = undefined;
+    return firstValueFrom(
       this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
         map((doc) => doc.data),
-        catchError(() => of(undefined)),
+        tap((permission) => (this.permission = permission)),
       ),
     );
-    return this.permission;
   }
 
   /**
