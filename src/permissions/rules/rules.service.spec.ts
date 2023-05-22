@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentRule, RulesService } from './rules.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
-import { of, throwError } from 'rxjs';
+import { defer, of, throwError } from 'rxjs';
 import { Permission } from './permission';
 import { ConfigService } from '@nestjs/config';
 import { CouchdbService } from '../../couchdb/couchdb.service';
@@ -62,15 +62,16 @@ describe('RulesService', () => {
     jest
       .spyOn(mockCouchDBService, 'get')
       .mockReturnValue(throwError(() => new Error()));
+    jest.useFakeTimers();
 
-    await service.loadRules(DATABASE_NAME).catch(() => undefined);
+    const prom = service.loadRules(DATABASE_NAME);
+    jest.advanceTimersByTime(5000);
 
+    await expect(prom).rejects.toBeDefined();
     expect(service.getRulesForUser(normalUser)).toEqual([
-      {
-        subject: 'all',
-        action: 'manage',
-      },
+      { subject: 'all', action: 'manage' },
     ]);
+    jest.useRealTimers();
   });
 
   it('should return the rules for every passed user role', () => {
@@ -151,5 +152,22 @@ describe('RulesService', () => {
 
     expect(result).toEqual([publicRule]);
     expect(result).not.toContain(testPermission.data.default);
+  });
+
+  it('should retry loading the rules if it fails', async () => {
+    let calls = 0;
+    jest.spyOn(mockCouchDBService, 'get').mockReturnValue(
+      defer(() => {
+        calls++;
+        if (calls < 3) {
+          return throwError(() => new Error());
+        } else return of(testPermission);
+      }),
+    );
+
+    await service.loadRules('app');
+
+    expect(calls).toEqual(3);
+    expect(service.getRulesForUser(normalUser)).toEqual(userRules);
   });
 });

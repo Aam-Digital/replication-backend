@@ -3,7 +3,7 @@ import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { Permission, RulesConfig } from './permission';
-import { firstValueFrom, map, tap } from 'rxjs';
+import { firstValueFrom, map, retry, tap } from 'rxjs';
 import * as _ from 'lodash';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
@@ -23,7 +23,6 @@ export class RulesService {
     private couchdbService: CouchdbService,
     private configService: ConfigService,
   ) {
-    // Somehow this only executes when it is subscribed to
     const permissionDbName = this.configService.get(
       RulesService.ENV_PERMISSION_DB,
     );
@@ -34,6 +33,7 @@ export class RulesService {
     this.permission = undefined;
     return firstValueFrom(
       this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
+        retry({ count: 5, delay: 1000 }),
         map((doc) => doc.data),
         tap((permission) => (this.permission = permission)),
       ),
