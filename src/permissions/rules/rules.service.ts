@@ -33,7 +33,7 @@ export class RulesService {
     this.permission = undefined;
     return firstValueFrom(
       this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
-        retry({ count: 5, delay: 1000 }),
+        retry({ count: 60, delay: 1000 }),
         map((doc) => doc.data),
         tap((permission) => (this.permission = permission)),
       ),
