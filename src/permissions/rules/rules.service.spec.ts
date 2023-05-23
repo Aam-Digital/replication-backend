@@ -65,7 +65,7 @@ describe('RulesService', () => {
     jest.useFakeTimers();
 
     const prom = service.loadRules(DATABASE_NAME);
-    jest.advanceTimersByTime(5000);
+    jest.advanceTimersByTime(60000);
 
     await expect(prom).rejects.toBeDefined();
     expect(service.getRulesForUser(normalUser)).toEqual([
