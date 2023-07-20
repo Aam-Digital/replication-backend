@@ -3,7 +3,15 @@ import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { Permission, RulesConfig } from './permission';
-import { firstValueFrom, map, retry, tap } from 'rxjs';
+import {
+  lastValueFrom,
+  map,
+  repeat,
+  retry,
+  Subject,
+  takeUntil,
+  tap,
+} from 'rxjs';
 import * as _ from 'lodash';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
@@ -18,6 +26,7 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
 export class RulesService {
   static readonly ENV_PERMISSION_DB = 'PERMISSION_DB';
   private permission: RulesConfig;
+  private startingToLoad = new Subject<void>();
 
   constructor(
     private couchdbService: CouchdbService,
@@ -26,20 +35,28 @@ export class RulesService {
     const permissionDbName = this.configService.get(
       RulesService.ENV_PERMISSION_DB,
     );
-    this.loadRules(permissionDbName);
+    this.loadRulesContinuously(permissionDbName);
   }
 
-  async loadRules(db: string): Promise<RulesConfig> {
-    this.permission = undefined;
-    return firstValueFrom(
-      this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
+  loadRulesContinuously(db: string): Promise<any> {
+    this.startingToLoad.next();
+    return lastValueFrom(
+      this.loadRules(db).pipe(
         retry({ count: 60, delay: 1000 }),
-        map((doc) => doc.data),
-        tap((permission) => (this.permission = permission)),
+        repeat({ delay: 60000 }),
+        // Stopping subscription if new loading is started
+        takeUntil(this.startingToLoad),
       ),
     );
   }
 
+  loadRules(db: string) {
+    this.permission = undefined;
+    return this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
+      map((doc) => doc.data),
+      tap((permissions) => (this.permission = permissions)),
+    );
+  }
   /**
    * Get all rules that are related to the roles of the user
    * If no permissions are found, returns rule that allows everything
