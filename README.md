@@ -97,8 +97,8 @@ For more information on how to write rules have a look at the [CASL documentatio
 ## Operation
 Besides the CouchDB endpoints, the backend also provides some additional endpoints that are necessary to be used at times.
 A swagger / OpenAPI interface can be visited at `/api/` which shows all endpoints that are available.
-- `/rules/{db}/reload` needs to be executed whenever the `Permission` document is updated in the database in order to update the permissions in the backend. `{db}` should be the name of the database in which the `Permission` document is stored.
-- `{db}/clear_local` needs to be executed whenever a rule or a permission change might give a user more permission than the user previously had. This will restart the synchronization process for each client which makes them fetch all the documents for which they now have gained permissions.
+- `/admin/reload/{db}` needs to be executed whenever the `Permission` document is updated in the database in order to update the cached permissions in the backend. `{db}` should be the name of the database in which the `Permission` document is stored.
+- `/admin/clear_local/{db}` needs to be executed whenever a rule or a permission change might give a user more permission than the user previously had. This will restart the synchronization process for each client which makes them fetch all the documents for which they now have gained permissions.
 - The endpoints of the *real* CouchDB are available through a reverse proxy at `/couchdb/`. This can be used to visit the developer interface at `/couchdb/_utils/`.
 
 Additionally, a separate check on the client side is necessary that cleans up the local database whenever a client looses read permissions for a document.
