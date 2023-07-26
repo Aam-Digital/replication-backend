@@ -3,18 +3,11 @@ import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { Permission, RulesConfig } from './permission';
-import {
-  lastValueFrom,
-  map,
-  repeat,
-  retry,
-  Subject,
-  takeUntil,
-  tap,
-} from 'rxjs';
+import { catchError, concatMap, defer, of, repeat, retry, tap } from 'rxjs';
 import * as _ from 'lodash';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
+import { ChangesResponse } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/changes.dto';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 
@@ -26,7 +19,7 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
 export class RulesService {
   static readonly ENV_PERMISSION_DB = 'PERMISSION_DB';
   private permission: RulesConfig;
-  private startingToLoad = new Subject<void>();
+  private lastSeq: string;
 
   constructor(
     private couchdbService: CouchdbService,
@@ -35,26 +28,38 @@ export class RulesService {
     const permissionDbName = this.configService.get(
       RulesService.ENV_PERMISSION_DB,
     );
-    this.loadRulesContinuously(permissionDbName);
+    this.loadRulesContinuously(permissionDbName).subscribe();
   }
 
-  loadRulesContinuously(db: string): Promise<any> {
-    this.startingToLoad.next();
-    return lastValueFrom(
-      this.loadRules(db).pipe(
-        retry({ count: 60, delay: 1000 }),
-        repeat({ delay: 60000 }),
-        // Stopping subscription if new loading is started
-        takeUntil(this.startingToLoad),
-      ),
+  loadRulesContinuously(db = 'app') {
+    // Rebuild params when observable is retried/repeated
+    const getParams = defer(() =>
+      of({
+        filter: '_doc_ids',
+        feed: 'longpoll',
+        limit: '1',
+        since: this.lastSeq,
+        include_docs: true,
+        doc_ids: JSON.stringify([Permission.DOC_ID]),
+      }),
     );
-  }
 
-  loadRules(db: string) {
-    this.permission = undefined;
-    return this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
-      map((doc) => doc.data),
-      tap((permissions) => (this.permission = permissions)),
+    return getParams.pipe(
+      concatMap((params) =>
+        this.couchdbService.get<ChangesResponse>(db, '_changes', params),
+      ),
+      tap((changes) => {
+        this.lastSeq = changes.last_seq;
+        if (changes.results.length > 0) {
+          this.permission = changes.results[0].doc.data;
+        }
+      }),
+      catchError((err) => {
+        console.error('LOAD RULES ERROR:', err);
+        throw err;
+      }),
+      retry({ delay: 1000 }),
+      repeat(),
     );
   }
   /**
