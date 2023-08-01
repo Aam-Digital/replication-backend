@@ -1,10 +1,11 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { DocumentRule, RulesService } from './rules.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
-import { defer, of, throwError } from 'rxjs';
+import { defer, NEVER, of, throwError } from 'rxjs';
 import { Permission } from './permission';
 import { ConfigService } from '@nestjs/config';
 import { CouchdbService } from '../../couchdb/couchdb.service';
+import { ChangesResponse } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/changes.dto';
 
 describe('RulesService', () => {
   let service: RulesService;
@@ -12,6 +13,7 @@ describe('RulesService', () => {
   let userRules: DocumentRule[];
   let mockCouchDBService: CouchdbService;
   let testPermission: Permission;
+  let changesResponse: ChangesResponse;
   const normalUser = new UserInfo('normalUser', ['user_app']);
   const adminUser = new UserInfo('superUser', ['user_app', 'admin_app']);
   const DATABASE_NAME = 'app';
@@ -26,12 +28,19 @@ describe('RulesService', () => {
     });
     userRules = testPermission.data[normalUser.roles[0]];
     adminRules = testPermission.data[adminUser.roles[1]];
+    changesResponse = {
+      last_seq: 'initial_seq',
+      results: [{ doc: testPermission }],
+    };
     mockCouchDBService = {
       get: () => undefined,
     } as any;
-    jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(testPermission));
+    jest
+      .spyOn(mockCouchDBService, 'get')
+      .mockReturnValueOnce(of(changesResponse))
+      .mockReturnValueOnce(NEVER);
 
-    const module: TestingModule = await Test.createTestingModule({
+    const module = await Test.createTestingModule({
       providers: [
         RulesService,
         {
@@ -44,44 +53,66 @@ describe('RulesService', () => {
       ],
     }).compile();
 
-    service = module.get<RulesService>(RulesService);
+    service = module.get(RulesService);
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it('should fetch the rules from the db on startup', async () => {
+  it('should fetch the rules from the db on startup', () => {
     expect(mockCouchDBService.get).toHaveBeenCalledWith(
       DATABASE_NAME,
-      Permission.DOC_ID,
+      '_changes',
+      expect.anything(),
+    );
+    expect(service.getRulesForUser(normalUser)).toEqual(userRules);
+    expect(service.getRulesForUser(adminUser)).toEqual(
+      userRules.concat(adminRules),
     );
   });
 
-  it('should allow everything in case no rules object could be found', async () => {
+  it('should retry loading the rules if it fails', () => {
+    jest.useFakeTimers();
+    let calls = 0;
+    jest.spyOn(console, 'error').mockImplementation();
+    const newPermissions = new Permission({
+      [normalUser.roles[0]]: [{ action: 'manage', subject: 'Child' }],
+    });
+    const newResponse: ChangesResponse = {
+      last_seq: 'new_seq',
+      results: [{ doc: newPermissions }],
+    };
+
     jest
       .spyOn(mockCouchDBService, 'get')
-      .mockReturnValue(throwError(() => new Error()));
-    jest.useFakeTimers();
+      .mockImplementation((db, path, params) =>
+        defer(() => {
+          calls++;
+          if (calls < 3) {
+            return throwError(() => new Error());
+          } else if (params.since === 'new_seq') {
+            return NEVER;
+          } else {
+            return of(newResponse);
+          }
+        }),
+      );
 
-    const prom = service.loadRules(DATABASE_NAME);
-    jest.advanceTimersByTime(60000);
+    service.loadRulesContinuously('app');
+    jest.advanceTimersByTime(30000);
 
-    await expect(prom).rejects.toBeDefined();
-    expect(service.getRulesForUser(normalUser)).toEqual([
-      { subject: 'all', action: 'manage' },
-    ]);
+    // 2x error, 1x success, 1x waiting for next change
+    expect(calls).toEqual(4);
+    expect(console.error).toHaveBeenCalledTimes(2);
+    expect(console.error).toHaveBeenCalledWith(
+      'LOAD RULES ERROR:',
+      expect.any(Error),
+    );
+    expect(service.getRulesForUser(normalUser)).toEqual(
+      newPermissions.data[normalUser.roles[0]],
+    );
     jest.useRealTimers();
-  });
-
-  it('should return the rules for every passed user role', () => {
-    let result = service.getRulesForUser(normalUser);
-
-    userRules.forEach((rule) => expect(result).toContainEqual(rule));
-    adminRules.forEach((rule) => expect(result).not.toContainEqual(rule));
-
-    result = service.getRulesForUser(adminUser);
-    expect(result).toEqual(userRules.concat(adminRules));
   });
 
   it('should not fail if no rules exist for a given role', () => {
@@ -102,21 +133,15 @@ describe('RulesService', () => {
     expect(result).toEqual([defaultRule].concat(userRules, adminRules));
   });
 
-  it('should inject user properties', async () => {
-    const permissionWithVariable = new Permission({
-      [normalUser.roles[0]]: [
-        {
-          subject: 'User',
-          action: 'read',
-          conditions: { name: '${user.name}' },
-        },
-      ],
-    });
-    jest
-      .spyOn(mockCouchDBService, 'get')
-      .mockReturnValue(of(permissionWithVariable));
+  it('should inject user properties', () => {
+    testPermission.data[normalUser.roles[0]] = [
+      {
+        subject: 'User',
+        action: 'read',
+        conditions: { name: '${user.name}' },
+      },
+    ];
 
-    await service.loadRules(DATABASE_NAME);
     const rules = service.getRulesForUser(normalUser);
 
     expect(rules).toEqual([
@@ -128,18 +153,14 @@ describe('RulesService', () => {
     ]);
   });
 
-  it('should throw an error if a unknown variable is encountered', async () => {
-    const permission = new Permission({
-      [normalUser.roles[0]]: [
-        {
-          subject: 'User',
-          action: 'update',
-          conditions: { name: '${user.notExistingProperty}' },
-        },
-      ],
-    });
-    jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(permission));
-    await service.loadRules(DATABASE_NAME);
+  it('should throw an error if a unknown variable is encountered', () => {
+    testPermission.data[normalUser.roles[0]] = [
+      {
+        subject: 'User',
+        action: 'update',
+        conditions: { name: '${user.notExistingProperty}' },
+      },
+    ];
     expect(() => service.getRulesForUser(normalUser)).toThrow(ReferenceError);
   });
 
@@ -152,22 +173,5 @@ describe('RulesService', () => {
 
     expect(result).toEqual([publicRule]);
     expect(result).not.toContain(testPermission.data.default);
-  });
-
-  it('should retry loading the rules if it fails', async () => {
-    let calls = 0;
-    jest.spyOn(mockCouchDBService, 'get').mockReturnValue(
-      defer(() => {
-        calls++;
-        if (calls < 3) {
-          return throwError(() => new Error());
-        } else return of(testPermission);
-      }),
-    );
-
-    await service.loadRules('app');
-
-    expect(calls).toEqual(3);
-    expect(service.getRulesForUser(normalUser)).toEqual(userRules);
   });
 });
