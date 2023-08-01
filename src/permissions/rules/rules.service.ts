@@ -3,7 +3,7 @@ import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { Permission, RulesConfig } from './permission';
-import { catchError, concatMap, defer, of, repeat, retry, tap } from 'rxjs';
+import { catchError, concatMap, defer, of, repeat, retry } from 'rxjs';
 import * as _ from 'lodash';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
@@ -28,7 +28,7 @@ export class RulesService {
     const permissionDbName = this.configService.get(
       RulesService.ENV_PERMISSION_DB,
     );
-    this.loadRulesContinuously(permissionDbName).subscribe();
+    this.loadRulesContinuously(permissionDbName);
   }
 
   loadRulesContinuously(db = 'app') {
@@ -44,23 +44,24 @@ export class RulesService {
       }),
     );
 
-    return getParams.pipe(
-      concatMap((params) =>
-        this.couchdbService.get<ChangesResponse>(db, '_changes', params),
-      ),
-      tap((changes) => {
+    return getParams
+      .pipe(
+        concatMap((params) =>
+          this.couchdbService.get<ChangesResponse>(db, '_changes', params),
+        ),
+        catchError((err) => {
+          console.error('LOAD RULES ERROR:', err);
+          throw err;
+        }),
+        retry({ delay: 1000 }),
+        repeat(),
+      )
+      .subscribe((changes) => {
         this.lastSeq = changes.last_seq;
         if (changes.results.length > 0) {
           this.permission = changes.results[0].doc.data;
         }
-      }),
-      catchError((err) => {
-        console.error('LOAD RULES ERROR:', err);
-        throw err;
-      }),
-      retry({ delay: 1000 }),
-      repeat(),
-    );
+      });
   }
   /**
    * Get all rules that are related to the roles of the user

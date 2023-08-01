@@ -29,7 +29,7 @@ describe('RulesService', () => {
     userRules = testPermission.data[normalUser.roles[0]];
     adminRules = testPermission.data[adminUser.roles[1]];
     changesResponse = {
-      last_seq: 'received',
+      last_seq: 'initial_seq',
       results: [{ doc: testPermission }],
     };
     mockCouchDBService = {
@@ -66,12 +66,23 @@ describe('RulesService', () => {
       '_changes',
       expect.anything(),
     );
+    expect(service.getRulesForUser(normalUser)).toEqual(userRules);
+    expect(service.getRulesForUser(adminUser)).toEqual(
+      userRules.concat(adminRules),
+    );
   });
 
   it('should retry loading the rules if it fails', () => {
     jest.useFakeTimers();
     let calls = 0;
-    jest.spyOn(console, 'error');
+    jest.spyOn(console, 'error').mockImplementation();
+    const newPermissions = new Permission({
+      [normalUser.roles[0]]: [{ action: 'manage', subject: 'Child' }],
+    });
+    const newResponse: ChangesResponse = {
+      last_seq: 'new_seq',
+      results: [{ doc: newPermissions }],
+    };
 
     jest
       .spyOn(mockCouchDBService, 'get')
@@ -83,33 +94,25 @@ describe('RulesService', () => {
           } else if (params.since === 'new_seq') {
             return NEVER;
           } else {
-            return of(Object.assign(changesResponse, { last_seq: 'new_seq' }));
+            return of(newResponse);
           }
         }),
       );
 
-    service.loadRulesContinuously('app').subscribe();
+    service.loadRulesContinuously('app');
     jest.advanceTimersByTime(30000);
 
     // 2x error, 1x success, 1x waiting for next change
     expect(calls).toEqual(4);
+    expect(console.error).toHaveBeenCalledTimes(2);
     expect(console.error).toHaveBeenCalledWith(
       'LOAD RULES ERROR:',
       expect.any(Error),
     );
-    expect(console.error).toHaveBeenCalledTimes(2);
-    expect(service.getRulesForUser(normalUser)).toEqual(userRules);
+    expect(service.getRulesForUser(normalUser)).toEqual(
+      newPermissions.data[normalUser.roles[0]],
+    );
     jest.useRealTimers();
-  });
-
-  it('should return the rules for every passed user role', () => {
-    let result = service.getRulesForUser(normalUser);
-
-    userRules.forEach((rule) => expect(result).toContainEqual(rule));
-    adminRules.forEach((rule) => expect(result).not.toContainEqual(rule));
-
-    result = service.getRulesForUser(adminUser);
-    expect(result).toEqual(userRules.concat(adminRules));
   });
 
   it('should not fail if no rules exist for a given role', () => {
@@ -131,21 +134,14 @@ describe('RulesService', () => {
   });
 
   it('should inject user properties', () => {
-    const permissionWithVariable = new Permission({
-      [normalUser.roles[0]]: [
-        {
-          subject: 'User',
-          action: 'read',
-          conditions: { name: '${user.name}' },
-        },
-      ],
-    });
-    jest
-      .spyOn(mockCouchDBService, 'get')
-      .mockReturnValueOnce(of({ results: [{ doc: permissionWithVariable }] }))
-      .mockReturnValueOnce(NEVER);
+    testPermission.data[normalUser.roles[0]] = [
+      {
+        subject: 'User',
+        action: 'read',
+        conditions: { name: '${user.name}' },
+      },
+    ];
 
-    service.loadRulesContinuously().subscribe();
     const rules = service.getRulesForUser(normalUser);
 
     expect(rules).toEqual([
@@ -158,21 +154,13 @@ describe('RulesService', () => {
   });
 
   it('should throw an error if a unknown variable is encountered', () => {
-    const permission = new Permission({
-      [normalUser.roles[0]]: [
-        {
-          subject: 'User',
-          action: 'update',
-          conditions: { name: '${user.notExistingProperty}' },
-        },
-      ],
-    });
-    jest
-      .spyOn(mockCouchDBService, 'get')
-      .mockReturnValueOnce(of({ results: [{ doc: permission }] }))
-      .mockReturnValueOnce(NEVER);
-
-    service.loadRulesContinuously().subscribe();
+    testPermission.data[normalUser.roles[0]] = [
+      {
+        subject: 'User',
+        action: 'update',
+        conditions: { name: '${user.notExistingProperty}' },
+      },
+    ];
     expect(() => service.getRulesForUser(normalUser)).toThrow(ReferenceError);
   });
 
