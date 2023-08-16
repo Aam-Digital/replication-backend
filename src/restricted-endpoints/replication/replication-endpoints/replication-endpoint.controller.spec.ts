@@ -44,6 +44,19 @@ describe('ReplicationEndpointsController', () => {
     expect(controller).toBeDefined();
   });
 
+  it('should overwrite the `include_docs` param in the changes feed', () => {
+    jest.spyOn(mockCouchDBService, 'get');
+
+    controller
+      .changes('someDB', { since: 'now', include_docs: true })
+      .subscribe();
+
+    expect(mockCouchDBService.get).toHaveBeenCalledWith('someDB', '_changes', {
+      since: 'now',
+      include_docs: false,
+    });
+  });
+
   it('should use the document filter service in bulkGet', async () => {
     const bulkGetResponse: BulkGetResponse = {
       results: [
