@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Query,
   UseGuards,
 } from '@nestjs/common';
@@ -35,6 +36,72 @@ export class ReplicationEndpointsController {
     private couchdbService: CouchdbService,
     private documentFilter: BulkDocumentService,
   ) {}
+
+  /**
+   * return information on the whole CouchDB
+   */
+  @Get()
+  couchDBInfo() {
+    return this.couchdbService.get();
+  }
+
+  /**
+   * returns information about a single DB
+   * @param db
+   */
+  @Get([':db'])
+  dbInfo(@Param('db') db: string) {
+    return this.couchdbService.get(db);
+  }
+
+  /**
+   * Reads a local document (which are not synced)
+   * @param db
+   * @param docId
+   */
+  @Get(':db/_local/:docId')
+  getLocalDoc(@Param('db') db: string, @Param('docId') docId: string) {
+    return this.couchdbService.get(db, `_local/${docId}`);
+  }
+
+  /**
+   * Updated a local document
+   * @param db
+   * @param docId
+   * @param body
+   */
+  @Put(':db/_local/:docId')
+  putLocalDoc(
+    @Param('db') db: string,
+    @Param('docId') docId: string,
+    @Body() body,
+  ) {
+    return this.couchdbService.put(db, body);
+  }
+
+  /**
+   * Get changes for a set of revs
+   * @param db
+   * @param body
+   */
+  @Post(':db/_revs_diff')
+  revsDiff(@Param('db') db: string, @Body() body) {
+    return this.couchdbService.post(db, '_revs_diff', body);
+  }
+
+  /**
+   * Get the changes stream.
+   * The `include_docs` params is automatically set to false.
+   * @param db
+   * @param params
+   */
+  @Get(':db/_changes')
+  changes(@Param('db') db: string, @Query() params) {
+    return this.couchdbService.get(db, '_changes', {
+      ...params,
+      include_docs: false,
+    });
+  }
 
   /**
    * Upload multiple documents with a single request.
