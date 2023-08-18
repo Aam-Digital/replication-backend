@@ -18,7 +18,8 @@ import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { PermissionService } from '../../../permissions/permission/permission.service';
 import { firstValueFrom } from 'rxjs';
 import { Request, Response } from 'express';
-import { RestrictedEndpointsModule } from '../../restricted-endpoints.module';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+import { ConfigService } from '@nestjs/config';
 
 /**
  * This controller handles uploading and downloading of attachments.
@@ -28,9 +29,38 @@ import { RestrictedEndpointsModule } from '../../restricted-endpoints.module';
 @UseGuards(CombinedAuthGuard)
 @Controller(':db/:docId/:property')
 export class AttachmentController {
+  private databaseUrl = this.configService.get<string>(
+    CouchdbService.DATABASE_URL_ENV,
+  );
+  private databaseUser = this.configService.get<string>(
+    CouchdbService.DATABASE_USER_ENV,
+  );
+  private databasePassword = this.configService.get<string>(
+    CouchdbService.DATABASE_PASSWORD_ENV,
+  );
+  /**
+   * This proxy allows to send authenticated requests to the real database
+   */
+  proxy = createProxyMiddleware({
+    target: this.databaseUrl,
+    secure: true,
+    changeOrigin: true,
+    followRedirects: false,
+    xfwd: true,
+    autoRewrite: true,
+    onProxyReq: (proxyReq) => {
+      // Removing existing cookie and overwriting header with authorized credentials
+      const authHeader = Buffer.from(
+        `${this.databaseUser}:${this.databasePassword}`,
+      ).toString('base64');
+      proxyReq.setHeader('authorization', `Basic ${authHeader}`);
+      proxyReq.removeHeader('cookie');
+    },
+  });
   constructor(
     private couchDB: CouchdbService,
     private permissions: PermissionService,
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -55,7 +85,7 @@ export class AttachmentController {
     @Res() response: Response,
   ) {
     await this.ensurePermissions(user, 'update', db, docId, property);
-    RestrictedEndpointsModule.proxy(request, response, () => undefined);
+    this.proxy(request, response, () => undefined);
   }
 
   /**
@@ -77,7 +107,7 @@ export class AttachmentController {
     @Res() response: Response,
   ) {
     await this.ensurePermissions(user, 'read', db, docId, property);
-    RestrictedEndpointsModule.proxy(request, response, () => undefined);
+    this.proxy(request, response, () => undefined);
   }
 
   private async ensurePermissions(
