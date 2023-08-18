@@ -9,7 +9,7 @@ import { catchError, map, Observable } from 'rxjs';
 import {
   DatabaseDocument,
   DocSuccess,
-} from '../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
+} from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import {
   SessionResponse,
   UserInfo,
@@ -60,8 +60,8 @@ export class CouchdbService {
   }
 
   get<T extends DatabaseDocument = DatabaseDocument>(
-    databaseName: string,
-    documentID: string,
+    databaseName?: string,
+    documentID?: string,
     params?: any,
   ): Observable<T> {
     return this.httpService
@@ -69,8 +69,15 @@ export class CouchdbService {
       .pipe(map((response) => response.data));
   }
 
-  private buildDocUrl(db: string, documentId: string): string {
-    return `${this.databaseUrl}/${db}/${documentId}`;
+  private buildDocUrl(db?: string, documentId?: string): string {
+    let url = `${this.databaseUrl}/`;
+    if (db) {
+      url += `${db}/`;
+    }
+    if (documentId) {
+      url += documentId;
+    }
+    return url;
   }
 
   put(dbName: string, document: DatabaseDocument): Observable<DocSuccess> {

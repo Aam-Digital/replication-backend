@@ -7,7 +7,7 @@ import { catchError, concatMap, defer, of, repeat, retry } from 'rxjs';
 import * as _ from 'lodash';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
-import { ChangesResponse } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/changes.dto';
+import { ChangesResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 

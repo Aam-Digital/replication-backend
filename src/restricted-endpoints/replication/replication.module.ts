@@ -4,10 +4,11 @@ import { ReplicationEndpointsController } from './replication-endpoints/replicat
 import { BulkDocumentService } from './bulk-document/bulk-document.service';
 import { PermissionModule } from '../../permissions/permission.module';
 import { AuthModule } from '../../auth/auth.module';
+import { BulkDocEndpointsController } from './bulk-document/bulk-doc-endpoints.controller';
 
 @Module({
   imports: [HttpModule, PermissionModule, AuthModule],
-  controllers: [ReplicationEndpointsController],
+  controllers: [ReplicationEndpointsController, BulkDocEndpointsController],
   providers: [BulkDocumentService],
 })
 export class ReplicationModule {}

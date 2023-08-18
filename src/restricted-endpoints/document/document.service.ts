@@ -3,7 +3,7 @@ import { UserInfo } from '../session/user-auth.dto';
 import {
   DatabaseDocument,
   DocSuccess,
-} from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
+} from '../replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { firstValueFrom } from 'rxjs';
 import {
   DocumentAbility,

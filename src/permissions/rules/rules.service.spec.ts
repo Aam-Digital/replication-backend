@@ -5,7 +5,7 @@ import { defer, NEVER, of, throwError } from 'rxjs';
 import { Permission } from './permission';
 import { ConfigService } from '@nestjs/config';
 import { CouchdbService } from '../../couchdb/couchdb.service';
-import { ChangesResponse } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/changes.dto';
+import { ChangesResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
 
 describe('RulesService', () => {
   let service: RulesService;

@@ -1,8 +1,8 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
-  Body,
   Put,
   Query,
   UseGuards,
@@ -11,7 +11,7 @@ import { UserInfo } from '../session/user-auth.dto';
 import {
   DatabaseDocument,
   DocSuccess,
-} from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
+} from '../replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { DocumentService } from './document.service';
 import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../auth/user.decorator';

@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { RulesService } from '../rules/rules.service';
 import { Ability, AbilityClass, InferSubjects } from '@casl/ability';
-import { DatabaseDocument } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
+import { DatabaseDocument } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 
 const actions = [
   'read',
@@ -12,7 +12,7 @@ const actions = [
   'manage', // Matches any actions
 ] as const;
 
-type Actions = typeof actions[number];
+type Actions = (typeof actions)[number];
 type Subjects = InferSubjects<typeof DatabaseDocument> | string;
 export type DocumentAbility = Ability<[Actions, Subjects]>;
 export const DocumentAbility = Ability as AbilityClass<DocumentAbility>;

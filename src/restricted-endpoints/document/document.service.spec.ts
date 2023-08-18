@@ -8,7 +8,7 @@ import {
 } from '../../permissions/permission/permission.service';
 import { DocumentRule } from '../../permissions/rules/rules.service';
 import { UnauthorizedException } from '@nestjs/common';
-import { DocSuccess } from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
+import { DocSuccess } from '../replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { COUCHDB_USER_DOC, UserInfo } from '../session/user-auth.dto';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 

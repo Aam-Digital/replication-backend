@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { DocumentController } from './document.controller';
 import { DocumentService } from './document.service';
-import { DocSuccess } from '../replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
+import { DocSuccess } from '../replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../session/user-auth.dto';
 import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
 
