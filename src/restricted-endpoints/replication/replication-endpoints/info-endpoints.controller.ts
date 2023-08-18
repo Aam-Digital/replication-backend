@@ -5,7 +5,6 @@ import {
   Param,
   Post,
   Put,
-  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
@@ -22,7 +21,7 @@ import { OnlyAuthenticated } from '../../../auth/only-authenticated.decorator';
 @OnlyAuthenticated()
 @UseGuards(CombinedAuthGuard)
 @Controller()
-export class ReplicationEndpointsController {
+export class InfoEndpointsController {
   constructor(private couchdbService: CouchdbService) {}
 
   /**
@@ -76,19 +75,5 @@ export class ReplicationEndpointsController {
   @Post(':db/_revs_diff')
   revsDiff(@Param('db') db: string, @Body() body) {
     return this.couchdbService.post(db, '_revs_diff', body);
-  }
-
-  /**
-   * Get the changes stream.
-   * The `include_docs` params is automatically set to false.
-   * @param db
-   * @param params
-   */
-  @Get(':db/_changes')
-  changes(@Param('db') db: string, @Query() params) {
-    return this.couchdbService.get(db, '_changes', {
-      ...params,
-      include_docs: false,
-    });
   }
 }

@@ -30,7 +30,9 @@ describe('RulesService', () => {
     adminRules = testPermission.data[adminUser.roles[1]];
     changesResponse = {
       last_seq: 'initial_seq',
-      results: [{ doc: testPermission }],
+      results: [
+        { doc: testPermission, seq: '', changes: [], id: testPermission._id },
+      ],
     };
     mockCouchDBService = {
       get: () => undefined,
@@ -81,7 +83,7 @@ describe('RulesService', () => {
     });
     const newResponse: ChangesResponse = {
       last_seq: 'new_seq',
-      results: [{ doc: newPermissions }],
+      results: [{ ...changesResponse.results[0], doc: newPermissions }],
     };
 
     jest
