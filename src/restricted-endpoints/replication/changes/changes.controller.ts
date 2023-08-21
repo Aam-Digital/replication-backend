@@ -24,7 +24,8 @@ export class ChangesController {
 
   /**
    * Get the changes stream.
-   * The `include_docs` params is automatically set to false.
+   * The changes feed only returns the doc IDs to which the requesting user has access.
+   * Even if `include_docs: true` is set, the stream will not return the document content.
    * @param db
    * @param params
    * @param user
@@ -35,7 +36,6 @@ export class ChangesController {
     @Query() params,
     @User() user: UserInfo,
   ): Observable<ChangesResponse> {
-    // TODO check if longpoll is still working
     return this.couchdbService
       .get<ChangesResponse>(db, '_changes', {
         ...params,
