@@ -15,7 +15,7 @@ import { omit } from 'lodash';
 
 @OnlyAuthenticated()
 @UseGuards(CombinedAuthGuard)
-@Controller('changes')
+@Controller()
 export class ChangesController {
   constructor(
     private couchdbService: CouchdbService,

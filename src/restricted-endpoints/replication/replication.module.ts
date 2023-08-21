@@ -5,10 +5,15 @@ import { BulkDocumentService } from './bulk-document/bulk-document.service';
 import { PermissionModule } from '../../permissions/permission.module';
 import { AuthModule } from '../../auth/auth.module';
 import { BulkDocEndpointsController } from './bulk-document/bulk-doc-endpoints.controller';
+import { ChangesController } from './changes/changes.controller';
 
 @Module({
   imports: [HttpModule, PermissionModule, AuthModule],
-  controllers: [InfoEndpointsController, BulkDocEndpointsController],
+  controllers: [
+    ChangesController,
+    InfoEndpointsController,
+    BulkDocEndpointsController,
+  ],
   providers: [BulkDocumentService],
 })
 export class ReplicationModule {}
