@@ -16,5 +16,5 @@ export interface ChangeResult {
 export interface ChangesParams {
   limit: number;
   since: string;
-  include_docs: boolean;
+  include_docs: string;
 }

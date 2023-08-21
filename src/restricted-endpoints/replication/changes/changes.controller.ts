@@ -13,7 +13,6 @@ import {
   DocumentAbility,
   PermissionService,
 } from '../../../permissions/permission/permission.service';
-import { DatabaseDocument } from '../bulk-document/couchdb-dtos/bulk-docs.dto';
 import { omit } from 'lodash';
 
 @OnlyAuthenticated()
@@ -39,66 +38,64 @@ export class ChangesController {
     @Query() params: ChangesParams,
     @User() user: UserInfo,
   ): Promise<ChangesResponse> {
-    const changes: ChangesResponse[] = [];
-    let permittedChanges = 0;
+    const ability = this.permissionService.getAbilityFor(user);
+    const change = { results: [] } as ChangesResponse;
     let since = params.since;
-    if (params.limit) {
-      while (permittedChanges < params.limit) {
-        const res = await firstValueFrom(
-          this.couchdbService
-            .get<ChangesResponse>(db, '_changes', {
-              ...params,
-              since,
-              include_docs: true,
-            })
-            .pipe(map((res) => this.filterChanges(res, user))),
-        );
-        changes.push(res);
-        if (res.pending === 0) {
-          break;
-        }
-        since = res.last_seq;
-        permittedChanges += res.results.length;
+    while (true) {
+      const res = await this.getPermittedChanges(
+        db,
+        { ...params, since },
+        ability,
+      );
+      // missing documents till limit
+      const missing = params.limit - change.results.length;
+      // overflow documents of this request
+      const discarded = Math.max(change.results.length - missing, 0);
+      change.results.push(...res.results.slice(0, missing));
+      change.last_seq =
+        change.results.length > 0
+          ? change.results[change.results.length - 1].seq
+          : undefined;
+      change.pending = res.pending + discarded;
+      if (
+        !params.limit ||
+        change.pending === 0 ||
+        change.results.length >= params.limit
+      ) {
+        // enough docs found or none left
+        break;
       }
-      const combinedChanges = { results: [] } as ChangesResponse;
-      for (const change of changes) {
-        if (
-          combinedChanges.results.length + change.results.length <
-          params.limit
-        ) {
-          combinedChanges.results.push(...change.results);
-          combinedChanges.pending = change.pending;
-          combinedChanges.last_seq = change.last_seq;
-        } else if (
-          combinedChanges.results.length + change.results.length >=
-          params.limit
-        ) {
-          const missing = params.limit - combinedChanges.results.length;
-          const discarded = change.results.length - missing;
-          combinedChanges.results.push(...change.results);
-          combinedChanges.last_seq =
-            combinedChanges.results[combinedChanges.results.length - 1].seq;
-          combinedChanges.pending = change.pending + discarded;
-          break;
-        }
-      }
-      return combinedChanges;
+      since = res.last_seq;
     }
+    if (params.include_docs !== 'true') {
+      // remove docs if not requested
+      change.results = change.results.map((c) => omit(c, 'doc'));
+    }
+    return change;
+  }
+
+  getPermittedChanges(
+    db: string,
+    params: ChangesParams,
+    ability: DocumentAbility,
+  ): Promise<ChangesResponse> {
+    return firstValueFrom(
+      this.couchdbService
+        .get<ChangesResponse>(db, '_changes', {
+          ...params,
+          include_docs: true,
+        })
+        .pipe(map((res) => this.filterChanges(res, ability))),
+    );
   }
 
   private filterChanges(
     changes: ChangesResponse,
-    user: UserInfo,
+    ability: DocumentAbility,
   ): ChangesResponse {
-    const ability = this.permissionService.getAbilityFor(user);
-    changes.results = changes.results
-      .filter((change) => this.canReadDoc(change.doc, ability))
-      .map((change) => omit(change, 'doc'));
+    changes.results = changes.results.filter(
+      ({ doc }) => doc._deleted || ability.can('read', doc),
+    );
     return changes;
-  }
-
-  private canReadDoc(doc: DatabaseDocument, ability: DocumentAbility) {
-    // TODO test if deleted doc content can be retrieved
-    return doc._deleted || ability.can('read', doc);
   }
 }
