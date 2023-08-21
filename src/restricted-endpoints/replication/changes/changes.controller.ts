@@ -1,7 +1,10 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import { ChangesResponse } from '../bulk-document/couchdb-dtos/changes.dto';
+import {
+  ChangesParams,
+  ChangesResponse,
+} from '../bulk-document/couchdb-dtos/changes.dto';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
-import { map, Observable } from 'rxjs';
+import { firstValueFrom, map } from 'rxjs';
 import { OnlyAuthenticated } from '../../../auth/only-authenticated.decorator';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../../auth/user.decorator';
@@ -31,17 +34,56 @@ export class ChangesController {
    * @param user
    */
   @Get(':db/_changes')
-  changes(
+  async changes(
     @Param('db') db: string,
-    @Query() params,
+    @Query() params: ChangesParams,
     @User() user: UserInfo,
-  ): Observable<ChangesResponse> {
-    return this.couchdbService
-      .get<ChangesResponse>(db, '_changes', {
-        ...params,
-        include_docs: true,
-      })
-      .pipe(map((res) => this.filterChanges(res, user)));
+  ): Promise<ChangesResponse> {
+    const changes: ChangesResponse[] = [];
+    let permittedChanges = 0;
+    let since = params.since;
+    if (params.limit) {
+      while (permittedChanges < params.limit) {
+        const res = await firstValueFrom(
+          this.couchdbService
+            .get<ChangesResponse>(db, '_changes', {
+              ...params,
+              since,
+              include_docs: true,
+            })
+            .pipe(map((res) => this.filterChanges(res, user))),
+        );
+        changes.push(res);
+        if (res.pending === 0) {
+          break;
+        }
+        since = res.last_seq;
+        permittedChanges += res.results.length;
+      }
+      const combinedChanges = { results: [] } as ChangesResponse;
+      for (const change of changes) {
+        if (
+          combinedChanges.results.length + change.results.length <
+          params.limit
+        ) {
+          combinedChanges.results.push(...change.results);
+          combinedChanges.pending = change.pending;
+          combinedChanges.last_seq = change.last_seq;
+        } else if (
+          combinedChanges.results.length + change.results.length >=
+          params.limit
+        ) {
+          const missing = params.limit - combinedChanges.results.length;
+          const discarded = change.results.length - missing;
+          combinedChanges.results.push(...change.results);
+          combinedChanges.last_seq =
+            combinedChanges.results[combinedChanges.results.length - 1].seq;
+          combinedChanges.pending = change.pending + discarded;
+          break;
+        }
+      }
+      return combinedChanges;
+    }
   }
 
   private filterChanges(
@@ -56,6 +98,7 @@ export class ChangesController {
   }
 
   private canReadDoc(doc: DatabaseDocument, ability: DocumentAbility) {
+    // TODO test if deleted doc content can be retrieved
     return doc._deleted || ability.can('read', doc);
   }
 }
