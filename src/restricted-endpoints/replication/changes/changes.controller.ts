@@ -48,7 +48,7 @@ export class ChangesController {
         ability,
       );
       // missing documents till limit
-      const missing = params.limit - change.results.length;
+      const missing = (params.limit ?? Infinity) - change.results.length;
       // overflow documents of this request
       const discarded = Math.max(res.results.length - missing, 0);
       change.results.push(...res.results.slice(0, missing));
@@ -67,7 +67,7 @@ export class ChangesController {
       since = res.last_seq;
     }
     if (params.include_docs !== 'true') {
-      // remove docs if not requested
+      // remove doc content if not requested
       change.results = change.results.map((c) => omit(c, 'doc'));
     }
     return change;
