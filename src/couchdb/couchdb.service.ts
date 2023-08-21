@@ -52,7 +52,7 @@ export class CouchdbService {
   private initMapAxiosErrorsToNestjsExceptions() {
     this.httpService.axiosRef.interceptors.response.use(undefined, (err) => {
       if (!err.response) {
-        throw new HttpException('unknown', 400);
+        throw err;
       } else {
         throw new HttpException(err.response.data, err.response.status);
       }
