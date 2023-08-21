@@ -50,12 +50,11 @@ export class ChangesController {
       // missing documents till limit
       const missing = params.limit - change.results.length;
       // overflow documents of this request
-      const discarded = Math.max(change.results.length - missing, 0);
+      const discarded = Math.max(res.results.length - missing, 0);
       change.results.push(...res.results.slice(0, missing));
-      change.last_seq =
-        change.results.length > 0
-          ? change.results[change.results.length - 1].seq
-          : undefined;
+      if (change.results.length > 0) {
+        change.last_seq = change.results[change.results.length - 1].seq;
+      }
       change.pending = res.pending + discarded;
       if (
         !params.limit ||
