@@ -93,7 +93,10 @@ export class ChangesController {
     ability: DocumentAbility,
   ): ChangesResponse {
     changes.results = changes.results.filter(
-      ({ doc }) => doc._deleted || ability.can('read', doc),
+      ({ doc }) =>
+        // deleted doc without properties besides _id, _rev and _deleted
+        (doc._deleted && Object.keys(doc).length === 3) ||
+        ability.can('read', doc),
     );
     return changes;
   }

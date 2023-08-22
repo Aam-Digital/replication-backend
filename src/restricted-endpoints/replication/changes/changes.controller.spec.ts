@@ -9,7 +9,7 @@ import {
 } from '../bulk-document/couchdb-dtos/changes.dto';
 import { DatabaseDocument } from '../bulk-document/couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
-import { of } from 'rxjs';
+import { Observable, of } from 'rxjs';
 import { RulesService } from '../../../permissions/rules/rules.service';
 
 describe('ChangesController', () => {
@@ -132,8 +132,8 @@ describe('ChangesController', () => {
   it('should keep requesting docs until the limit is reached', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
     getSpy
-      .mockReturnValueOnce(of(createChanges([schoolDoc, privateSchoolDoc], 2)))
-      .mockReturnValueOnce(of(createChanges([childDoc, deletedChildDoc])));
+      .mockReturnValueOnce(createChanges([schoolDoc, privateSchoolDoc], 2))
+      .mockReturnValueOnce(createChanges([childDoc, deletedChildDoc]));
 
     const res = await controller.changes('some-db', user, { limit: 2 });
 
@@ -148,10 +148,8 @@ describe('ChangesController', () => {
   it('should not return more changes than requested', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
     getSpy
-      .mockReturnValueOnce(
-        of(createChanges([schoolDoc, childDoc, childDoc], 2)),
-      )
-      .mockReturnValueOnce(of(createChanges([schoolDoc, childDoc, childDoc])));
+      .mockReturnValueOnce(createChanges([schoolDoc, childDoc, childDoc], 3))
+      .mockReturnValueOnce(createChanges([schoolDoc, childDoc, childDoc]));
 
     const res = await controller.changes('some-db', user, { limit: 3 });
 
@@ -173,20 +171,43 @@ describe('ChangesController', () => {
     ]);
   });
 
+  it('should not return docs of deleted documents that still have other properties', async () => {
+    const deletedWithoutProps: DatabaseDocument = {
+      _id: 'School:deletedWithout',
+      _rev: '1-rev-without',
+      _deleted: true,
+    };
+    const deletedWithProps: DatabaseDocument = {
+      _id: 'School:deletedWith',
+      _rev: '1-rev-with',
+      _deleted: true,
+      private: true,
+    };
+    getSpy.mockReturnValue(
+      createChanges([deletedWithProps, deletedWithoutProps]),
+    );
+
+    const res = await controller.changes('some-db', user, {
+      include_docs: 'true',
+    });
+
+    expect(res.results).toEqual([docToChange(deletedWithoutProps)]);
+  });
+
   function createChanges(
     docs: DatabaseDocument[],
     pending = 0,
-  ): ChangesResponse {
-    return {
+  ): Observable<ChangesResponse> {
+    return of({
       pending,
       last_seq: docToChange(docs[docs.length - 1]).seq,
       results: docs.map(docToChange),
-    };
+    });
   }
 
   function docToChange(doc: DatabaseDocument): ChangeResult {
     return {
-      doc,
+      doc: { ...doc, _rev: `1-rev-${doc._id}` },
       id: doc._id,
       changes: [{ rev: `rev-${doc._id}` }],
       seq: `seq-${doc._id}`,
