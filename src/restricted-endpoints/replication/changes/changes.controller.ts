@@ -36,7 +36,7 @@ export class ChangesController {
   async changes(
     @Param('db') db: string,
     @User() user: UserInfo,
-    @Query() params: ChangesParams,
+    @Query() params?: ChangesParams,
   ): Promise<ChangesResponse> {
     const ability = this.permissionService.getAbilityFor(user);
     const change = { results: [] } as ChangesResponse;

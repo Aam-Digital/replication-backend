@@ -5,21 +5,15 @@ import { PermissionService } from '../../../permissions/permission/permission.se
 import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
 import {
   ChangeResult,
-  ChangesParams,
   ChangesResponse,
 } from '../bulk-document/couchdb-dtos/changes.dto';
 import { DatabaseDocument } from '../bulk-document/couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
 import { of } from 'rxjs';
-import {
-  DocumentRule,
-  RulesService,
-} from '../../../permissions/rules/rules.service';
+import { RulesService } from '../../../permissions/rules/rules.service';
 
 describe('ChangesController', () => {
   let controller: ChangesController;
-  let mockCouchdbService: CouchdbService;
-  let mockRulesService: RulesService;
   const schoolDoc: DatabaseDocument = { _id: 'School:1' };
   const privateSchoolDoc: DatabaseDocument = { _id: 'School:2', private: true };
   const childDoc: DatabaseDocument = { _id: 'Child:1' };
@@ -32,7 +26,6 @@ describe('ChangesController', () => {
     pending: 0,
   };
   const user: UserInfo = { name: 'username', roles: [] };
-
   function docToChange(doc: DatabaseDocument): ChangeResult {
     return {
       doc,
@@ -41,10 +34,19 @@ describe('ChangesController', () => {
       seq: `seq-${doc._id}`,
     };
   }
+  const mockCouchdbService = { get: () => undefined } as CouchdbService;
+  const getSpy = jest.spyOn(mockCouchdbService, 'get');
+  const mockRulesService = {
+    getRulesForUser: () => undefined,
+  } as any as RulesService;
+  const getRulesSpy = jest.spyOn(mockRulesService, 'getRulesForUser');
 
   beforeEach(async () => {
-    mockCouchdbService = { get: () => undefined } as any;
-    mockRulesService = { getRulesForUser: () => undefined } as any;
+    getSpy.mockReset();
+    getRulesSpy.mockReset();
+    jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of({ ...changes }));
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([]);
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ChangesController],
       providers: [
@@ -63,14 +65,14 @@ describe('ChangesController', () => {
   });
 
   it('should use the rules of the requesting user', () => {
-    getChangesForPermissions([]);
+    controller.changes('some-db', user);
 
     expect(mockRulesService.getRulesForUser).toHaveBeenCalledWith(user);
   });
 
   it('should forward params', () => {
     const params = { since: 'now', feed: 'continuous', limit: 500 };
-    getChangesForPermissions([], params);
+    controller.changes('some-db', user, params);
 
     expect(mockCouchdbService.get).toHaveBeenCalledWith('some-db', '_changes', {
       ...params,
@@ -79,9 +81,9 @@ describe('ChangesController', () => {
   });
 
   it('should return all changes if user is allowed to read everything', async () => {
-    const res = await getChangesForPermissions([
-      { subject: 'all', action: 'manage' },
-    ]);
+    getRulesSpy.mockReturnValue([{ subject: 'all', action: 'manage' }]);
+
+    const res = await controller.changes('some-db', user);
 
     expect(res.results.map((r) => r.id)).toEqual([
       schoolDoc._id,
@@ -92,10 +94,12 @@ describe('ChangesController', () => {
   });
 
   it('should filter out changes for which the user does not have access', async () => {
-    const res = await getChangesForPermissions([
+    getRulesSpy.mockReturnValue([
       { subject: 'School', action: 'read', conditions: { private: true } },
       { subject: 'Child', action: 'manage' },
     ]);
+
+    const res = await controller.changes('some-db', user);
 
     expect(res.results.map((r) => r.id)).toEqual([
       privateSchoolDoc._id,
@@ -105,9 +109,9 @@ describe('ChangesController', () => {
   });
 
   it('should always return deleted docs', async () => {
-    const res = await getChangesForPermissions([
-      { subject: 'School', action: 'read' },
-    ]);
+    getRulesSpy.mockReturnValue([{ subject: 'School', action: 'read' }]);
+
+    const res = await controller.changes('some-db', user);
 
     expect(res.results.map((r) => r.id)).toEqual([
       schoolDoc._id,
@@ -117,29 +121,20 @@ describe('ChangesController', () => {
   });
 
   it('should not return the document content on default', async () => {
-    const res = await getChangesForPermissions([
-      { subject: 'School', action: 'read' },
-    ]);
+    getRulesSpy.mockReturnValue([{ subject: 'School', action: 'read' }]);
+
+    const res = await controller.changes('some-db', user);
 
     res.results.forEach((r) => expect(r.doc).toBeUndefined());
   });
 
   it('should return the document content if requested', async () => {
-    const res = await getChangesForPermissions(
-      [{ subject: 'School', action: 'read' }],
-      { include_docs: 'true' },
-    );
+    getRulesSpy.mockReturnValue([{ subject: 'School', action: 'read' }]);
+
+    const res = await controller.changes('some-db', user, {
+      include_docs: 'true',
+    });
 
     res.results.forEach((r) => expect(r.doc).toBeDefined());
   });
-
-  function getChangesForPermissions(
-    rules: DocumentRule[],
-    params?: ChangesParams,
-  ) {
-    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue(rules);
-    jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of({ ...changes }));
-
-    return controller.changes('some-db', user, params);
-  }
 });
