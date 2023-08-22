@@ -18,22 +18,13 @@ describe('ChangesController', () => {
   const privateSchoolDoc: DatabaseDocument = { _id: 'School:2', private: true };
   const childDoc: DatabaseDocument = { _id: 'Child:1' };
   const deletedChildDoc: DatabaseDocument = { _id: 'Child:2', _deleted: true };
-  const changes: ChangesResponse = {
-    last_seq: 'some_seq',
-    results: [schoolDoc, privateSchoolDoc, childDoc, deletedChildDoc].map(
-      docToChange,
-    ),
-    pending: 0,
-  };
+  const changes = createChanges([
+    schoolDoc,
+    privateSchoolDoc,
+    childDoc,
+    deletedChildDoc,
+  ]);
   const user: UserInfo = { name: 'username', roles: [] };
-  function docToChange(doc: DatabaseDocument): ChangeResult {
-    return {
-      doc,
-      id: doc._id,
-      changes: [{ rev: `rev-${doc._id}` }],
-      seq: `seq-${doc._id}`,
-    };
-  }
   const mockCouchdbService = { get: () => undefined } as CouchdbService;
   const getSpy = jest.spyOn(mockCouchdbService, 'get');
   const mockRulesService = {
@@ -140,17 +131,9 @@ describe('ChangesController', () => {
 
   it('should keep requesting docs until the limit is reached', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
-    const change1: ChangesResponse = {
-      results: [schoolDoc, privateSchoolDoc].map(docToChange),
-      pending: 2,
-      last_seq: docToChange(privateSchoolDoc).seq,
-    };
-    const change2: ChangesResponse = {
-      results: [childDoc, deletedChildDoc].map(docToChange),
-      pending: 0,
-      last_seq: docToChange(deletedChildDoc).seq,
-    };
-    getSpy.mockReturnValueOnce(of(change1)).mockReturnValueOnce(of(change2));
+    getSpy
+      .mockReturnValueOnce(of(createChanges([schoolDoc, privateSchoolDoc], 2)))
+      .mockReturnValueOnce(of(createChanges([childDoc, deletedChildDoc])));
 
     const res = await controller.changes('some-db', user, { limit: 2 });
 
@@ -164,14 +147,11 @@ describe('ChangesController', () => {
 
   it('should not return more changes than requested', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
-    const change: ChangesResponse = {
-      results: [schoolDoc, childDoc, childDoc].map(docToChange),
-      pending: 3,
-      last_seq: docToChange(childDoc).seq,
-    };
     getSpy
-      .mockReturnValueOnce(of({ ...change }))
-      .mockReturnValueOnce(of({ ...change, pending: 0 }));
+      .mockReturnValueOnce(
+        of(createChanges([schoolDoc, childDoc, childDoc], 2)),
+      )
+      .mockReturnValueOnce(of(createChanges([schoolDoc, childDoc, childDoc])));
 
     const res = await controller.changes('some-db', user, { limit: 3 });
 
@@ -192,4 +172,24 @@ describe('ChangesController', () => {
       deletedChildDoc._id,
     ]);
   });
+
+  function createChanges(
+    docs: DatabaseDocument[],
+    pending = 0,
+  ): ChangesResponse {
+    return {
+      pending,
+      last_seq: docToChange(docs[docs.length - 1]).seq,
+      results: docs.map(docToChange),
+    };
+  }
+
+  function docToChange(doc: DatabaseDocument): ChangeResult {
+    return {
+      doc,
+      id: doc._id,
+      changes: [{ rev: `rev-${doc._id}` }],
+      seq: `seq-${doc._id}`,
+    };
+  }
 });
