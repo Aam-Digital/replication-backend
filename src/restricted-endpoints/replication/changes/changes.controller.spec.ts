@@ -137,4 +137,59 @@ describe('ChangesController', () => {
 
     res.results.forEach((r) => expect(r.doc).toBeDefined());
   });
+
+  it('should keep requesting docs until the limit is reached', async () => {
+    getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
+    const change1: ChangesResponse = {
+      results: [schoolDoc, privateSchoolDoc].map(docToChange),
+      pending: 2,
+      last_seq: docToChange(privateSchoolDoc).seq,
+    };
+    const change2: ChangesResponse = {
+      results: [childDoc, deletedChildDoc].map(docToChange),
+      pending: 0,
+      last_seq: docToChange(deletedChildDoc).seq,
+    };
+    getSpy.mockReturnValueOnce(of(change1)).mockReturnValueOnce(of(change2));
+
+    const res = await controller.changes('some-db', user, { limit: 2 });
+
+    expect(res.pending).toBe(0);
+    expect(res.last_seq).toBe(docToChange(deletedChildDoc).seq);
+    expect(res.results.map((r) => r.id)).toEqual([
+      childDoc._id,
+      deletedChildDoc._id,
+    ]);
+  });
+
+  it('should not return more changes than requested', async () => {
+    getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
+    const change: ChangesResponse = {
+      results: [schoolDoc, childDoc, childDoc].map(docToChange),
+      pending: 3,
+      last_seq: docToChange(childDoc).seq,
+    };
+    getSpy
+      .mockReturnValueOnce(of({ ...change }))
+      .mockReturnValueOnce(of({ ...change, pending: 0 }));
+
+    const res = await controller.changes('some-db', user, { limit: 3 });
+
+    expect(res.pending).toBe(1);
+    expect(res.last_seq).toBe(docToChange(childDoc).seq);
+    res.results.forEach(({ id }) => expect(id).toBe(childDoc._id));
+  });
+
+  it('should only return remaining changes if not enough were found', async () => {
+    getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
+
+    const res = await controller.changes('some-db', user, { limit: 3 });
+
+    expect(res.pending).toBe(0);
+    expect(res.last_seq).toBe(docToChange(deletedChildDoc).seq);
+    expect(res.results.map((r) => r.id)).toEqual([
+      childDoc._id,
+      deletedChildDoc._id,
+    ]);
+  });
 });
