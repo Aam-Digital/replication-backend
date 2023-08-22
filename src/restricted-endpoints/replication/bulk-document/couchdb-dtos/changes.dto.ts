@@ -14,7 +14,8 @@ export interface ChangeResult {
 }
 
 export interface ChangesParams {
-  limit: number;
-  since: string;
-  include_docs: string;
+  limit?: number;
+  since?: string;
+  include_docs?: string;
+  [key: string]: any;
 }

@@ -35,12 +35,12 @@ export class ChangesController {
   @Get(':db/_changes')
   async changes(
     @Param('db') db: string,
-    @Query() params: ChangesParams,
     @User() user: UserInfo,
+    @Query() params: ChangesParams,
   ): Promise<ChangesResponse> {
     const ability = this.permissionService.getAbilityFor(user);
     const change = { results: [] } as ChangesResponse;
-    let since = params.since;
+    let since = params?.since;
     while (true) {
       const res = await this.getPermittedChanges(
         db,
@@ -48,7 +48,7 @@ export class ChangesController {
         ability,
       );
       // missing documents till limit
-      const missing = (params.limit ?? Infinity) - change.results.length;
+      const missing = (params?.limit ?? Infinity) - change.results.length;
       // overflow documents of this request
       const discarded = Math.max(res.results.length - missing, 0);
       change.results.push(...res.results.slice(0, missing));
@@ -57,7 +57,7 @@ export class ChangesController {
       }
       change.pending = res.pending + discarded;
       if (
-        !params.limit ||
+        !params?.limit ||
         change.pending === 0 ||
         change.results.length >= params.limit
       ) {
@@ -66,7 +66,7 @@ export class ChangesController {
       }
       since = res.last_seq;
     }
-    if (params.include_docs !== 'true') {
+    if (params?.include_docs !== 'true') {
       // remove doc content if not requested
       change.results = change.results.map((c) => omit(c, 'doc'));
     }
