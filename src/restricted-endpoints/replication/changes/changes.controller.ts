@@ -47,9 +47,9 @@ export class ChangesController {
         { ...params, since },
         ability,
       );
-      // missing documents till limit
+      // missing changes till limit
       const missing = (params?.limit ?? Infinity) - change.results.length;
-      // overflow documents of this request
+      // overflow changes of this request
       const discarded = Math.max(res.results.length - missing, 0);
       change.results.push(...res.results.slice(0, missing));
       if (change.results.length > 0) {
@@ -61,7 +61,7 @@ export class ChangesController {
         change.pending === 0 ||
         change.results.length >= params.limit
       ) {
-        // enough docs found or none left
+        // enough changes found or none left
         break;
       }
       since = res.last_seq;
