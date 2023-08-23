@@ -16,7 +16,10 @@ import { UserInfo } from '../../session/user-auth.dto';
 import { ApiQuery } from '@nestjs/swagger';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
-import { PermissionService } from '../../../permissions/permission/permission.service';
+import {
+  Action,
+  PermissionService,
+} from '../../../permissions/permission/permission.service';
 import { firstValueFrom } from 'rxjs';
 import { Request, Response } from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
@@ -113,7 +116,7 @@ export class AttachmentController {
   }
 
   /**
-   * Returns an attachment if the user has `read` permissions.
+   * Deletes an attachment if the user has `read` permissions.
    * @param db name of the database
    * @param docId name of the attachment database (`...-attachments`)
    * @param property on the entity where the file name is stored
@@ -128,13 +131,13 @@ export class AttachmentController {
     @Query() params: QueryParams,
     @User() user: UserInfo,
   ) {
-    await this.ensurePermissions(user, 'read', db, docId, property);
+    await this.ensurePermissions(user, 'delete', db, docId, property);
     return this.couchDB.delete(db, `${docId}/${property}`, params);
   }
 
   private async ensurePermissions(
     user: UserInfo,
-    action: 'read' | 'update' | 'delete',
+    action: Action,
     db: string,
     docId: string,
     property: string,

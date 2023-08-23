@@ -82,7 +82,6 @@ export class DocumentController {
     @Param('docId') docId: string,
     @User() user: UserInfo,
     @Query() queryParams?: QueryParams,
-    // This is just for the Swagger interface
   ) {
     return this.documentService.deleteDocument(db, docId, user, queryParams);
   }

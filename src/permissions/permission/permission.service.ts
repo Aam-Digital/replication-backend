@@ -12,9 +12,9 @@ const actions = [
   'manage', // Matches any actions
 ] as const;
 
-type Actions = (typeof actions)[number];
-type Subjects = InferSubjects<typeof DatabaseDocument> | string;
-export type DocumentAbility = Ability<[Actions, Subjects]>;
+export type Action = (typeof actions)[number];
+type Subject = InferSubjects<typeof DatabaseDocument> | string;
+export type DocumentAbility = Ability<[Action, Subject]>;
 export const DocumentAbility = Ability as AbilityClass<DocumentAbility>;
 
 export function detectDocumentType(subject: DatabaseDocument): string {
