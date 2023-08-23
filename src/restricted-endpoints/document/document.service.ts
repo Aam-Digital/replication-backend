@@ -67,6 +67,25 @@ export class DocumentService {
     }
   }
 
+  async deleteDocument(
+    databaseName: string,
+    documentID: string,
+    requestingUser: UserInfo,
+    queryParams?: any,
+  ) {
+    const userAbility = this.permissionService.getAbilityFor(requestingUser);
+    const document = await firstValueFrom(
+      this.couchdbService.get(databaseName, documentID, queryParams),
+    );
+    if (userAbility.can('delete', document)) {
+      return firstValueFrom(
+        this.couchdbService.delete(databaseName, documentID, queryParams),
+      );
+    } else {
+      throw new UnauthorizedException('unauthorized', 'User is not permitted');
+    }
+  }
+
   /**
    * Selectively apply changed properties only if the user has permissions for that specific property.
    *

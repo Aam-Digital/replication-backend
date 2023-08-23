@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Put,
@@ -64,5 +65,26 @@ export class DocumentController {
   ): Promise<DocSuccess> {
     document._id = docId;
     return this.documentService.putDocument(db, document, user);
+  }
+
+  /**
+   * Delete a document from the specified database using basic auth.
+   * See {@ling https://docs.couchdb.org/en/stable/api/document/common.html#delete--db-docid}
+   * @param db the name of the database from which the document should be fetched
+   * @param docId the name of the document
+   * @param user logged in user
+   * @param queryParams additional params that will be forwarded
+   * @param rev is only accessed as part of `queryParams`
+   */
+  @Delete()
+  async deleteDocument(
+    @Param('db') db: string,
+    @Param('docId') docId: string,
+    @User() user: UserInfo,
+    @Query() queryParams?: any,
+    // This is just for the Swagger interface
+    @Query('rev') rev?: string,
+  ) {
+    return this.documentService.deleteDocument(db, docId, user, queryParams);
   }
 }
