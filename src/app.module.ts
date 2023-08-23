@@ -5,9 +5,9 @@ import { SeverityLevel } from '@sentry/types';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
 import { AuthModule } from './auth/auth.module';
 import { CouchdbModule } from './couchdb/couchdb.module';
-import * as Sentry from '@sentry/node';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AdminModule } from './admin/admin.module';
+import { setUser } from '@sentry/node';
 
 const lowSeverityLevels: SeverityLevel[] = ['log', 'info'];
 
@@ -58,7 +58,7 @@ export class AppModule implements NestModule {
     consumer
       .apply((req, res, next) => {
         // reset user before processing a request
-        Sentry.setUser({ username: 'unknown' });
+        setUser({ username: 'unknown' });
         next();
       })
       .forRoutes('*');

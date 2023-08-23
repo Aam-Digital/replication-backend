@@ -10,8 +10,8 @@ import {
   PermissionService,
 } from '../../permissions/permission/permission.service';
 import { permittedFieldsOf } from '@casl/ability/extra';
-import * as _ from 'lodash';
 import { CouchdbService } from '../../couchdb/couchdb.service';
+import { pick } from 'lodash';
 
 /**
  * Read and write individual documents with the remote CouchDB server
@@ -88,7 +88,7 @@ export class DocumentService {
     });
     if (permittedFields.length > 0) {
       // Updating some properties
-      const updatedFields = _.pick(newDoc, permittedFields);
+      const updatedFields = pick(newDoc, permittedFields);
       return Object.assign(oldDoc, updatedFields);
     } else {
       // Updating whole document
