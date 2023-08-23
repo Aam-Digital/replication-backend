@@ -33,6 +33,7 @@ describe('RulesService', () => {
       results: [
         { doc: testPermission, seq: '', changes: [], id: testPermission._id },
       ],
+      pending: 0,
     };
     mockCouchDBService = {
       get: () => undefined,
@@ -84,6 +85,7 @@ describe('RulesService', () => {
     const newResponse: ChangesResponse = {
       last_seq: 'new_seq',
       results: [{ ...changesResponse.results[0], doc: newPermissions }],
+      pending: 0,
     };
 
     jest

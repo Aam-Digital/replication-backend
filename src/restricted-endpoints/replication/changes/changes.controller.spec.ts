@@ -35,7 +35,7 @@ describe('ChangesController', () => {
   beforeEach(async () => {
     getSpy.mockReset();
     getRulesSpy.mockReset();
-    jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of({ ...changes }));
+    jest.spyOn(mockCouchdbService, 'get').mockReturnValue(changes);
     jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
