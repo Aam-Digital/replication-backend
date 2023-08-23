@@ -16,6 +16,7 @@ import {
 import { DocumentService } from './document.service';
 import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../auth/user.decorator';
+import { QueryParams } from '../replication/bulk-document/couchdb-dtos/document.dto';
 
 /**
  * This controller implements endpoints to interact with single documents of a database.
@@ -74,16 +75,14 @@ export class DocumentController {
    * @param docId the name of the document
    * @param user logged in user
    * @param queryParams additional params that will be forwarded
-   * @param rev is only accessed as part of `queryParams`
    */
   @Delete()
   async deleteDocument(
     @Param('db') db: string,
     @Param('docId') docId: string,
     @User() user: UserInfo,
-    @Query() queryParams?: any,
+    @Query() queryParams?: QueryParams,
     // This is just for the Swagger interface
-    @Query('rev') rev?: string,
   ) {
     return this.documentService.deleteDocument(db, docId, user, queryParams);
   }

@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Param,
@@ -20,6 +21,7 @@ import { firstValueFrom } from 'rxjs';
 import { Request, Response } from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { ConfigService } from '@nestjs/config';
+import { QueryParams } from '../../replication/bulk-document/couchdb-dtos/document.dto';
 
 /**
  * This controller handles uploading and downloading of attachments.
@@ -110,9 +112,29 @@ export class AttachmentController {
     this.proxy(request, response, () => undefined);
   }
 
+  /**
+   * Returns an attachment if the user has `read` permissions.
+   * @param db name of the database
+   * @param docId name of the attachment database (`...-attachments`)
+   * @param property on the entity where the file name is stored
+   * @param params additional params that will be forwarded
+   * @param user which makes the request
+   */
+  @Delete()
+  async deleteAttachment(
+    @Param('db') db: string,
+    @Param('docId') docId: string,
+    @Param('property') property: string,
+    @Query() params: QueryParams,
+    @User() user: UserInfo,
+  ) {
+    await this.ensurePermissions(user, 'read', db, docId, property);
+    return this.couchDB.delete(db, `${docId}/${property}`, params);
+  }
+
   private async ensurePermissions(
     user: UserInfo,
-    action: 'read' | 'update',
+    action: 'read' | 'update' | 'delete',
     db: string,
     docId: string,
     property: string,
