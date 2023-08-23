@@ -38,6 +38,7 @@ describe('DocumentService', () => {
     mockCouchDBService = {
       get: () => of({}),
       put: () => of({}),
+      delete: () => of({}),
     } as any;
     jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(userDoc));
     jest.spyOn(mockCouchDBService, 'put').mockReturnValue(of(SUCCESS_RESPONSE));
@@ -204,6 +205,36 @@ describe('DocumentService', () => {
     );
 
     return expect(response).rejects.toThrow(UnauthorizedException);
+  });
+
+  it('should throw exception if user is not allowed to delete a doc', async () => {
+    mockAbility([{ subject: COUCHDB_USER_DOC, action: 'read' }]);
+    jest.spyOn(mockCouchDBService, 'delete');
+
+    const response = service.deleteDocument(
+      databaseName,
+      userDoc._id,
+      requestingUser,
+      { rev: userDoc._rev },
+    );
+
+    await expect(response).rejects.toThrow(UnauthorizedException);
+    expect(mockCouchDBService.delete).not.toHaveBeenCalled();
+  });
+
+  it('should allow a permitted user to delete a doc', async () => {
+    mockAbility([{ subject: COUCHDB_USER_DOC, action: 'delete' }]);
+    jest.spyOn(mockCouchDBService, 'delete');
+
+    await service.deleteDocument(databaseName, userDoc._id, requestingUser, {
+      rev: userDoc._rev,
+    });
+
+    expect(mockCouchDBService.delete).toHaveBeenCalledWith(
+      databaseName,
+      userDoc._id,
+      { rev: userDoc._rev },
+    );
   });
 
   function mockAbility(rules: DocumentRule[]) {
