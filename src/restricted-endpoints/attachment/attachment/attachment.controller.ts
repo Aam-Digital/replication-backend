@@ -116,7 +116,7 @@ export class AttachmentController {
   }
 
   /**
-   * Deletes an attachment if the user has `read` permissions.
+   * Deletes an attachment if the user has `delete` permissions.
    * @param db name of the database
    * @param docId name of the attachment database (`...-attachments`)
    * @param property on the entity where the file name is stored
