@@ -17,7 +17,10 @@ describe('AttachmentController', () => {
   let mockPermissions: PermissionService;
 
   beforeEach(async () => {
-    mockCouchDB = { get: () => of(undefined) } as any;
+    mockCouchDB = {
+      get: () => of(undefined),
+      delete: () => of(undefined),
+    } as any;
     mockPermissions = { getAbilityFor: () => undefined } as any;
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AttachmentController],
@@ -95,7 +98,7 @@ describe('AttachmentController', () => {
     controller.proxy = undefined;
   });
 
-  it('should throw ForbiddenException if user is not permitted', () => {
+  it('should throw ForbiddenException if user is not permitted to view attachment', () => {
     jest
       .spyOn(mockPermissions, 'getAbilityFor')
       .mockReturnValue(
@@ -114,7 +117,7 @@ describe('AttachmentController', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('should call proxy if user is permitted', async () => {
+  it('should call proxy if user is permitted to download attachment', async () => {
     jest
       .spyOn(mockPermissions, 'getAbilityFor')
       .mockReturnValue(
@@ -134,5 +137,42 @@ describe('AttachmentController', () => {
 
     expect(controller.proxy).toHaveBeenCalled();
     controller.proxy = undefined;
+  });
+
+  it('should throw ForbiddenException if user is not permitted to delete attachment', () => {
+    jest
+      .spyOn(mockPermissions, 'getAbilityFor')
+      .mockReturnValue(new DocumentAbility([]));
+
+    return expect(
+      controller.deleteAttachment(
+        'db',
+        'docId',
+        'prop',
+        { rev: '1-rev' },
+        new UserInfo('user', []),
+      ),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should call couchDB service if user is allowed to delete', async () => {
+    jest
+      .spyOn(mockPermissions, 'getAbilityFor')
+      .mockReturnValue(
+        new DocumentAbility([{ subject: 'all', action: 'delete' }]),
+      );
+    jest.spyOn(mockCouchDB, 'delete');
+
+    await controller.deleteAttachment(
+      'db',
+      'docId',
+      'prop',
+      { rev: '1-rev' },
+      new UserInfo('user', []),
+    );
+
+    expect(mockCouchDB.delete).toHaveBeenCalledWith('db', 'docId/prop', {
+      rev: '1-rev',
+    });
   });
 });

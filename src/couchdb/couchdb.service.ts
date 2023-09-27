@@ -97,8 +97,10 @@ export class CouchdbService {
       .pipe(map((res) => res.data));
   }
 
-  delete(db: string, id: string): Observable<any> {
-    return this.httpService.delete(this.buildDocUrl(db, id));
+  delete(db: string, id: string, params?: any): Observable<any> {
+    return this.httpService
+      .delete(this.buildDocUrl(db, id), { params })
+      .pipe(map((res) => res.data));
   }
 
   login(username: string, password: string): Observable<UserInfo> {
