@@ -1,4 +1,9 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import {
+  HttpException,
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+} from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SentryInterceptor, SentryModule } from '@ntegral/nestjs-sentry';
 import { SeverityLevel } from '@sentry/types';
@@ -13,7 +18,18 @@ const lowSeverityLevels: SeverityLevel[] = ['log', 'info'];
 
 @Module({
   providers: [
-    { provide: APP_INTERCEPTOR, useFactory: () => new SentryInterceptor() },
+    {
+      provide: APP_INTERCEPTOR,
+      useFactory: () =>
+        new SentryInterceptor({
+          filters: [
+            {
+              type: HttpException,
+              filter: (exception: HttpException) => 500 > exception.getStatus(), // Only report 500 errors
+            },
+          ],
+        }),
+    },
   ],
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
