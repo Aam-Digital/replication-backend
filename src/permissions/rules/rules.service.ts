@@ -45,20 +45,12 @@ export class RulesService {
         timeout: 50000,
       }),
     );
-    const before = new Date().getTime();
 
     return getParams
       .pipe(
-        concatMap((params) => {
-          const date = new Date().getTime();
-          const diff = (date - before) / 1000;
-          console.log(diff.toFixed(2), 'restarting');
-          return this.couchdbService.get<ChangesResponse>(
-            db,
-            '_changes',
-            params,
-          );
-        }),
+        concatMap((params) =>
+          this.couchdbService.get<ChangesResponse>(db, '_changes', params),
+        ),
         catchError((err) => {
           console.error('LOAD RULES ERROR:', err);
           throw err;
