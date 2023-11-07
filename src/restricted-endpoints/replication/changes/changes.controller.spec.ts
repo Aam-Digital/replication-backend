@@ -171,6 +171,20 @@ describe('ChangesController', () => {
     ]);
   });
 
+  it('should return last sequence number if no more matching changes were found', async () => {
+    // Not allowed to read anything
+    getRulesSpy.mockReturnValue([]);
+    getSpy.mockReturnValueOnce(createChanges([schoolDoc, childDoc], 0));
+
+    const lastSeq = docToChange(childDoc).seq;
+
+    const res = await controller.changes('some-db', user, { limit: 3 });
+
+    expect(res.pending).toBe(0);
+    expect(res.last_seq).toBe(lastSeq);
+    expect(res.results).toEqual([]);
+  });
+
   it('should not return docs of deleted documents that still have other properties', async () => {
     const deletedWithoutProps: DatabaseDocument = {
       _id: 'School:deletedWithout',

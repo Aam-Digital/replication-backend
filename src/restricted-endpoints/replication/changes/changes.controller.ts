@@ -52,8 +52,12 @@ export class ChangesController {
       // overflow changes of this request
       const discarded = Math.max(res.results.length - missing, 0);
       change.results.push(...res.results.slice(0, missing));
-      if (change.results.length > 0) {
+      if (discarded > 0) {
+        // not all requested changes are used
         change.last_seq = change.results[change.results.length - 1].seq;
+      } else {
+        // all changes were used
+        change.last_seq = res.last_seq;
       }
       change.pending = res.pending + discarded;
       if (
