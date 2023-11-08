@@ -41,6 +41,8 @@ export class RulesService {
         since: this.lastSeq,
         include_docs: true,
         doc_ids: JSON.stringify([Permission.DOC_ID]),
+        // requests somehow time out after 1 minute
+        timeout: 50000,
       }),
     );
 
