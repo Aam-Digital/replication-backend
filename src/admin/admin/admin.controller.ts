@@ -1,8 +1,6 @@
 import { Controller, Param, Post, UseGuards } from '@nestjs/common';
-import { RulesConfig } from '../../permissions/rules/permission';
-import { RulesService } from '../../permissions/rules/rules.service';
 import { firstValueFrom } from 'rxjs';
-import { AllDocsResponse } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/all-docs.dto';
+import { AllDocsResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/all-docs.dto';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
 import { OnlyAuthenticated } from '../../auth/only-authenticated.decorator';
@@ -14,20 +12,7 @@ import { OnlyAuthenticated } from '../../auth/only-authenticated.decorator';
 @UseGuards(CombinedAuthGuard)
 @Controller('admin')
 export class AdminController {
-  constructor(
-    private rulesService: RulesService,
-    private couchdbService: CouchdbService,
-  ) {}
-
-  /**
-   * Reload the rules object from the database to apply changed permissions.
-   *
-   * @param db name of database from which the rules should be fetched
-   */
-  @Post('/reload/:db')
-  reloadRules(@Param('db') db: string): Promise<RulesConfig> {
-    return this.rulesService.loadRules(db);
-  }
+  constructor(private couchdbService: CouchdbService) {}
 
   /**
    * Deletes all local documents of the remote database.

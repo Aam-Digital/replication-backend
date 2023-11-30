@@ -7,9 +7,9 @@ import {
 import { BasicAuthGuard } from '../basic-auth/basic-auth.guard';
 import { JwtBearerGuard } from '../jwt-bearer/jwt-bearer.guard';
 import { JwtCookieGuard } from '../jwt-cookie/jwt-cookie.guard';
-import * as Sentry from '@sentry/node';
 import { ONLY_AUTHENTICATED_KEY } from '../../only-authenticated.decorator';
 import { Reflector } from '@nestjs/core';
+import { setUser } from '@sentry/node';
 
 /**
  * This can be used as middleware or guard.
@@ -51,7 +51,7 @@ export class CombinedAuthGuard implements CanActivate, NestMiddleware {
     const req = context.switchToHttp().getRequest();
     return this.authenticateViaGuards(context)
       .then((res) => {
-        Sentry.setUser({ username: req.user.name });
+        setUser({ username: req.user.name });
         return res;
       })
       .catch((err) => {
@@ -79,7 +79,7 @@ export class CombinedAuthGuard implements CanActivate, NestMiddleware {
       }),
     } as ExecutionContext;
     return this.authenticateViaGuards(context)
-      .then(() => Sentry.setUser({ username: req.user.name }))
+      .then(() => setUser({ username: req.user.name }))
       .then(() => next());
   }
 

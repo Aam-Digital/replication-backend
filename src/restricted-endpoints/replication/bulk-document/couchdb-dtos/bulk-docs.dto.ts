@@ -6,7 +6,7 @@ export class BulkDocsRequest {
 export class DatabaseDocument {
   // This can be optional when a single document is put into the database
   _id?: string;
-  // This can be optional when a object is created
+  // This can be optional when a document is created
   _rev?: string;
   _deleted?: boolean;
   _revisions?: {

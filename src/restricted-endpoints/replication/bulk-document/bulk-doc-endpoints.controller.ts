@@ -14,7 +14,7 @@ import {
 } from './couchdb-dtos/bulk-docs.dto';
 import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
-import { BulkDocumentService } from '../bulk-document/bulk-document.service';
+import { BulkDocumentService } from './bulk-document.service';
 import { UserInfo } from '../../session/user-auth.dto';
 import { ApiOperation } from '@nestjs/swagger';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
@@ -30,7 +30,7 @@ import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-a
  */
 @UseGuards(CombinedAuthGuard)
 @Controller()
-export class ReplicationEndpointsController {
+export class BulkDocEndpointsController {
   constructor(
     private couchdbService: CouchdbService,
     private documentFilter: BulkDocumentService,
