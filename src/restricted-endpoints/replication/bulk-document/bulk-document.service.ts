@@ -143,7 +143,7 @@ export class BulkDocumentService {
       }
     }
 
-    return Object.assign(existingDoc.doc, updatedDoc);
+    return Object.assign(existingDoc ? existingDoc.doc : {}, updatedDoc);
   }
 
   private hasPermissionsForDoc(
