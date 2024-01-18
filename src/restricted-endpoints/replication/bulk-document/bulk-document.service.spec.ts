@@ -111,6 +111,32 @@ describe('BulkDocumentService', () => {
     });
   });
 
+  it('should apply field permissions to CREATE operations in BulkDocs', async () => {
+    const request: BulkDocsRequest = {
+      new_edits: true,
+      docs: [Object.assign({}, childDoc), Object.assign(schoolDoc)],
+    };
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+      { action: 'create', subject: 'Child', fields: 'someProperty' },
+      { action: ['read', 'update'], subject: 'School' },
+    ]);
+    jest.spyOn(mockCouchDBService, 'post').mockReturnValue(of({ rows: [] }));
+
+    const result = await service.filterBulkDocsRequest(request, normalUser, '');
+
+    expect(result).toEqual({
+      new_edits: true,
+      docs: [
+        {
+          _id: 'Child:1',
+          _rev: 'someRev',
+          _revisions: { start: 1, ids: ['someRev'] },
+          someProperty: 'someValue',
+        },
+      ],
+    });
+  });
+
   it('should apply permissions to UPDATE operations in BulkDocs', async () => {
     const request: BulkDocsRequest = {
       new_edits: false,
@@ -209,6 +235,7 @@ describe('BulkDocumentService', () => {
       _rev: 'someRev',
       _revisions: { start: 1, ids: ['someRev'] },
       someProperty: 'someValue',
+      otherProperty: 'otherValue',
     };
   }
 
