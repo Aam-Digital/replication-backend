@@ -29,7 +29,14 @@ import { CouchdbService } from '../../../couchdb/couchdb.service';
  */
 @Injectable()
 export class BulkDocumentService {
-  private DEFAULT_FIELDS = ['_id', '_rev', '_revisions', 'updated', 'created'];
+  private DEFAULT_FIELDS = [
+    '_id',
+    '_rev',
+    '_revisions',
+    '_deleted',
+    'updated',
+    'created',
+  ];
 
   constructor(
     private permissionService: PermissionService,
@@ -116,6 +123,28 @@ export class BulkDocumentService {
     };
   }
 
+  private deleteEmptyValues(
+    updatedDoc: DatabaseDocument,
+    existingDoc: DocMetaInf,
+  ) {
+    const fieldKeys = Object.keys(updatedDoc).filter(
+      (key: string) => !this.DEFAULT_FIELDS.includes(key),
+    );
+
+    for (let i = 0; i < fieldKeys.length; i++) {
+      if (
+        updatedDoc[fieldKeys[i]] === '' ||
+        updatedDoc[fieldKeys[i]] === undefined ||
+        updatedDoc[fieldKeys[i]] === null
+      ) {
+        delete existingDoc.doc[fieldKeys[i]];
+        delete updatedDoc[fieldKeys[i]];
+      }
+    }
+
+    return Object.assign(existingDoc ? existingDoc.doc : {}, updatedDoc);
+  }
+
   private removeFieldsWithoutPermissions(
     updatedDoc: DatabaseDocument,
     existingDoc: DocMetaInf,
@@ -125,7 +154,8 @@ export class BulkDocumentService {
 
     if (existingDoc) {
       if (updatedDoc._deleted) {
-        return updatedDoc;
+        existingDoc.doc._deleted = true;
+        return existingDoc.doc;
       } else {
         action = 'update';
       }
@@ -143,7 +173,7 @@ export class BulkDocumentService {
       }
     }
 
-    return Object.assign(existingDoc ? existingDoc.doc : {}, updatedDoc);
+    return this.deleteEmptyValues(updatedDoc, existingDoc);
   }
 
   private hasPermissionsForDoc(

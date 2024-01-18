@@ -154,11 +154,64 @@ describe('BulkDocumentService', () => {
     });
   });
 
+  it('should apply field permissions to UPDATE operations in BulkDocs', async () => {
+    const request: BulkDocsRequest = {
+      new_edits: false,
+      docs: [
+        {
+          _id: 'Child:1',
+          _rev: 'someRev',
+          _revisions: { start: 1, ids: ['someRev'] },
+          someProperty: 'newSomeValue',
+          otherProperty: 'newOtherValue',
+        },
+        {
+          _id: 'School:1',
+          _rev: 'someRev',
+          _revisions: { start: 1, ids: ['someRev'] },
+          anotherProperty: 'newAnotherValue',
+        },
+      ],
+    };
+
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+      { action: 'update', subject: 'Child', fields: 'someProperty' },
+      { action: ['read', 'update'], subject: 'School' },
+    ]);
+
+    jest
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValue(of(createAllDocsResponse(childDoc, schoolDoc)));
+
+    const result = await service.filterBulkDocsRequest(request, normalUser, '');
+
+    expect(result).toEqual({
+      new_edits: false,
+      docs: [
+        {
+          _id: 'Child:1',
+          _rev: 'someRev',
+          _revisions: { start: 1, ids: ['someRev'] },
+          someProperty: 'newSomeValue',
+          otherProperty: 'otherValue',
+        },
+        {
+          _id: 'School:1',
+          _rev: 'someRev',
+          _revisions: { start: 1, ids: ['someRev'] },
+          anotherProperty: 'newAnotherValue',
+        },
+      ],
+    });
+  });
+
   it('should apply permissions to DELETE operations in BulkDocs', async () => {
     const deletedChildDoc = getChildDoc();
     deletedChildDoc._deleted = true;
+
     const deletedSchoolDoc = getSchoolDoc();
     deletedSchoolDoc._deleted = true;
+
     const request: BulkDocsRequest = {
       new_edits: false,
       docs: [deletedChildDoc, deletedSchoolDoc],
@@ -179,12 +232,61 @@ describe('BulkDocumentService', () => {
     });
   });
 
+  it('should apply field permissions to DELETE operations in BulkDocs', async () => {
+    const request: BulkDocsRequest = {
+      new_edits: false,
+      docs: [
+        {
+          _id: 'Child:1',
+          _rev: 'someRev',
+          _revisions: { start: 1, ids: ['someRev'] },
+          _deleted: true,
+          someProperty: 'newSomeValue',
+          otherProperty: 'otherValue',
+        },
+        {
+          _id: 'School:1',
+          _rev: 'someRev',
+          _revisions: { start: 1, ids: ['someRev'] },
+          _deleted: true,
+          anotherProperty: 'newAnotherValue',
+        },
+      ],
+    };
+
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+      { action: 'delete', subject: 'Child', fields: ['name'] },
+      { action: ['read', 'update'], subject: 'School' },
+    ]);
+    jest
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValue(of(createAllDocsResponse(childDoc, schoolDoc)));
+
+    const result = await service.filterBulkDocsRequest(request, normalUser, '');
+
+    expect(result).toEqual({
+      new_edits: false,
+      docs: [
+        {
+          _id: 'Child:1',
+          _rev: 'someRev',
+          _revisions: { start: 1, ids: ['someRev'] },
+          _deleted: true,
+          someProperty: 'someValue',
+          otherProperty: 'otherValue',
+        },
+      ],
+    });
+  });
+
   it('should check the permissions on the document from the database', async () => {
     const privateSchool = getSchoolDoc();
     privateSchool.privateSchool = true;
+
     const publicSchool = getSchoolDoc();
     publicSchool._id = 'School:2';
     publicSchool.privateSchool = false;
+
     jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
       { action: 'update', subject: 'Child' },
       {
@@ -193,20 +295,26 @@ describe('BulkDocumentService', () => {
         conditions: { privateSchool: false }, // User is only allowed to update/delete public schools
       },
     ]);
+
     jest
       .spyOn(mockCouchDBService, 'post')
       .mockReturnValue(of(createAllDocsResponse(privateSchool, publicSchool)));
+
     // User makes change to a document on which no permissions are given
     const updatedPrivateSchool = getSchoolDoc();
     updatedPrivateSchool.privateSchool = false;
     updatedPrivateSchool.name = 'Not so Private School';
+
     // User deletes a document, permissions can't be checked directly
     const deletedPublicSchool: DatabaseDocument = {
       _id: publicSchool._id,
       _rev: publicSchool._rev,
       _revisions: publicSchool._revisions,
       _deleted: true,
+      anotherProperty: 'anotherValue',
+      privateSchool: false,
     };
+
     const request: BulkDocsRequest = {
       new_edits: false,
       docs: [updatedPrivateSchool, deletedPublicSchool],
