@@ -127,9 +127,7 @@ export class BulkDocumentService {
     updatedDoc: DatabaseDocument,
     existingDoc: DocMetaInf,
   ) {
-    const fieldKeys = Object.keys(updatedDoc).filter(
-      (key: string) => !this.DEFAULT_FIELDS.includes(key),
-    );
+    const fieldKeys = this.getCustomFieldKeys(updatedDoc);
 
     for (let i = 0; i < fieldKeys.length; i++) {
       if (
@@ -163,9 +161,7 @@ export class BulkDocumentService {
       action = 'create';
     }
 
-    const fieldKeys = Object.keys(updatedDoc).filter(
-      (key: string) => !this.DEFAULT_FIELDS.includes(key),
-    );
+    const fieldKeys = this.getCustomFieldKeys(updatedDoc);
 
     for (let i = 0; i < fieldKeys.length; i++) {
       if (!ability.can(action, updatedDoc, fieldKeys[i])) {
@@ -174,6 +170,12 @@ export class BulkDocumentService {
     }
 
     return this.deleteEmptyValues(updatedDoc, existingDoc);
+  }
+
+  private getCustomFieldKeys(updatedDoc: DatabaseDocument) {
+    return Object.keys(updatedDoc).filter(
+      (key: string) => !this.DEFAULT_FIELDS.includes(key),
+    );
   }
 
   private hasPermissionsForDoc(
