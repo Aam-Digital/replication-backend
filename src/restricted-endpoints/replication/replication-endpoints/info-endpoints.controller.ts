@@ -18,7 +18,6 @@ import { OnlyAuthenticated } from '../../../auth/only-authenticated.decorator';
  * Enforces permissions of the current user, filtering requests and responses
  * between the connected CouchDB server and the client.
  */
-@OnlyAuthenticated()
 @UseGuards(CombinedAuthGuard)
 @Controller()
 export class InfoEndpointsController {
@@ -35,6 +34,7 @@ export class InfoEndpointsController {
 
   /**
    * returns information about a single DB
+   * can be accessed without logging in
    * @param db
    */
   @Get([':db'])
@@ -47,6 +47,7 @@ export class InfoEndpointsController {
    * @param db
    * @param docId
    */
+  @OnlyAuthenticated()
   @Get(':db/_local/:docId')
   getLocalDoc(@Param('db') db: string, @Param('docId') docId: string) {
     return this.couchdbService.get(db, `_local/${docId}`);
@@ -58,6 +59,7 @@ export class InfoEndpointsController {
    * @param docId
    * @param body
    */
+  @OnlyAuthenticated()
   @Put(':db/_local/:docId')
   putLocalDoc(
     @Param('db') db: string,
@@ -72,6 +74,7 @@ export class InfoEndpointsController {
    * @param db
    * @param body
    */
+  @OnlyAuthenticated()
   @Post(':db/_revs_diff')
   revsDiff(@Param('db') db: string, @Body() body) {
     return this.couchdbService.post(db, '_revs_diff', body);
