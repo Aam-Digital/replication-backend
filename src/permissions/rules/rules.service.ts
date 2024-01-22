@@ -4,10 +4,10 @@ import { DocumentAbility } from '../permission/permission.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { Permission, RulesConfig } from './permission';
 import { catchError, concatMap, defer, of, repeat, retry } from 'rxjs';
-import * as _ from 'lodash';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
-import { ChangesResponse } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/changes.dto';
+import { ChangesResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
+import { get } from 'lodash';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 
@@ -41,6 +41,8 @@ export class RulesService {
         since: this.lastSeq,
         include_docs: true,
         doc_ids: JSON.stringify([Permission.DOC_ID]),
+        // requests somehow time out after 1 minute
+        timeout: 50000,
       }),
     );
 
@@ -94,7 +96,7 @@ export class RulesService {
       }
 
       const name = rawValue.slice(2, -1);
-      const value = _.get({ user }, name);
+      const value = get({ user }, name);
 
       if (typeof value === 'undefined') {
         throw new ReferenceError(`Variable ${name} is not defined`);

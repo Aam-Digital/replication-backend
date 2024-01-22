@@ -5,7 +5,7 @@ import { defer, NEVER, of, throwError } from 'rxjs';
 import { Permission } from './permission';
 import { ConfigService } from '@nestjs/config';
 import { CouchdbService } from '../../couchdb/couchdb.service';
-import { ChangesResponse } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/changes.dto';
+import { ChangesResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
 
 describe('RulesService', () => {
   let service: RulesService;
@@ -30,7 +30,10 @@ describe('RulesService', () => {
     adminRules = testPermission.data[adminUser.roles[1]];
     changesResponse = {
       last_seq: 'initial_seq',
-      results: [{ doc: testPermission }],
+      results: [
+        { doc: testPermission, seq: '', changes: [], id: testPermission._id },
+      ],
+      pending: 0,
     };
     mockCouchDBService = {
       get: () => undefined,
@@ -81,7 +84,8 @@ describe('RulesService', () => {
     });
     const newResponse: ChangesResponse = {
       last_seq: 'new_seq',
-      results: [{ doc: newPermissions }],
+      results: [{ ...changesResponse.results[0], doc: newPermissions }],
+      pending: 0,
     };
 
     jest

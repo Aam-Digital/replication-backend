@@ -4,16 +4,16 @@ import {
   BulkGetResult,
   ErrorDoc,
   OkDoc,
-} from '../replication-endpoints/couchdb-dtos/bulk-get.dto';
+} from './couchdb-dtos/bulk-get.dto';
 import {
   AllDocsRequest,
   AllDocsResponse,
   DocMetaInf,
-} from '../replication-endpoints/couchdb-dtos/all-docs.dto';
+} from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
   DatabaseDocument,
-} from '../replication-endpoints/couchdb-dtos/bulk-docs.dto';
+} from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
 import {
   DocumentAbility,

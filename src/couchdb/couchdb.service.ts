@@ -9,7 +9,7 @@ import { catchError, map, Observable } from 'rxjs';
 import {
   DatabaseDocument,
   DocSuccess,
-} from '../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/bulk-docs.dto';
+} from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import {
   SessionResponse,
   UserInfo,
@@ -51,17 +51,16 @@ export class CouchdbService {
 
   private initMapAxiosErrorsToNestjsExceptions() {
     this.httpService.axiosRef.interceptors.response.use(undefined, (err) => {
-      if (!err.response) {
-        throw new HttpException('unknown', 400);
-      } else {
-        throw new HttpException(err.response.data, err.response.status);
-      }
+      const resultErr = err.response
+        ? new HttpException(err.response.data, err.response.status)
+        : err;
+      return Promise.reject(resultErr);
     });
   }
 
   get<T extends DatabaseDocument = DatabaseDocument>(
-    databaseName: string,
-    documentID: string,
+    databaseName?: string,
+    documentID?: string,
     params?: any,
   ): Observable<T> {
     return this.httpService
@@ -69,8 +68,15 @@ export class CouchdbService {
       .pipe(map((response) => response.data));
   }
 
-  private buildDocUrl(db: string, documentId: string): string {
-    return `${this.databaseUrl}/${db}/${documentId}`;
+  private buildDocUrl(db?: string, documentId?: string): string {
+    let url = `${this.databaseUrl}/`;
+    if (db) {
+      url += `${db}/`;
+    }
+    if (documentId) {
+      url += documentId;
+    }
+    return url;
   }
 
   put(dbName: string, document: DatabaseDocument): Observable<DocSuccess> {
@@ -90,8 +96,10 @@ export class CouchdbService {
       .pipe(map((res) => res.data));
   }
 
-  delete(db: string, id: string): Observable<any> {
-    return this.httpService.delete(this.buildDocUrl(db, id));
+  delete(db: string, id: string, params?: any): Observable<any> {
+    return this.httpService
+      .delete(this.buildDocUrl(db, id), { params })
+      .pipe(map((res) => res.data));
   }
 
   login(username: string, password: string): Observable<UserInfo> {

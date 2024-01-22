@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BulkDocumentService } from './bulk-document.service';
-import { BulkGetResponse } from '../replication-endpoints/couchdb-dtos/bulk-get.dto';
-import { AllDocsResponse } from '../replication-endpoints/couchdb-dtos/all-docs.dto';
+import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
+import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
   DatabaseDocument,
-} from '../replication-endpoints/couchdb-dtos/bulk-docs.dto';
+} from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
 import { PermissionService } from '../../../permissions/permission/permission.service';
 import { RulesService } from '../../../permissions/rules/rules.service';

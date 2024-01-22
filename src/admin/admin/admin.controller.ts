@@ -1,6 +1,6 @@
 import { Controller, Param, Post, UseGuards } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
-import { AllDocsResponse } from '../../restricted-endpoints/replication/replication-endpoints/couchdb-dtos/all-docs.dto';
+import { AllDocsResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/all-docs.dto';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
 import { OnlyAuthenticated } from '../../auth/only-authenticated.decorator';
