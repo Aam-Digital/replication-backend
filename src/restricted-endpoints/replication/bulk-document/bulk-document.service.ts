@@ -29,6 +29,15 @@ import { CouchdbService } from '../../../couchdb/couchdb.service';
  */
 @Injectable()
 export class BulkDocumentService {
+  private DEFAULT_FIELDS = [
+    '_id',
+    '_rev',
+    '_revisions',
+    '_deleted',
+    'updated',
+    'created',
+  ];
+
   constructor(
     private permissionService: PermissionService,
     private couchdbService: CouchdbService,
@@ -96,14 +105,77 @@ export class BulkDocumentService {
     );
     return {
       new_edits: request.new_edits,
-      docs: request.docs.filter((doc) =>
-        this.hasPermissionsForDoc(
-          doc,
-          response.rows.find((responseDoc) => responseDoc.id === doc._id),
-          ability,
+      docs: request.docs
+        .filter((doc) =>
+          this.hasPermissionsForDoc(
+            doc,
+            response.rows.find((responseDoc) => responseDoc.id === doc._id),
+            ability,
+          ),
+        )
+        .map((doc) =>
+          this.removeFieldsWithoutPermissions(
+            doc,
+            response.rows.find((responseDoc) => responseDoc.id === doc._id),
+            ability,
+          ),
         ),
-      ),
     };
+  }
+
+  private deleteEmptyValues(
+    updatedDoc: DatabaseDocument,
+    existingDoc: DocMetaInf,
+  ) {
+    const fieldKeys = this.getCustomFieldKeys(updatedDoc);
+
+    for (let i = 0; i < fieldKeys.length; i++) {
+      if (
+        updatedDoc[fieldKeys[i]] === '' ||
+        updatedDoc[fieldKeys[i]] === undefined ||
+        updatedDoc[fieldKeys[i]] === null
+      ) {
+        delete existingDoc.doc[fieldKeys[i]];
+        delete updatedDoc[fieldKeys[i]];
+      }
+    }
+
+    return Object.assign(existingDoc ? existingDoc.doc : {}, updatedDoc);
+  }
+
+  private removeFieldsWithoutPermissions(
+    updatedDoc: DatabaseDocument,
+    existingDoc: DocMetaInf,
+    ability: DocumentAbility,
+  ): DatabaseDocument {
+    let action: any;
+
+    if (existingDoc) {
+      if (updatedDoc._deleted) {
+        existingDoc.doc._deleted = true;
+        return existingDoc.doc;
+      } else {
+        action = 'update';
+      }
+    } else {
+      action = 'create';
+    }
+
+    const fieldKeys = this.getCustomFieldKeys(updatedDoc);
+
+    for (let i = 0; i < fieldKeys.length; i++) {
+      if (!ability.can(action, updatedDoc, fieldKeys[i])) {
+        delete updatedDoc[fieldKeys[i]];
+      }
+    }
+
+    return this.deleteEmptyValues(updatedDoc, existingDoc);
+  }
+
+  private getCustomFieldKeys(updatedDoc: DatabaseDocument) {
+    return Object.keys(updatedDoc).filter(
+      (key: string) => !this.DEFAULT_FIELDS.includes(key),
+    );
   }
 
   private hasPermissionsForDoc(
