@@ -5,7 +5,6 @@ import {
 } from '../bulk-document/couchdb-dtos/changes.dto';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { firstValueFrom, map } from 'rxjs';
-import { OnlyAuthenticated } from '../../../auth/only-authenticated.decorator';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../../auth/user.decorator';
 import { UserInfo } from '../../session/user-auth.dto';
@@ -15,7 +14,6 @@ import {
 } from '../../../permissions/permission/permission.service';
 import { omit } from 'lodash';
 
-@OnlyAuthenticated()
 @UseGuards(CombinedAuthGuard)
 @Controller()
 export class ChangesController {
