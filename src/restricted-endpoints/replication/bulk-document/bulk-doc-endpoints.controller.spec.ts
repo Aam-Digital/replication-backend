@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ReplicationEndpointsController } from './replication-endpoints.controller';
+import { BulkDocEndpointsController } from './bulk-doc-endpoints.controller';
 import { firstValueFrom, of } from 'rxjs';
-import { BulkDocumentService } from '../bulk-document/bulk-document.service';
+import { BulkDocumentService } from './bulk-document.service';
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
@@ -9,8 +9,8 @@ import { UserInfo } from '../../session/user-auth.dto';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
 
-describe('ReplicationEndpointsController', () => {
-  let controller: ReplicationEndpointsController;
+describe('BulkDocEndpointsController', () => {
+  let controller: BulkDocEndpointsController;
   let mockCouchDBService: CouchdbService;
   let documentFilter: BulkDocumentService;
 
@@ -27,7 +27,7 @@ describe('ReplicationEndpointsController', () => {
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [ReplicationEndpointsController],
+      controllers: [BulkDocEndpointsController],
       providers: [
         ...authGuardMockProviders,
         { provide: CouchdbService, useValue: mockCouchDBService },
@@ -35,8 +35,8 @@ describe('ReplicationEndpointsController', () => {
       ],
     }).compile();
 
-    controller = module.get<ReplicationEndpointsController>(
-      ReplicationEndpointsController,
+    controller = module.get<BulkDocEndpointsController>(
+      BulkDocEndpointsController,
     );
   });
 

@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   ForbiddenException,
   Get,
   Param,
@@ -15,10 +16,15 @@ import { UserInfo } from '../../session/user-auth.dto';
 import { ApiQuery } from '@nestjs/swagger';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
-import { PermissionService } from '../../../permissions/permission/permission.service';
+import {
+  Action,
+  PermissionService,
+} from '../../../permissions/permission/permission.service';
 import { firstValueFrom } from 'rxjs';
 import { Request, Response } from 'express';
-import { RestrictedEndpointsModule } from '../../restricted-endpoints.module';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+import { ConfigService } from '@nestjs/config';
+import { QueryParams } from '../../replication/bulk-document/couchdb-dtos/document.dto';
 
 /**
  * This controller handles uploading and downloading of attachments.
@@ -28,9 +34,38 @@ import { RestrictedEndpointsModule } from '../../restricted-endpoints.module';
 @UseGuards(CombinedAuthGuard)
 @Controller(':db/:docId/:property')
 export class AttachmentController {
+  private databaseUrl = this.configService.get<string>(
+    CouchdbService.DATABASE_URL_ENV,
+  );
+  private databaseUser = this.configService.get<string>(
+    CouchdbService.DATABASE_USER_ENV,
+  );
+  private databasePassword = this.configService.get<string>(
+    CouchdbService.DATABASE_PASSWORD_ENV,
+  );
+  /**
+   * This proxy allows to send authenticated requests to the real database
+   */
+  proxy = createProxyMiddleware({
+    target: this.databaseUrl,
+    secure: true,
+    changeOrigin: true,
+    followRedirects: false,
+    xfwd: true,
+    autoRewrite: true,
+    onProxyReq: (proxyReq) => {
+      // Removing existing cookie and overwriting header with authorized credentials
+      const authHeader = Buffer.from(
+        `${this.databaseUser}:${this.databasePassword}`,
+      ).toString('base64');
+      proxyReq.setHeader('authorization', `Basic ${authHeader}`);
+      proxyReq.removeHeader('cookie');
+    },
+  });
   constructor(
     private couchDB: CouchdbService,
     private permissions: PermissionService,
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -55,7 +90,7 @@ export class AttachmentController {
     @Res() response: Response,
   ) {
     await this.ensurePermissions(user, 'update', db, docId, property);
-    RestrictedEndpointsModule.proxy(request, response, () => undefined);
+    this.proxy(request, response, () => undefined);
   }
 
   /**
@@ -77,12 +112,32 @@ export class AttachmentController {
     @Res() response: Response,
   ) {
     await this.ensurePermissions(user, 'read', db, docId, property);
-    RestrictedEndpointsModule.proxy(request, response, () => undefined);
+    this.proxy(request, response, () => undefined);
+  }
+
+  /**
+   * Deletes an attachment if the user has `delete` permissions.
+   * @param db name of the database
+   * @param docId name of the attachment database (`...-attachments`)
+   * @param property on the entity where the file name is stored
+   * @param params additional params that will be forwarded
+   * @param user which makes the request
+   */
+  @Delete()
+  async deleteAttachment(
+    @Param('db') db: string,
+    @Param('docId') docId: string,
+    @Param('property') property: string,
+    @Query() params: QueryParams,
+    @User() user: UserInfo,
+  ) {
+    await this.ensurePermissions(user, 'delete', db, docId, property);
+    return this.couchDB.delete(db, `${docId}/${property}`, params);
   }
 
   private async ensurePermissions(
     user: UserInfo,
-    action: 'read' | 'update',
+    action: Action,
     db: string,
     docId: string,
     property: string,

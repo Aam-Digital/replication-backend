@@ -63,6 +63,8 @@ ENV JWT_SECRET="jwtSecret"
 ENV JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\n<PUBLIC_KEY>\n-----END PUBLIC KEY-----"
 # (optional) The sentry DSN in order to send the error messages to sentry
 ENV SENTRY_DSN=""
+# (optional) Port under which the app can be accessed. Default is 3000
+ENV PORT=""
 
 CMD ["node", "dist/main"]
 

@@ -1,13 +1,15 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AttachmentController } from './attachment.controller';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
-import { PermissionService } from '../../../permissions/permission/permission.service';
+import {
+  DocumentAbility,
+  PermissionService,
+} from '../../../permissions/permission/permission.service';
 import { of } from 'rxjs';
-import { Ability } from '@casl/ability';
 import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
 import { ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { UserInfo } from '../../session/user-auth.dto';
-import { RestrictedEndpointsModule } from '../../restricted-endpoints.module';
+import { ConfigService } from '@nestjs/config';
 
 describe('AttachmentController', () => {
   let controller: AttachmentController;
@@ -15,7 +17,10 @@ describe('AttachmentController', () => {
   let mockPermissions: PermissionService;
 
   beforeEach(async () => {
-    mockCouchDB = { get: () => of(undefined) } as any;
+    mockCouchDB = {
+      get: () => of(undefined),
+      delete: () => of(undefined),
+    } as any;
     mockPermissions = { getAbilityFor: () => undefined } as any;
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AttachmentController],
@@ -23,6 +28,7 @@ describe('AttachmentController', () => {
         ...authGuardMockProviders,
         { provide: CouchdbService, useValue: mockCouchDB },
         { provide: PermissionService, useValue: mockPermissions },
+        { provide: ConfigService, useValue: { get: () => 'test' } },
       ],
     }).compile();
 
@@ -34,7 +40,9 @@ describe('AttachmentController', () => {
   });
 
   it('should throw UnauthorizedException if user is not logged in and not permitted', () => {
-    jest.spyOn(mockPermissions, 'getAbilityFor').mockReturnValue(new Ability());
+    jest
+      .spyOn(mockPermissions, 'getAbilityFor')
+      .mockReturnValue(new DocumentAbility());
 
     return expect(
       controller.createAttachment(
@@ -50,7 +58,9 @@ describe('AttachmentController', () => {
   });
 
   it('should throw ForbiddenException if user is authenticated but not permitted', () => {
-    jest.spyOn(mockPermissions, 'getAbilityFor').mockReturnValue(new Ability());
+    jest
+      .spyOn(mockPermissions, 'getAbilityFor')
+      .mockReturnValue(new DocumentAbility());
 
     return expect(
       controller.createAttachment(
@@ -68,9 +78,11 @@ describe('AttachmentController', () => {
   it('should upload document if user is permitted', async () => {
     jest
       .spyOn(mockPermissions, 'getAbilityFor')
-      .mockReturnValue(new Ability([{ subject: 'all', action: 'manage' }]));
-    RestrictedEndpointsModule.proxy = () => undefined;
-    jest.spyOn(RestrictedEndpointsModule, 'proxy');
+      .mockReturnValue(
+        new DocumentAbility([{ subject: 'all', action: 'manage' }]),
+      );
+    controller.proxy = () => undefined;
+    jest.spyOn(controller, 'proxy');
 
     await controller.createAttachment(
       'db',
@@ -82,14 +94,16 @@ describe('AttachmentController', () => {
       undefined,
     );
 
-    expect(RestrictedEndpointsModule.proxy).toHaveBeenCalled();
-    RestrictedEndpointsModule.proxy = undefined;
+    expect(controller.proxy).toHaveBeenCalled();
+    controller.proxy = undefined;
   });
 
-  it('should throw ForbiddenException if user is not permitted', () => {
+  it('should throw ForbiddenException if user is not permitted to view attachment', () => {
     jest
       .spyOn(mockPermissions, 'getAbilityFor')
-      .mockReturnValue(new Ability([{ subject: 'all', action: 'update' }]));
+      .mockReturnValue(
+        new DocumentAbility([{ subject: 'all', action: 'update' }]),
+      );
 
     return expect(
       controller.getAttachment(
@@ -103,12 +117,14 @@ describe('AttachmentController', () => {
     ).rejects.toThrow(ForbiddenException);
   });
 
-  it('should call proxy if user is permitted', async () => {
+  it('should call proxy if user is permitted to download attachment', async () => {
     jest
       .spyOn(mockPermissions, 'getAbilityFor')
-      .mockReturnValue(new Ability([{ subject: 'all', action: 'read' }]));
-    RestrictedEndpointsModule.proxy = () => undefined;
-    jest.spyOn(RestrictedEndpointsModule, 'proxy');
+      .mockReturnValue(
+        new DocumentAbility([{ subject: 'all', action: 'read' }]),
+      );
+    controller.proxy = () => undefined;
+    jest.spyOn(controller, 'proxy');
 
     await controller.getAttachment(
       'db',
@@ -119,7 +135,44 @@ describe('AttachmentController', () => {
       undefined,
     );
 
-    expect(RestrictedEndpointsModule.proxy).toHaveBeenCalled();
-    RestrictedEndpointsModule.proxy = undefined;
+    expect(controller.proxy).toHaveBeenCalled();
+    controller.proxy = undefined;
+  });
+
+  it('should throw ForbiddenException if user is not permitted to delete attachment', () => {
+    jest
+      .spyOn(mockPermissions, 'getAbilityFor')
+      .mockReturnValue(new DocumentAbility([]));
+
+    return expect(
+      controller.deleteAttachment(
+        'db',
+        'docId',
+        'prop',
+        { rev: '1-rev' },
+        new UserInfo('user', []),
+      ),
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it('should call couchDB service if user is allowed to delete', async () => {
+    jest
+      .spyOn(mockPermissions, 'getAbilityFor')
+      .mockReturnValue(
+        new DocumentAbility([{ subject: 'all', action: 'delete' }]),
+      );
+    jest.spyOn(mockCouchDB, 'delete');
+
+    await controller.deleteAttachment(
+      'db',
+      'docId',
+      'prop',
+      { rev: '1-rev' },
+      new UserInfo('user', []),
+    );
+
+    expect(mockCouchDB.delete).toHaveBeenCalledWith('db', 'docId/prop', {
+      rev: '1-rev',
+    });
   });
 });
