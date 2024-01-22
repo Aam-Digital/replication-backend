@@ -3,10 +3,11 @@ import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { Permission, RulesConfig } from './permission';
-import { firstValueFrom, map, retry, tap } from 'rxjs';
-import * as _ from 'lodash';
+import { catchError, concatMap, defer, of, repeat, retry } from 'rxjs';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
+import { ChangesResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
+import { get } from 'lodash';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 
@@ -18,6 +19,7 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
 export class RulesService {
   static readonly ENV_PERMISSION_DB = 'PERMISSION_DB';
   private permission: RulesConfig;
+  private lastSeq: string;
 
   constructor(
     private couchdbService: CouchdbService,
@@ -26,20 +28,43 @@ export class RulesService {
     const permissionDbName = this.configService.get(
       RulesService.ENV_PERMISSION_DB,
     );
-    this.loadRules(permissionDbName);
+    this.loadRulesContinuously(permissionDbName);
   }
 
-  async loadRules(db: string): Promise<RulesConfig> {
-    this.permission = undefined;
-    return firstValueFrom(
-      this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
-        retry({ count: 60, delay: 1000 }),
-        map((doc) => doc.data),
-        tap((permission) => (this.permission = permission)),
-      ),
+  loadRulesContinuously(db = 'app') {
+    // Rebuild params when observable is retried/repeated
+    const getParams = defer(() =>
+      of({
+        filter: '_doc_ids',
+        feed: 'longpoll',
+        limit: '1',
+        since: this.lastSeq,
+        include_docs: true,
+        doc_ids: JSON.stringify([Permission.DOC_ID]),
+        // requests somehow time out after 1 minute
+        timeout: 50000,
+      }),
     );
-  }
 
+    return getParams
+      .pipe(
+        concatMap((params) =>
+          this.couchdbService.get<ChangesResponse>(db, '_changes', params),
+        ),
+        catchError((err) => {
+          console.error('LOAD RULES ERROR:', err);
+          throw err;
+        }),
+        retry({ delay: 1000 }),
+        repeat(),
+      )
+      .subscribe((changes) => {
+        this.lastSeq = changes.last_seq;
+        if (changes.results.length > 0) {
+          this.permission = changes.results[0].doc.data;
+        }
+      });
+  }
   /**
    * Get all rules that are related to the roles of the user
    * If no permissions are found, returns rule that allows everything
@@ -71,7 +96,7 @@ export class RulesService {
       }
 
       const name = rawValue.slice(2, -1);
-      const value = _.get({ user }, name);
+      const value = get({ user }, name);
 
       if (typeof value === 'undefined') {
         throw new ReferenceError(`Variable ${name} is not defined`);

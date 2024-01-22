@@ -44,6 +44,6 @@ async function bootstrap() {
   // Logging everything through sentry
   app.useLogger(SentryService.SentryServiceInstance());
 
-  await app.listen(3000);
+  await app.listen(process.env.PORT || 3000);
 }
 bootstrap();

@@ -58,7 +58,7 @@ describe('CouchdbService', () => {
     });
   });
 
-  it('should transform axios errors to HttpExceptions with the same status code', () => {
+  it('should transform axios errors to HttpExceptions with the same status code', async () => {
     const axiosError = {
       response: {
         data: {
@@ -71,7 +71,7 @@ describe('CouchdbService', () => {
 
     let result: HttpException;
     try {
-      responseInterceptor(axiosError);
+      await responseInterceptor(axiosError);
     } catch (err) {
       result = err;
     }

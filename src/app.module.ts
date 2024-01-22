@@ -1,19 +1,35 @@
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import {
+  HttpException,
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+} from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { SentryInterceptor, SentryModule } from '@ntegral/nestjs-sentry';
 import { SeverityLevel } from '@sentry/types';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
 import { AuthModule } from './auth/auth.module';
 import { CouchdbModule } from './couchdb/couchdb.module';
-import * as Sentry from '@sentry/node';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AdminModule } from './admin/admin.module';
+import { setUser } from '@sentry/node';
 
 const lowSeverityLevels: SeverityLevel[] = ['log', 'info'];
 
 @Module({
   providers: [
-    { provide: APP_INTERCEPTOR, useFactory: () => new SentryInterceptor() },
+    {
+      provide: APP_INTERCEPTOR,
+      useFactory: () =>
+        new SentryInterceptor({
+          filters: [
+            {
+              type: HttpException,
+              filter: (exception: HttpException) => 500 > exception.getStatus(), // Only report 500 errors
+            },
+          ],
+        }),
+    },
   ],
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -58,7 +74,7 @@ export class AppModule implements NestModule {
     consumer
       .apply((req, res, next) => {
         // reset user before processing a request
-        Sentry.setUser({ username: 'unknown' });
+        setUser({ username: 'unknown' });
         next();
       })
       .forRoutes('*');
