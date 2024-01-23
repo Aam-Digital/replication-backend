@@ -50,7 +50,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Report'
 
-  /report/{reportId}/calculation:
+  /report/{reportId}/calculate:
     post:
       tags:
         - report
