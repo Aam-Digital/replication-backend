@@ -49,6 +49,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Report'
+
+  /report/{reportId}/calculation:
     post:
       tags:
         - report
@@ -63,13 +65,13 @@ paths:
           name: from
           schema:
             type: string
-            format: timestamp
+            format: date
             required: true
         - in: query
           name: to
           schema:
             type: string
-            format: timestamp
+            format: date
             required: true
       responses:
         200:
@@ -139,7 +141,7 @@ components:
           example: report_all_course_members
         last_run:
           type: string
-          format: timestamp
+          format: date
         run_pending:
           type: boolean
         schema:
@@ -159,10 +161,10 @@ components:
           format: uuid
         start_date:
           type: string
-          example: timestamp
+          example: date
         end_date:
           type: string
-          example: timestamp
+          example: date
           nullable: true
         status:
           type: string
