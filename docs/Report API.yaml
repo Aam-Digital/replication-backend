@@ -1,0 +1,193 @@
+openapi: 3.0.3
+info:
+  title: Aam Digital - Report API
+  description: |-
+    todo
+  version: 1.0.0-draft.1
+servers:
+  - url: https://dev.aam-digital.com/api/v1
+tags:
+  - name: report
+paths:
+  /report:
+    get:
+      tags:
+        - report
+      summary: Return list of available Reports
+      responses:
+        200:
+          description: List of all available Reports
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Report'
+    post:
+      tags:
+        - report
+      summary: Create a new Report
+      responses:
+        default:
+          description: response
+
+  /report/{reportId}:
+    get:
+      tags:
+        - report
+      summary: Return report by ID
+      parameters:
+        - in: path
+          name: reportId
+          schema:
+            type: string
+          required: true
+      responses:
+        200:
+          description: List of all available Reports
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+    post:
+      tags:
+        - report
+      summary: Trigger a new report calculation run
+      parameters:
+        - in: path
+          name: reportId
+          schema:
+            type: string
+          required: true
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: timestamp
+            required: true
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: timestamp
+            required: true
+      responses:
+        200:
+          description: Return run identifier
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  run_id:
+                    type: string
+                    format: uuid
+
+  /report-run/{runId}:
+    get:
+      tags:
+        - report
+      summary: Return metadata for a report run
+      parameters:
+        - in: path
+          name: runId
+          schema:
+            type: string
+          required: true
+      responses:
+        200:
+          description: Successful report data response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportRun'
+
+  /report-run/{runId}/data:
+    get:
+      tags:
+        - report
+      summary: Fetch actual report data for a specific run
+      parameters:
+        - in: path
+          name: runId
+          schema:
+            type: string
+          required: true
+      responses:
+        200:
+          description: successful report data response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportData'
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/ReportData'
+        404:
+          description: report data is not available yet
+
+components:
+  schemas:
+    Report:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          example: report_all_course_members
+        last_run:
+          type: string
+          format: timestamp
+        run_pending:
+          type: boolean
+        schema:
+          $ref: '#/components/schemas/ReportSchema'
+
+    ReportSchema:
+      type: object
+      properties:
+        fields:
+          type: object
+
+    ReportRun:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        start_date:
+          type: string
+          example: timestamp
+        end_date:
+          type: string
+          example: timestamp
+          nullable: true
+        status:
+          type: string
+          description: Current status of the run
+          enum:
+            - pending
+            - running
+            - finished
+
+    ReportData:
+      type: object
+      properties:
+        reportId:
+          type: string
+          format: uuid
+        data:
+          type: object
+
+  securitySchemes:
+    openId:
+      type: openIdConnect
+      openIdConnectUrl: https://keycloak.aam-digital.com/realms/dev/.well-known/openid-configuration
+
+security:
+  - openId:
+      - reports_read
+      - reports_write
+
