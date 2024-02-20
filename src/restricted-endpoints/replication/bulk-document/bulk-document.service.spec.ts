@@ -58,6 +58,19 @@ describe('BulkDocumentService', () => {
     expect(result).toEqual(createBulkGetResponse(schoolDoc));
   });
 
+  it('should filter out docs without read permissions in response', () => {
+    const result = service.filterFindResponse(
+      {
+        docs: [getSchoolDoc(), getChildDoc(), getReportDoc()],
+        bookmark: '',
+      },
+      normalUser,
+    );
+
+    expect(result.docs.length).toBe(1);
+    expect(result.docs[0]._id).toBe('School:1');
+  });
+
   it('should not filter out deleted documents in bulk get', () => {
     const bulkGetResponse = createBulkGetResponse(childDoc, schoolDoc);
     childDoc._deleted = true;
@@ -206,6 +219,15 @@ describe('BulkDocumentService', () => {
   function getChildDoc(): DatabaseDocument {
     return {
       _id: 'Child:1',
+      _rev: 'someRev',
+      _revisions: { start: 1, ids: ['someRev'] },
+      someProperty: 'someValue',
+    };
+  }
+
+  function getReportDoc(): DatabaseDocument {
+    return {
+      _id: 'Report:1',
       _rev: 'someRev',
       _revisions: { start: 1, ids: ['someRev'] },
       someProperty: 'someValue',

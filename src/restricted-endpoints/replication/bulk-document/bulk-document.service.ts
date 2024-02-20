@@ -108,9 +108,7 @@ export class BulkDocumentService {
     return {
       bookmark: request.bookmark,
       warning: request.warning,
-      docs: request.docs.filter((doc) =>
-        this.hasPermissionsForDoc(doc, doc, ability),
-      ),
+      docs: request.docs.filter((doc) => ability.can('read', doc)),
     };
   }
 

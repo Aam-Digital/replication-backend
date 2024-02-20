@@ -4,7 +4,7 @@ import { firstValueFrom, of } from 'rxjs';
 import { BulkDocumentService } from './bulk-document.service';
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
-import { BulkDocsRequest } from './couchdb-dtos/bulk-docs.dto';
+import { BulkDocsRequest, FindResponse } from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
@@ -24,6 +24,7 @@ describe('BulkDocEndpointsController', () => {
       filterBulkGetResponse: () => null,
       filterAllDocsResponse: () => null,
       filterBulkDocsRequest: () => null,
+      filterFindResponse: () => null,
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -165,6 +166,49 @@ describe('BulkDocEndpointsController', () => {
       'db',
       '_bulk_docs',
       filteredRequest,
+    );
+  });
+
+  it('find() should use the document filter service', async () => {
+    const request = {
+      selector: {
+        'calculation.id': {
+          $eq: 'ReportCalculation:81e88aa8-9c5b-43d6-b0ca-40e165ffb1e6',
+        },
+      },
+    };
+
+    const filteredResponse: FindResponse = {
+      bookmark: '',
+      docs: [
+        {
+          _id: 'ReportCalculation:1',
+          _rev: 'anotherRev',
+          _revisions: { start: 1, ids: ['anotherRev'] },
+          anotherProperty: 'anotherProperty',
+        },
+      ],
+    };
+
+    jest
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValue(of(filteredResponse));
+
+    jest
+      .spyOn(documentFilter, 'filterFindResponse')
+      .mockReturnValue(filteredResponse);
+    const user = new UserInfo('username', ['admin']);
+
+    await firstValueFrom(controller.find('db', request, user));
+
+    expect(mockCouchDBService.post).toHaveBeenCalledWith(
+      'db',
+      '_find',
+      request,
+    );
+    expect(documentFilter.filterFindResponse).toHaveBeenCalledWith(
+      filteredResponse,
+      user,
     );
   });
 });

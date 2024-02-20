@@ -24,7 +24,7 @@ import {
   DocumentAbility,
   PermissionService,
 } from '../../permissions/permission/permission.service';
-import { EMPTY, firstValueFrom, map, Observable } from 'rxjs';
+import { EMPTY, firstValueFrom, map, Observable, throwError } from 'rxjs';
 import { permittedFieldsOf } from '@casl/ability/extra';
 import { pick } from 'lodash';
 import { Request as Req } from 'express';
@@ -68,7 +68,10 @@ export class DocumentController {
         _id: docId,
       })
     ) {
-      throw new UnauthorizedException('unauthorized', 'User is not permitted');
+      return throwError(
+        () =>
+          new UnauthorizedException('unauthorized', 'User is not permitted'),
+      );
     }
 
     return this.couchdbService.head(db, docId, queryParams).pipe(
