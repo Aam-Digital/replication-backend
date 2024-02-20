@@ -3,9 +3,11 @@ import {
   Controller,
   Delete,
   Get,
+  Head,
   Param,
   Put,
   Query,
+  Request,
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
@@ -22,9 +24,11 @@ import {
   DocumentAbility,
   PermissionService,
 } from '../../permissions/permission/permission.service';
-import { firstValueFrom } from 'rxjs';
+import { EMPTY, firstValueFrom, map, Observable, throwError } from 'rxjs';
 import { permittedFieldsOf } from '@casl/ability/extra';
 import { pick } from 'lodash';
+import { Request as Req } from 'express';
+import { AxiosResponse } from 'axios';
 
 /**
  * This controller implements endpoints to interact with single documents of a database.
@@ -39,6 +43,48 @@ export class DocumentController {
     private couchdbService: CouchdbService,
     private permissionService: PermissionService,
   ) {}
+
+  /**
+   * Check document meta information
+   * See {@link https://docs.couchdb.org/en/stable/api/document/common.html#head--db-docid}
+   * @param req express Request object
+   * @param db the name of the database from which the document should be fetched
+   * @param docId the name of the document
+   * @param user logged in user
+   * @param queryParams additional params that will be forwarded
+   */
+  @Head()
+  headDocument(
+    @Request() req: Req,
+    @Param('db') db: string,
+    @Param('docId') docId: string,
+    @User() user: UserInfo,
+    @Query() queryParams?: any,
+  ): Observable<any> {
+    const userAbility = this.permissionService.getAbilityFor(user);
+
+    if (
+      !userAbility.can('read', {
+        _id: docId,
+      })
+    ) {
+      return throwError(
+        () =>
+          new UnauthorizedException('unauthorized', 'User is not permitted'),
+      );
+    }
+
+    return this.couchdbService.head(db, docId, queryParams).pipe(
+      map((res) => {
+        this.forwardHeader(res, req, [
+          'ETag',
+          'X-Couch-Request-ID',
+          'X-CouchDB-Body-Time',
+        ]);
+        return EMPTY;
+      }),
+    );
+  }
 
   /**
    * Fetch a document from a database with basic auth.
@@ -69,6 +115,7 @@ export class DocumentController {
   /**
    * Put a document into the specified database using basic auth.
    * See {@link https://docs.couchdb.org/en/stable/api/document/common.html?highlight=put%20document#put--db-docid}
+   * @param req express Request object
    * @param db the name of the database where the document should be put
    * @param docId the ID of the document which should be put
    * @param document the document to be put. This doc does not necessarily need a _id field.
@@ -76,6 +123,7 @@ export class DocumentController {
    */
   @Put()
   async putDocument(
+    @Request() req: Req,
     @Param('db') db: string,
     @Param('docId') docId: string,
     @Body() document: DatabaseDocument,
@@ -97,6 +145,9 @@ export class DocumentController {
         existingDoc,
         document,
       );
+      if (req.header('if-match')) {
+        document._rev = req.header('if-match');
+      }
       return firstValueFrom(this.couchdbService.put(db, finalDoc));
     } else {
       throw new UnauthorizedException('unauthorized', 'User is not permitted');
@@ -155,6 +206,19 @@ export class DocumentController {
     } else {
       // Updating whole document
       return newDoc;
+    }
+  }
+
+  private forwardHeader(
+    res: AxiosResponse<any, any>,
+    req: Req,
+    headers: string[],
+  ) {
+    for (let i = 0; i < headers.length; i++) {
+      const header = headers[i];
+      if (res.headers[header.toLowerCase()]) {
+        req.res.setHeader(header, res.headers[header.toLowerCase()]);
+      }
     }
   }
 }

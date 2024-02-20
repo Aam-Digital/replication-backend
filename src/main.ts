@@ -21,6 +21,8 @@ async function bootstrap() {
     }),
   );
 
+  app.getHttpAdapter().getInstance().disable('x-powered-by');
+
   // SwaggerUI setup see https://docs.nestjs.com/openapi/introduction#bootstrap
   const config = new DocumentBuilder()
     .setTitle(process.env.npm_package_name)

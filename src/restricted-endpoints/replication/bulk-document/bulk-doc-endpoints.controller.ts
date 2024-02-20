@@ -7,10 +7,11 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { from, map, Observable, switchMap } from 'rxjs';
+import { from, map, Observable, of, switchMap } from 'rxjs';
 import {
   BulkDocsRequest,
   BulkDocsResponse,
+  FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
 import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
@@ -62,6 +63,31 @@ export class BulkDocEndpointsController {
           filteredBody,
         ),
       ),
+    );
+  }
+
+  /**
+   * Find documents using a declarative JSON querying syntax.
+   * See {@link https://docs.couchdb.org/en/stable/api/database/find.html#post--db-_find}
+   *
+   * @param db name of the database to which the documents should be uploaded
+   * @param body search query object
+   * @param user logged in user
+   * @returns BulkDocsResponse list of documents matching search query
+   */
+  @Post('/:db/_find')
+  @ApiOperation({
+    description: `Find documents using a declarative JSON querying syntax.`,
+  })
+  find(
+    @Param('db') db: string,
+    @Body() body: object,
+    @User() user: UserInfo,
+  ): Observable<FindResponse> {
+    return from(this.couchdbService.post<FindResponse>(db, '_find', body)).pipe(
+      switchMap((response) => {
+        return of(this.documentFilter.filterFindResponse(response, user));
+      }),
     );
   }
 

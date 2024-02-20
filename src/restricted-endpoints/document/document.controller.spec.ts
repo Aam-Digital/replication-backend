@@ -12,11 +12,19 @@ import { CouchdbService } from '../../couchdb/couchdb.service';
 import { of, throwError } from 'rxjs';
 import { DocumentRule } from '../../permissions/rules/rules.service';
 import { UnauthorizedException } from '@nestjs/common';
+import { Request as Req } from 'express';
+import { AxiosResponse } from 'axios';
 
 describe('DocumentController', () => {
   let controller: DocumentController;
   let mockPermissionService: PermissionService;
   let mockCouchDBService: CouchdbService;
+
+  let headers = {};
+  const mockReq = {
+    header: jest.fn((key: string, value: string) => (headers[key] = value)),
+  } as unknown as Req;
+
   const databaseName = '_users';
   const userDoc = {
     _id: `${COUCHDB_USER_DOC}:testUser`,
@@ -32,13 +40,24 @@ describe('DocumentController', () => {
     rev: userDoc._rev,
   };
   beforeEach(async () => {
+    headers = {};
     mockCouchDBService = {
       get: () => of({}),
       put: () => of({}),
+      head: () => of({}),
       delete: () => of({}),
     } as any;
     jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(userDoc));
     jest.spyOn(mockCouchDBService, 'put').mockReturnValue(of(SUCCESS_RESPONSE));
+    jest.spyOn(mockCouchDBService, 'head').mockReturnValue(
+      of({
+        headers: {
+          etag: 'etag-value',
+          'x-couch-request-id': 'request-id-value',
+          'x-couchdb-body-time': 'body-time-value',
+        },
+      } as unknown as AxiosResponse),
+    );
 
     mockPermissionService = {
       getAbilityFor: () => undefined,
@@ -64,11 +83,39 @@ describe('DocumentController', () => {
     mockAbility([{ subject: 'all', action: 'manage' }]);
 
     await controller.putDocument(
+      mockReq,
       databaseName,
       userDoc._id,
       userDoc,
       requestingUser,
     );
+
+    expect(mockPermissionService.getAbilityFor).toHaveBeenCalledWith(
+      requestingUser,
+    );
+  });
+
+  it('putDocument() should set if-match header in _rev property', async () => {
+    mockAbility([{ subject: 'all', action: 'manage' }]);
+
+    const req = {
+      header: jest.fn((key: string) => {
+        if (key === 'if-match') {
+          return 'if-match-value';
+        }
+      }),
+    } as unknown as Req;
+
+    await controller.putDocument(
+      req,
+      databaseName,
+      userDoc._id,
+      userDoc,
+      requestingUser,
+    );
+
+    expect(req.header).toHaveBeenNthCalledWith(1, 'if-match');
+    expect(req.header).toHaveBeenNthCalledWith(2, 'if-match');
 
     expect(mockPermissionService.getAbilityFor).toHaveBeenCalledWith(
       requestingUser,
@@ -98,6 +145,61 @@ describe('DocumentController', () => {
     );
   });
 
+  it('headDocument() should throw unauthorized exception if user does not have read permission', (done) => {
+    mockAbility([
+      {
+        subject: COUCHDB_USER_DOC,
+        action: 'read',
+        inverted: true,
+      },
+    ]);
+
+    controller
+      .headDocument(mockReq, databaseName, userDoc._id, requestingUser)
+      .subscribe({
+        next: () => {
+          done('should reject observable');
+        },
+        error: () => {
+          done();
+        },
+      });
+  });
+
+  it('headDocument() should forward header from couchdb response', (done) => {
+    mockAbility([
+      {
+        subject: COUCHDB_USER_DOC,
+        action: 'read',
+      },
+    ]);
+
+    const req = {
+      header: jest.fn((key: string, value: string) => (headers[key] = value)),
+      res: {
+        setHeader: jest.fn(
+          (key: string, value: string) => (headers[key] = value),
+        ),
+      },
+    } as unknown as Req;
+
+    controller
+      .headDocument(req, databaseName, userDoc._id, requestingUser)
+      .subscribe({
+        next: () => {
+          expect(headers).toStrictEqual({
+            ETag: 'etag-value',
+            'X-Couch-Request-ID': 'request-id-value',
+            'X-CouchDB-Body-Time': 'body-time-value',
+          });
+          done();
+        },
+        error: (err) => {
+          done(err);
+        },
+      });
+  });
+
   it('should throw unauthorized exception if user does not have read permission', async () => {
     mockAbility([
       {
@@ -123,6 +225,7 @@ describe('DocumentController', () => {
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['create', 'read'] }]);
 
     const response = controller.putDocument(
+      mockReq,
       databaseName,
       userDoc._id,
       userDoc,
@@ -140,6 +243,7 @@ describe('DocumentController', () => {
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
 
     const response = controller.putDocument(
+      mockReq,
       databaseName,
       userDoc._id,
       userDoc,
@@ -155,6 +259,7 @@ describe('DocumentController', () => {
     userWithUpdatedRoles.roles = ['admin_app'];
 
     const response = controller.putDocument(
+      mockReq,
       databaseName,
       userDoc._id,
       userWithUpdatedRoles,
@@ -184,6 +289,7 @@ describe('DocumentController', () => {
     updatedPasswordAndRole.roles = ['admin_app'];
 
     const response = controller.putDocument(
+      mockReq,
       databaseName,
       updatedPasswordAndRole._id,
       updatedPasswordAndRole,
@@ -214,6 +320,7 @@ describe('DocumentController', () => {
     userWithUpdatedPassword['password'] = 'new_password';
 
     const response = controller.putDocument(
+      mockReq,
       databaseName,
       userDoc._id,
       userWithUpdatedPassword,

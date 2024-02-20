@@ -14,6 +14,7 @@ import {
   SessionResponse,
   UserInfo,
 } from '../restricted-endpoints/session/user-auth.dto';
+import { AxiosResponse } from 'axios';
 
 @Injectable()
 export class CouchdbService {
@@ -58,13 +59,23 @@ export class CouchdbService {
     });
   }
 
+  head(
+    databaseName?: string,
+    documentId?: string,
+    params?: any,
+  ): Observable<AxiosResponse> {
+    return this.httpService.head(this.buildDocUrl(databaseName, documentId), {
+      params,
+    });
+  }
+
   get<T extends DatabaseDocument = DatabaseDocument>(
     databaseName?: string,
-    documentID?: string,
+    documentId?: string,
     params?: any,
   ): Observable<T> {
     return this.httpService
-      .get<T>(this.buildDocUrl(databaseName, documentID), { params })
+      .get<T>(this.buildDocUrl(databaseName, documentId), { params })
       .pipe(map((response) => response.data));
   }
 

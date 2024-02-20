@@ -10,7 +10,10 @@ export class UserCredentials {
  * User object as used by CouchDB
  */
 export class UserInfo {
-  constructor(public name: string, public roles: string[]) {}
+  constructor(
+    public name: string,
+    public roles: string[],
+  ) {}
 }
 
 /**

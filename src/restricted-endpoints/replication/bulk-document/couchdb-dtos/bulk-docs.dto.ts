@@ -3,6 +3,12 @@ export class BulkDocsRequest {
   docs: DatabaseDocument[];
 }
 
+export class FindResponse {
+  docs: DatabaseDocument[];
+  bookmark: string;
+  warning?: string;
+}
+
 export class DatabaseDocument {
   // This can be optional when a single document is put into the database
   _id?: string;
