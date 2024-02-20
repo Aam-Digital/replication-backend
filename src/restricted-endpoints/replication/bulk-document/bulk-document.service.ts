@@ -13,6 +13,7 @@ import {
 import {
   BulkDocsRequest,
   DatabaseDocument,
+  FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
 import {
@@ -96,6 +97,38 @@ export class BulkDocumentService {
     );
     return {
       new_edits: request.new_edits,
+      docs: request.docs.filter((doc) =>
+        this.hasPermissionsForDoc(
+          doc,
+          response.rows.find((responseDoc) => responseDoc.id === doc._id),
+          ability,
+        ),
+      ),
+    };
+  }
+
+  async filterFindResponse(
+    request: FindResponse,
+    user: UserInfo,
+    db: string,
+  ): Promise<FindResponse> {
+    const ability = this.permissionService.getAbilityFor(user);
+    const allDocsRequest: AllDocsRequest = {
+      keys: request.docs.map((doc) => doc._id),
+    };
+    const response = await firstValueFrom(
+      this.couchdbService.post<AllDocsResponse>(
+        db,
+        '_all_docs',
+        allDocsRequest,
+        {
+          include_docs: true,
+        },
+      ),
+    );
+    return {
+      bookmark: request.bookmark,
+      warning: request.warning,
       docs: request.docs.filter((doc) =>
         this.hasPermissionsForDoc(
           doc,

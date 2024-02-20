@@ -12,11 +12,18 @@ import { CouchdbService } from '../../couchdb/couchdb.service';
 import { of, throwError } from 'rxjs';
 import { DocumentRule } from '../../permissions/rules/rules.service';
 import { UnauthorizedException } from '@nestjs/common';
+import { Request as Req } from 'express';
 
 describe('DocumentController', () => {
   let controller: DocumentController;
   let mockPermissionService: PermissionService;
   let mockCouchDBService: CouchdbService;
+
+  const headers = {};
+  const mockReq = {
+    header: jest.fn((key: string, value: string) => (headers[key] = value)),
+  } as unknown as Req;
+
   const databaseName = '_users';
   const userDoc = {
     _id: `${COUCHDB_USER_DOC}:testUser`,
@@ -64,6 +71,7 @@ describe('DocumentController', () => {
     mockAbility([{ subject: 'all', action: 'manage' }]);
 
     await controller.putDocument(
+      mockReq,
       databaseName,
       userDoc._id,
       userDoc,
@@ -123,6 +131,7 @@ describe('DocumentController', () => {
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['create', 'read'] }]);
 
     const response = controller.putDocument(
+      mockReq,
       databaseName,
       userDoc._id,
       userDoc,
@@ -140,6 +149,7 @@ describe('DocumentController', () => {
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
 
     const response = controller.putDocument(
+      mockReq,
       databaseName,
       userDoc._id,
       userDoc,
@@ -155,6 +165,7 @@ describe('DocumentController', () => {
     userWithUpdatedRoles.roles = ['admin_app'];
 
     const response = controller.putDocument(
+      mockReq,
       databaseName,
       userDoc._id,
       userWithUpdatedRoles,
@@ -184,6 +195,7 @@ describe('DocumentController', () => {
     updatedPasswordAndRole.roles = ['admin_app'];
 
     const response = controller.putDocument(
+      mockReq,
       databaseName,
       updatedPasswordAndRole._id,
       updatedPasswordAndRole,
@@ -214,6 +226,7 @@ describe('DocumentController', () => {
     userWithUpdatedPassword['password'] = 'new_password';
 
     const response = controller.putDocument(
+      mockReq,
       databaseName,
       userDoc._id,
       userWithUpdatedPassword,

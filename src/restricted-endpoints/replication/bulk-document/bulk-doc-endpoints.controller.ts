@@ -11,6 +11,7 @@ import { from, map, Observable, switchMap } from 'rxjs';
 import {
   BulkDocsRequest,
   BulkDocsResponse,
+  FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
 import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
@@ -62,6 +63,31 @@ export class BulkDocEndpointsController {
           filteredBody,
         ),
       ),
+    );
+  }
+
+  /**
+   * Find multiple documents with a single request.
+   * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#upload-batch-of-changed-documents}
+   *
+   * @param db name of the database to which the documents should be uploaded
+   * @param body search query object
+   * @param user logged in user
+   * @returns BulkDocsResponse list of documents matching search query
+   */
+  @Post('/:db/_find')
+  @ApiOperation({
+    description: `Find multiple documents with a single request.`,
+  })
+  find(
+    @Param('db') db: string,
+    @Body() body: any,
+    @User() user: UserInfo,
+  ): Observable<FindResponse> {
+    return from(this.couchdbService.post<FindResponse>(db, '_find', body)).pipe(
+      switchMap((response) => {
+        return this.documentFilter.filterFindResponse(response, user, db);
+      }),
     );
   }
 
