@@ -5,11 +5,7 @@ import {
   ErrorDoc,
   OkDoc,
 } from './couchdb-dtos/bulk-get.dto';
-import {
-  AllDocsRequest,
-  AllDocsResponse,
-  DocMetaInf,
-} from './couchdb-dtos/all-docs.dto';
+import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
   DatabaseDocument,
@@ -100,55 +96,34 @@ export class BulkDocumentService {
       docs: request.docs.filter((doc) =>
         this.hasPermissionsForDoc(
           doc,
-          response.rows.find((responseDoc) => responseDoc.id === doc._id),
+          response.rows.find((responseDoc) => responseDoc.id === doc._id)?.doc,
           ability,
         ),
       ),
     };
   }
 
-  async filterFindResponse(
-    request: FindResponse,
-    user: UserInfo,
-    db: string,
-  ): Promise<FindResponse> {
+  filterFindResponse(request: FindResponse, user: UserInfo): FindResponse {
     const ability = this.permissionService.getAbilityFor(user);
-    const allDocsRequest: AllDocsRequest = {
-      keys: request.docs.map((doc) => doc._id),
-    };
-    const response = await firstValueFrom(
-      this.couchdbService.post<AllDocsResponse>(
-        db,
-        '_all_docs',
-        allDocsRequest,
-        {
-          include_docs: true,
-        },
-      ),
-    );
     return {
       bookmark: request.bookmark,
       warning: request.warning,
       docs: request.docs.filter((doc) =>
-        this.hasPermissionsForDoc(
-          doc,
-          response.rows.find((responseDoc) => responseDoc.id === doc._id),
-          ability,
-        ),
+        this.hasPermissionsForDoc(doc, doc, ability),
       ),
     };
   }
 
   private hasPermissionsForDoc(
     updatedDoc: DatabaseDocument,
-    existingDoc: DocMetaInf,
+    existingDoc: DatabaseDocument,
     ability: DocumentAbility,
   ) {
     if (existingDoc) {
       if (updatedDoc._deleted) {
-        return ability.can('delete', existingDoc.doc);
+        return ability.can('delete', existingDoc);
       } else {
-        return ability.can('update', existingDoc.doc);
+        return ability.can('update', existingDoc);
       }
     } else {
       return ability.can('create', updatedDoc);

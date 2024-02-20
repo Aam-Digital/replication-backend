@@ -7,7 +7,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { from, map, Observable, switchMap } from 'rxjs';
+import { from, map, Observable, of, switchMap } from 'rxjs';
 import {
   BulkDocsRequest,
   BulkDocsResponse,
@@ -67,8 +67,8 @@ export class BulkDocEndpointsController {
   }
 
   /**
-   * Find multiple documents with a single request.
-   * See {@link https://docs.couchdb.org/en/stable/replication/protocol.html#upload-batch-of-changed-documents}
+   * Find documents using a declarative JSON querying syntax.
+   * See {@link https://docs.couchdb.org/en/stable/api/database/find.html#post--db-_find}
    *
    * @param db name of the database to which the documents should be uploaded
    * @param body search query object
@@ -77,16 +77,16 @@ export class BulkDocEndpointsController {
    */
   @Post('/:db/_find')
   @ApiOperation({
-    description: `Find multiple documents with a single request.`,
+    description: `Find documents using a declarative JSON querying syntax.`,
   })
   find(
     @Param('db') db: string,
-    @Body() body: any,
+    @Body() body: object,
     @User() user: UserInfo,
   ): Observable<FindResponse> {
     return from(this.couchdbService.post<FindResponse>(db, '_find', body)).pipe(
       switchMap((response) => {
-        return this.documentFilter.filterFindResponse(response, user, db);
+        return of(this.documentFilter.filterFindResponse(response, user));
       }),
     );
   }

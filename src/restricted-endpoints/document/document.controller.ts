@@ -24,10 +24,11 @@ import {
   DocumentAbility,
   PermissionService,
 } from '../../permissions/permission/permission.service';
-import { firstValueFrom } from 'rxjs';
+import { EMPTY, firstValueFrom, map, Observable } from 'rxjs';
 import { permittedFieldsOf } from '@casl/ability/extra';
 import { pick } from 'lodash';
 import { Request as Req } from 'express';
+import { AxiosResponse } from 'axios';
 
 /**
  * This controller implements endpoints to interact with single documents of a database.
@@ -44,8 +45,8 @@ export class DocumentController {
   ) {}
 
   /**
-   * Fetch a document from a database with basic auth.
-   * See {@link https://docs.couchdb.org/en/stable/api/document/common.html?highlight=put%20document#get--db-docid}
+   * Check document meta information
+   * See {@link https://docs.couchdb.org/en/stable/api/document/common.html#head--db-docid}
    * @param req express Request object
    * @param db the name of the database from which the document should be fetched
    * @param docId the name of the document
@@ -53,25 +54,33 @@ export class DocumentController {
    * @param queryParams additional params that will be forwarded
    */
   @Head()
-  async headDocument(
+  headDocument(
     @Request() req: Req,
     @Param('db') db: string,
     @Param('docId') docId: string,
     @User() user: UserInfo,
     @Query() queryParams?: any,
-  ): Promise<DatabaseDocument> {
+  ): Observable<any> {
     const userAbility = this.permissionService.getAbilityFor(user);
-    const document = await firstValueFrom(
-      this.couchdbService.get(db, docId, queryParams),
-    );
-    if (userAbility.can('read', document)) {
-      if (document._rev) {
-        req.res.setHeader('etag', document._rev);
-      }
-      return document;
-    } else {
+
+    if (
+      !userAbility.can('read', {
+        _id: docId,
+      })
+    ) {
       throw new UnauthorizedException('unauthorized', 'User is not permitted');
     }
+
+    return this.couchdbService.head(db, docId, queryParams).pipe(
+      map((res) => {
+        this.forwardHeader(res, req, [
+          'ETag',
+          'X-Couch-Request-ID',
+          'X-CouchDB-Body-Time',
+        ]);
+        return EMPTY;
+      }),
+    );
   }
 
   /**
@@ -194,6 +203,19 @@ export class DocumentController {
     } else {
       // Updating whole document
       return newDoc;
+    }
+  }
+
+  private forwardHeader(
+    res: AxiosResponse<any, any>,
+    req: Req,
+    headers: string[],
+  ) {
+    for (let i = 0; i < headers.length; i++) {
+      const header = headers[i];
+      if (res.headers[header.toLowerCase()]) {
+        req.res.setHeader(header, res.headers[header.toLowerCase()]);
+      }
     }
   }
 }
