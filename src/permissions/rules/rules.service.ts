@@ -8,6 +8,7 @@ import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
 import { ChangesResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
 import { get } from 'lodash';
+import { AdminService } from '../../admin/admin.service';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 
@@ -24,6 +25,7 @@ export class RulesService {
   constructor(
     private couchdbService: CouchdbService,
     private configService: ConfigService,
+    private adminService: AdminService,
   ) {
     const permissionDbName = this.configService.get(
       RulesService.ENV_PERMISSION_DB,
@@ -60,8 +62,19 @@ export class RulesService {
       )
       .subscribe((changes) => {
         this.lastSeq = changes.last_seq;
-        if (changes.results.length > 0) {
-          this.permission = changes.results[0].doc.data;
+        if (changes.results?.length > 0) {
+          const prevPermissions = this.permission;
+          const newPermissions = changes.results[0].doc.data;
+
+          this.permission = newPermissions;
+
+          if (
+            prevPermissions !== undefined && // do not clear upon restart of the API
+            JSON.stringify(prevPermissions) !== JSON.stringify(newPermissions)
+          ) {
+            this.adminService.clearLocal(db);
+            console.log('Permissions changed - triggered clearLocal:');
+          }
         }
       });
   }

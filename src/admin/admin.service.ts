@@ -1,17 +1,13 @@
-import { Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
-import { AllDocsResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/all-docs.dto';
-import { CouchdbService } from '../../couchdb/couchdb.service';
-import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
-import { OnlyAuthenticated } from '../../auth/only-authenticated.decorator';
+import { AllDocsResponse } from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/all-docs.dto';
+import { CouchdbService } from '../couchdb/couchdb.service';
 
 /**
- * This service provides some general administrativ endpoints.
+ * Service providing some general functionalities that are required in the context of administering the db and permissions.
  */
-@OnlyAuthenticated()
-@UseGuards(CombinedAuthGuard)
-@Controller('admin')
-export class AdminController {
+@Injectable()
+export class AdminService {
   constructor(private couchdbService: CouchdbService) {}
 
   /**
@@ -24,8 +20,7 @@ export class AdminController {
    *
    * This function should be called whenever the permissions change to re-trigger sync
    */
-  @Post('/clear_local/:db')
-  async clearLocal(@Param('db') db: string): Promise<any> {
+  async clearLocal(db: string) {
     const localDocsResponse = await firstValueFrom(
       this.couchdbService.get<AllDocsResponse>(db, '_local_docs'),
     );
@@ -41,6 +36,5 @@ export class AdminController {
     );
 
     await Promise.all(deletePromises);
-    return true;
   }
 }

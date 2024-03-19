@@ -6,14 +6,18 @@ import { Permission } from './permission';
 import { ConfigService } from '@nestjs/config';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ChangesResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
+import { AdminService } from '../../admin/admin.service';
 
 describe('RulesService', () => {
   let service: RulesService;
   let adminRules: DocumentRule[];
   let userRules: DocumentRule[];
   let mockCouchDBService: CouchdbService;
+  let mockAdminService: AdminService;
+
   let testPermission: Permission;
   let changesResponse: ChangesResponse;
+
   const normalUser = new UserInfo('normalUser', ['user_app']);
   const adminUser = new UserInfo('superUser', ['user_app', 'admin_app']);
   const DATABASE_NAME = 'app';
@@ -28,6 +32,7 @@ describe('RulesService', () => {
     });
     userRules = testPermission.data[normalUser.roles[0]];
     adminRules = testPermission.data[adminUser.roles[1]];
+
     changesResponse = {
       last_seq: 'initial_seq',
       results: [
@@ -43,6 +48,10 @@ describe('RulesService', () => {
       .mockReturnValueOnce(of(changesResponse))
       .mockReturnValueOnce(NEVER);
 
+    mockAdminService = {
+      clearLocal: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
     const module = await Test.createTestingModule({
       providers: [
         RulesService,
@@ -53,6 +62,7 @@ describe('RulesService', () => {
           }),
         },
         { provide: CouchdbService, useValue: mockCouchDBService },
+        { provide: AdminService, useValue: mockAdminService },
       ],
     }).compile();
 
@@ -177,5 +187,41 @@ describe('RulesService', () => {
 
     expect(result).toEqual([publicRule]);
     expect(result).not.toContain(testPermission.data.default);
+  });
+
+  it('should update rules and call clear_local when permission doc changed', () => {
+    jest.useFakeTimers();
+
+    const updatedPermission = new Permission({
+      user_app: [{ action: 'manage', subject: 'all' }],
+    });
+    const updatedPermissionChange = {
+      last_seq: '1',
+      results: [
+        {
+          doc: updatedPermission,
+          seq: '1',
+          changes: [],
+          id: updatedPermission._id,
+        },
+      ],
+      pending: 0,
+    };
+
+    jest
+      .spyOn(mockCouchDBService, 'get')
+      .mockReturnValueOnce(of(changesResponse))
+      .mockReturnValueOnce(of(updatedPermissionChange))
+      .mockReturnValue(NEVER);
+
+    service.loadRulesContinuously('app');
+    jest.advanceTimersByTime(1500);
+
+    expect(service.getRulesForUser(normalUser)).toEqual([
+      { action: 'manage', subject: 'all' },
+    ]);
+    expect(mockAdminService.clearLocal).toHaveBeenCalled();
+
+    jest.useRealTimers();
   });
 });
