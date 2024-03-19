@@ -1,11 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { AdminController } from './admin.controller';
+import { AdminService } from './admin.service';
+import { CouchdbService } from '../couchdb/couchdb.service';
 import { of } from 'rxjs';
-import { CouchdbService } from '../../couchdb/couchdb.service';
-import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
 
-describe('AdminController', () => {
-  let controller: AdminController;
+describe('AdminService', () => {
+  let service: AdminService;
   let mockCouchDBService: CouchdbService;
 
   beforeEach(async () => {
@@ -14,18 +13,17 @@ describe('AdminController', () => {
       delete: () => of({}),
     } as any;
     const module: TestingModule = await Test.createTestingModule({
-      controllers: [AdminController],
       providers: [
-        ...authGuardMockProviders,
+        AdminService,
         { provide: CouchdbService, useValue: mockCouchDBService },
       ],
     }).compile();
 
-    controller = module.get(AdminController);
+    service = module.get<AdminService>(AdminService);
   });
 
   it('should be defined', () => {
-    expect(controller).toBeDefined();
+    expect(service).toBeDefined();
   });
 
   it('should delete all docs in the _local db', async () => {
@@ -42,12 +40,11 @@ describe('AdminController', () => {
     jest.spyOn(mockCouchDBService, 'delete').mockReturnValue(of(undefined));
     const dbName = 'app';
 
-    const result = await controller.clearLocal(dbName);
+    await service.clearLocal(dbName);
 
     expect(mockCouchDBService.get).toHaveBeenCalledWith(dbName, '_local_docs');
     mockAllDocsResponse.rows.forEach((row) => {
       expect(mockCouchDBService.delete).toHaveBeenCalledWith(dbName, row.id);
     });
-    expect(result).toBe(true);
   });
 });
