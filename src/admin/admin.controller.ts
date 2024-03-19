@@ -4,7 +4,7 @@ import { OnlyAuthenticated } from '../auth/only-authenticated.decorator';
 import { AdminService } from './admin.service';
 
 /**
- * This service provides some general administrativ endpoints.
+ * This controller provides some general administrative endpoints.
  */
 @OnlyAuthenticated()
 @UseGuards(CombinedAuthGuard)
