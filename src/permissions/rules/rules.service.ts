@@ -63,14 +63,17 @@ export class RulesService {
       .subscribe((changes) => {
         this.lastSeq = changes.last_seq;
         if (changes.results?.length > 0) {
+          const prevPermissions = this.permission;
           const newPermissions = changes.results[0].doc.data;
+
           this.permission = newPermissions;
 
           if (
-            this.permission !== undefined && // do not clear upon restart of the API
-            JSON.stringify(this.permission) !== JSON.stringify(newPermissions)
+            prevPermissions !== undefined && // do not clear upon restart of the API
+            JSON.stringify(prevPermissions) !== JSON.stringify(newPermissions)
           ) {
             this.adminService.clearLocal(db);
+            console.log('Permissions changed - triggered clearLocal:');
           }
         }
       });
