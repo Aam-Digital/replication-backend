@@ -14,7 +14,7 @@ The backend can either be run as a docker container
 ```
 > docker run aamdigital/replication-ms:latest
 ```
-or directly through npm
+or directly through npm (see below: --> "Development")
 ```
 > npm install && npm start
 ```
@@ -97,7 +97,6 @@ For more information on how to write rules have a look at the [CASL documentatio
 ## Operation
 Besides the CouchDB endpoints, the backend also provides some additional endpoints that are necessary to be used at times.
 A swagger / OpenAPI interface can be visited at `/api/` which shows all endpoints that are available.
-- `/admin/reload/{db}` needs to be executed whenever the `Permission` document is updated in the database in order to update the cached permissions in the backend. `{db}` should be the name of the database in which the `Permission` document is stored.
 - `/admin/clear_local/{db}` needs to be executed whenever a rule or a permission change might give a user more permission than the user previously had. This will restart the synchronization process for each client which makes them fetch all the documents for which they now have gained permissions.
 - The endpoints of the *real* CouchDB are available through a reverse proxy at `/couchdb/`. This can be used to visit the developer interface at `/couchdb/_utils/`.
 
@@ -112,3 +111,7 @@ To run and test this project locally:
 1. `npm install` to download and set up all dependencies
 2. `npm start` to run the application locally (see above for required environment variables)
 3. `npm test` to execute unit tests
+
+## Run in a fully local environment with other services
+Use the dockerized local environment to run a fully synced app including backend services on your machine:
+https://github.com/Aam-Digital/aam-services/tree/main/docs/developer
