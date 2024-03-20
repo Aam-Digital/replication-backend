@@ -72,8 +72,9 @@ export class RulesService {
             prevPermissions !== undefined && // do not clear upon restart of the API
             JSON.stringify(prevPermissions) !== JSON.stringify(newPermissions)
           ) {
-            this.adminService.clearLocal(db);
-            console.log('Permissions changed - triggered clearLocal:');
+            this.adminService.clearLocal(db).then(() => {
+              console.log('Permissions changed - triggered clearLocal:' + db);
+            });
           }
         }
       });
