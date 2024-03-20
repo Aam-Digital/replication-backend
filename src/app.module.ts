@@ -1,67 +1,18 @@
-import {
-  HttpException,
-  MiddlewareConsumer,
-  Module,
-  NestModule,
-} from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
-import { SentryInterceptor, SentryModule } from '@ntegral/nestjs-sentry';
-import { SeverityLevel } from '@sentry/types';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
 import { AuthModule } from './auth/auth.module';
 import { CouchdbModule } from './couchdb/couchdb.module';
-import { APP_INTERCEPTOR } from '@nestjs/core';
 import { AdminModule } from './admin/admin.module';
 import { setUser } from '@sentry/node';
-
-const lowSeverityLevels: SeverityLevel[] = ['log', 'info'];
+import { AppConfiguration } from './config/configuration';
 
 @Module({
-  providers: [
-    {
-      provide: APP_INTERCEPTOR,
-      useFactory: () =>
-        new SentryInterceptor({
-          filters: [
-            {
-              type: HttpException,
-              filter: (exception: HttpException) => 500 > exception.getStatus(), // Only report 500 errors
-            },
-          ],
-        }),
-    },
-  ],
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    SentryModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => {
-        if (!configService.get('SENTRY_DSN')) {
-          return;
-        }
-
-        return {
-          dsn: configService.get('SENTRY_DSN'),
-          debug: true,
-          environment: 'prod',
-          release: 'backend@' + process.env.npm_package_version,
-          whitelistUrls: [/https?:\/\/(.*)\.?aam-digital\.com/],
-          initialScope: {
-            tags: {
-              // ID of the docker container in which this is run
-              hostname: process.env.HOSTNAME || 'unknown',
-            },
-          },
-          beforeSend: (event) => {
-            if (lowSeverityLevels.includes(event.level)) {
-              return null;
-            } else {
-              return event;
-            }
-          },
-        };
-      },
+    ConfigModule.forRoot({
+      isGlobal: true,
+      ignoreEnvFile: false,
+      load: [AppConfiguration],
     }),
     AdminModule,
     CouchdbModule,
