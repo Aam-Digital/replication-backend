@@ -3,7 +3,9 @@ import { AppModule } from './app.module';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 import { createProxyMiddleware } from 'http-proxy-middleware';
-import { SentryService } from '@ntegral/nestjs-sentry';
+import { configureSentry } from './sentry.configuration';
+import { ConfigService } from '@nestjs/config';
+import { AppConfiguration } from './config/configuration';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { bodyParser: false });
@@ -43,8 +45,10 @@ async function bootstrap() {
   // Required for JWT cookie auth
   app.use(cookieParser());
 
-  // Logging everything through sentry
-  app.useLogger(SentryService.SentryServiceInstance());
+  // load ConfigService instance to access .env and app.yaml values
+  const configService = new ConfigService(AppConfiguration());
+
+  configureSentry(app, configService);
 
   await app.listen(process.env.PORT || 3000);
 }

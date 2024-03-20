@@ -3,6 +3,9 @@
   "sourceRoot": "src",
   "compilerOptions": {
     "plugins": ["@nestjs/swagger"],
-    "assets": ["assets/*"]
+    "assets": [
+      "assets/*",
+      { "include": "./config/*.yaml", "outDir": "./dist", "watchAssets": true }
+    ]
   }
 }
