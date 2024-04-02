@@ -1,6 +1,10 @@
 import * as Sentry from '@sentry/node';
 import { ConfigService } from '@nestjs/config';
-import { ArgumentsHost, INestApplication } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  INestApplication,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
 
 export class SentryConfiguration {
@@ -56,6 +60,16 @@ function configureLoggingSentry(
     tracesSampleRate: 1.0, //  Capture 100% of the transactions
     // Set sampling rate for profiling - this is relative to tracesSampleRate
     profilesSampleRate: 1.0,
+
+    beforeSend: (event, hint) => {
+      const error = hint.originalException;
+      if (error instanceof UnauthorizedException) {
+        console.log(error);
+        return null;
+      }
+
+      return event;
+    },
   });
 
   app.use(Sentry.Handlers.errorHandler());
