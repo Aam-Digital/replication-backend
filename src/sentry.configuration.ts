@@ -1,11 +1,8 @@
 import * as Sentry from '@sentry/node';
 import { ConfigService } from '@nestjs/config';
-import {
-  ArgumentsHost,
-  INestApplication,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ArgumentsHost, INestApplication } from '@nestjs/common';
 import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
+import { HttpException } from '@nestjs/common/exceptions/http.exception';
 
 export class SentryConfiguration {
   ENABLED: boolean = false;
@@ -63,8 +60,11 @@ function configureLoggingSentry(
 
     beforeSend: (event, hint) => {
       const error = hint.originalException;
-      if (error instanceof UnauthorizedException) {
-        console.log(error);
+      if (
+        error instanceof HttpException &&
+        error.getStatus() >= 400 &&
+        error.getStatus() < 500
+      ) {
         return null;
       }
 
