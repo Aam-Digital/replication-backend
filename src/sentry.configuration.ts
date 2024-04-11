@@ -65,7 +65,6 @@ function configureLoggingSentry(
         error.getStatus() >= 400 &&
         error.getStatus() < 500
       ) {
-        console.log(error);
         return null;
       }
 
