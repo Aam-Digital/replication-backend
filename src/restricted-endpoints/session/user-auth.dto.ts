@@ -13,6 +13,7 @@ export class UserInfo {
   constructor(
     public name: string,
     public roles: string[],
+    public projects: string[] = [],
   ) {}
 }
 
