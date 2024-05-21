@@ -31,4 +31,4 @@ jobs:
           platforms: linux/amd64
           context: ./
           push: true
-          tags: ghcr.io/aam-digital/replication-backend:${{ github.event.pull_request.title }}
+          tags: ghcr.io/aam-digital/replication-backend:pr-${{ github.event.number }}
