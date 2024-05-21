@@ -29,7 +29,7 @@ export class JwtCookieStrategy extends PassportStrategy(
 
   async validate(data: any): Promise<UserInfo> {
     const user = await firstValueFrom(
-      this.couchdbService.get('app', 'User:' + data['preferred_username']),
+      this.couchdbService.get('app', data['username']),
     ).catch(() => {});
 
     return new UserInfo(
