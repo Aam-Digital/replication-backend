@@ -304,9 +304,10 @@ describe('DocumentController', () => {
   });
 
   it('should throw exception if the update permission is not given', () => {
-    const otherUser = {
+    const otherUser: UserInfo = {
       name: 'anotherUser',
       roles: [],
+      projects: [],
     };
     mockAbility([
       {

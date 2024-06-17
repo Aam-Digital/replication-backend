@@ -5,6 +5,8 @@ import { AuthModule } from '../../auth.module';
 import { UserInfo } from '../../../restricted-endpoints/session/user-auth.dto';
 import { TOKEN_KEY } from '../../cookie/cookie.service';
 import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
 
 /**
  * Authenticate a user using an existing JWT from a cookie in the request.
@@ -14,7 +16,10 @@ export class JwtCookieStrategy extends PassportStrategy(
   Strategy,
   'jwt-cookie',
 ) {
-  constructor(configService: ConfigService) {
+  constructor(
+    configService: ConfigService,
+    private couchdbService: CouchdbService,
+  ) {
     super({
       jwtFromRequest: (req) => req?.cookies[TOKEN_KEY],
       ignoreExpiration: false,
@@ -23,6 +28,14 @@ export class JwtCookieStrategy extends PassportStrategy(
   }
 
   async validate(data: any): Promise<UserInfo> {
-    return new UserInfo(data.name, data.sub);
+    const user = await firstValueFrom(
+      this.couchdbService.get('app', data['username']),
+    ).catch(() => {});
+
+    return new UserInfo(
+      data.name,
+      data.sub,
+      user && user['projects'] ? user['projects'] : [],
+    );
   }
 }
