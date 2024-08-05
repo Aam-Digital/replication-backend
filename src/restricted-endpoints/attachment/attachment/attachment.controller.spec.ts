@@ -81,7 +81,7 @@ describe('AttachmentController', () => {
       .mockReturnValue(
         new DocumentAbility([{ subject: 'all', action: 'manage' }]),
       );
-    controller.proxy = () => undefined;
+    (controller.proxy as any) = () => undefined;
     jest.spyOn(controller, 'proxy');
 
     await controller.createAttachment(
@@ -123,7 +123,7 @@ describe('AttachmentController', () => {
       .mockReturnValue(
         new DocumentAbility([{ subject: 'all', action: 'read' }]),
       );
-    controller.proxy = () => undefined;
+    (controller.proxy as any) = () => undefined;
     jest.spyOn(controller, 'proxy');
 
     await controller.getAttachment(

@@ -53,13 +53,15 @@ export class AttachmentController {
     followRedirects: false,
     xfwd: true,
     autoRewrite: true,
-    onProxyReq: (proxyReq) => {
-      // Removing existing cookie and overwriting header with authorized credentials
-      const authHeader = Buffer.from(
-        `${this.databaseUser}:${this.databasePassword}`,
-      ).toString('base64');
-      proxyReq.setHeader('authorization', `Basic ${authHeader}`);
-      proxyReq.removeHeader('cookie');
+    on: {
+      proxyReq: (proxyReq) => {
+        // Removing existing cookie and overwriting header with authorized credentials
+        const authHeader = Buffer.from(
+          `${this.databaseUser}:${this.databasePassword}`,
+        ).toString('base64');
+        proxyReq.setHeader('authorization', `Basic ${authHeader}`);
+        proxyReq.removeHeader('cookie');
+      },
     },
   });
   constructor(
