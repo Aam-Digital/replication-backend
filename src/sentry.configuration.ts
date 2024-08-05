@@ -50,8 +50,8 @@ function configureLoggingSentry(
     dsn: sentryConfiguration.DSN,
     integrations: [
       // enable HTTP calls tracing
-      new Sentry.Integrations.Console(),
-      new Sentry.Integrations.Http({ tracing: true }),
+      Sentry.captureConsoleIntegration(),
+      Sentry.httpIntegration(),
     ],
     // Performance Monitoring
     tracesSampleRate: 1.0, //  Capture 100% of the transactions
@@ -72,9 +72,7 @@ function configureLoggingSentry(
     },
   });
 
-  app.use(Sentry.Handlers.errorHandler());
-  app.use(Sentry.Handlers.tracingHandler());
-  app.use(Sentry.Handlers.requestHandler());
+  app.use(Sentry.expressErrorHandler());
 
   const { httpAdapter } = app.get(HttpAdapterHost);
   app.useGlobalFilters(new SentryFilter(httpAdapter));
