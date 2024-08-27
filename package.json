@@ -31,7 +31,7 @@
     "@nestjs/passport": "^10.0.3",
     "@nestjs/platform-express": "^10.3.10",
     "@nestjs/swagger": "^7.4.0",
-    "@sentry/node": "^8.22.0",
+    "@sentry/node": "^8.23.0",
     "@sentry/tracing": "^7.114.0",
     "js-yaml": "4.1.0",
     "cookie-parser": "^1.4.6",
