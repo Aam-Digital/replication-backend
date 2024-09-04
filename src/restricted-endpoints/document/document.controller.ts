@@ -102,11 +102,21 @@ export class DocumentController {
     @Query() queryParams?: any,
   ): Promise<DatabaseDocument> {
     const userAbility = this.permissionService.getAbilityFor(user);
-    const document = await firstValueFrom(
+
+    let documentToReturn: DatabaseDocument = await firstValueFrom(
       this.couchdbService.get(db, docId, queryParams),
     );
-    if (userAbility.can('read', document)) {
-      return document;
+
+    let documentForPermissionCheck: DatabaseDocument = documentToReturn;
+
+    if (db === 'app-attachments') {
+      documentForPermissionCheck = await firstValueFrom(
+        this.couchdbService.get('app', docId, queryParams),
+      );
+    }
+
+    if (userAbility.can('read', documentForPermissionCheck)) {
+      return documentToReturn;
     } else {
       throw new UnauthorizedException('unauthorized', 'User is not permitted');
     }
