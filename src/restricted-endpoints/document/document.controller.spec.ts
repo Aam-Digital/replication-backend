@@ -39,6 +39,7 @@ describe('DocumentController', () => {
     id: userDoc._id,
     rev: userDoc._rev,
   };
+
   beforeEach(async () => {
     headers = {};
     mockCouchDBService = {
@@ -61,6 +62,7 @@ describe('DocumentController', () => {
 
     mockPermissionService = {
       getAbilityFor: () => undefined,
+      isAllowedTo: jest.fn(async () => true),
     } as any;
 
     const module: TestingModule = await Test.createTestingModule({
@@ -81,6 +83,7 @@ describe('DocumentController', () => {
 
   it('should create ability for passed user', async () => {
     mockAbility([{ subject: 'all', action: 'manage' }]);
+    mockPermissionService.isAllowedTo = jest.fn(async () => true);
 
     await controller.putDocument(
       mockReq,
@@ -90,8 +93,11 @@ describe('DocumentController', () => {
       requestingUser,
     );
 
-    expect(mockPermissionService.getAbilityFor).toHaveBeenCalledWith(
+    expect(mockPermissionService.isAllowedTo).toHaveBeenCalledWith(
+      'update',
+      userDoc,
       requestingUser,
+      databaseName,
     );
   });
 
@@ -116,21 +122,9 @@ describe('DocumentController', () => {
 
     expect(req.header).toHaveBeenNthCalledWith(1, 'if-match');
     expect(req.header).toHaveBeenNthCalledWith(2, 'if-match');
-
-    expect(mockPermissionService.getAbilityFor).toHaveBeenCalledWith(
-      requestingUser,
-    );
   });
 
   it('should return the user object if user has read permissions', async () => {
-    mockAbility([
-      {
-        subject: COUCHDB_USER_DOC,
-        action: 'read',
-        conditions: { name: requestingUser.name },
-      },
-    ]);
-
     const response = controller.getDocument(
       databaseName,
       userDoc._id,
@@ -142,6 +136,12 @@ describe('DocumentController', () => {
       databaseName,
       userDoc._id,
       undefined,
+    );
+    expect(mockPermissionService.isAllowedTo).toHaveBeenCalledWith(
+      'read',
+      userDoc,
+      requestingUser,
+      databaseName,
     );
   });
 
@@ -201,13 +201,7 @@ describe('DocumentController', () => {
   });
 
   it('should throw unauthorized exception if user does not have read permission', async () => {
-    mockAbility([
-      {
-        subject: COUCHDB_USER_DOC,
-        action: 'read',
-        inverted: true,
-      },
-    ]);
+    mockPermissionService.isAllowedTo = jest.fn(async () => false);
 
     const response = controller.getDocument(
       databaseName,
@@ -216,13 +210,19 @@ describe('DocumentController', () => {
     );
 
     await expect(response).rejects.toThrow(UnauthorizedException);
+
+    expect(mockPermissionService.isAllowedTo).toHaveBeenCalledWith(
+      'read',
+      userDoc,
+      requestingUser,
+      databaseName,
+    );
   });
 
   it('should allow create operation if user has permission', async () => {
     jest
       .spyOn(mockCouchDBService, 'get')
       .mockReturnValue(throwError(() => new Error()));
-    mockAbility([{ subject: COUCHDB_USER_DOC, action: ['create', 'read'] }]);
 
     const response = controller.putDocument(
       mockReq,
@@ -234,13 +234,23 @@ describe('DocumentController', () => {
 
     await expect(response).resolves.toBe(SUCCESS_RESPONSE);
     expect(mockCouchDBService.put).toHaveBeenCalledWith(databaseName, userDoc);
+
+    expect(mockPermissionService.isAllowedTo).toHaveBeenCalledWith(
+      'create',
+      userDoc,
+      requestingUser,
+      databaseName,
+    );
   });
 
-  it('should throw an unauthorized exception if user does not have create permission', () => {
+  it('should throw an unauthorized exception if user does not have create permission', async () => {
     jest
       .spyOn(mockCouchDBService, 'get')
       .mockReturnValue(throwError(() => new Error()));
     mockAbility([{ subject: COUCHDB_USER_DOC, action: ['update', 'read'] }]);
+    mockPermissionService.isAllowedTo = jest.fn(
+      async (action) => action === 'update' || action === 'read',
+    );
 
     const response = controller.putDocument(
       mockReq,
@@ -250,7 +260,14 @@ describe('DocumentController', () => {
       requestingUser,
     );
 
-    return expect(response).rejects.toThrow(UnauthorizedException);
+    await expect(response).rejects.toThrow(UnauthorizedException);
+
+    expect(mockPermissionService.isAllowedTo).toHaveBeenCalledWith(
+      'create',
+      userDoc,
+      requestingUser,
+      databaseName,
+    );
   });
 
   it('should allow to update a whole document', async () => {
@@ -270,6 +287,13 @@ describe('DocumentController', () => {
     expect(mockCouchDBService.put).toHaveBeenCalledWith(
       databaseName,
       userWithUpdatedRoles,
+    );
+
+    expect(mockPermissionService.isAllowedTo).toHaveBeenCalledWith(
+      'update',
+      userDoc,
+      requestingUser,
+      databaseName,
     );
   });
 
@@ -303,7 +327,7 @@ describe('DocumentController', () => {
     );
   });
 
-  it('should throw exception if the update permission is not given', () => {
+  it('should throw exception if the update permission is not given', async () => {
     const otherUser: UserInfo = {
       name: 'anotherUser',
       roles: [],
@@ -317,6 +341,8 @@ describe('DocumentController', () => {
         conditions: { name: otherUser.name },
       },
     ]);
+    mockPermissionService.isAllowedTo = jest.fn(async () => false);
+
     const userWithUpdatedPassword = Object.assign({}, userDoc);
     userWithUpdatedPassword['password'] = 'new_password';
 
@@ -328,11 +354,20 @@ describe('DocumentController', () => {
       otherUser,
     );
 
-    return expect(response).rejects.toThrow(UnauthorizedException);
+    await expect(response).rejects.toThrow(UnauthorizedException);
+
+    expect(mockPermissionService.isAllowedTo).toHaveBeenCalledWith(
+      'update',
+      userDoc,
+      otherUser,
+      databaseName,
+    );
   });
 
   it('should throw exception if user is not allowed to delete a doc', async () => {
-    mockAbility([{ subject: COUCHDB_USER_DOC, action: 'read' }]);
+    mockPermissionService.isAllowedTo = jest.fn(
+      async (action) => action !== 'delete',
+    );
     jest.spyOn(mockCouchDBService, 'delete');
 
     const response = controller.deleteDocument(
@@ -344,10 +379,17 @@ describe('DocumentController', () => {
 
     await expect(response).rejects.toThrow(UnauthorizedException);
     expect(mockCouchDBService.delete).not.toHaveBeenCalled();
+
+    expect(mockPermissionService.isAllowedTo).toHaveBeenCalledWith(
+      'delete',
+      userDoc,
+      requestingUser,
+      databaseName,
+    );
   });
 
   it('should allow a permitted user to delete a doc', async () => {
-    mockAbility([{ subject: COUCHDB_USER_DOC, action: 'delete' }]);
+    mockPermissionService.isAllowedTo = jest.fn(async () => true);
     jest.spyOn(mockCouchDBService, 'delete');
 
     await controller.deleteDocument(databaseName, userDoc._id, requestingUser, {

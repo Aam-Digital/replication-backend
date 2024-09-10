@@ -101,21 +101,18 @@ export class DocumentController {
     @User() user: UserInfo,
     @Query() queryParams?: any,
   ): Promise<DatabaseDocument> {
-    const userAbility = this.permissionService.getAbilityFor(user);
-
-    let documentToReturn: DatabaseDocument = await firstValueFrom(
+    const documentToReturn: DatabaseDocument = await firstValueFrom(
       this.couchdbService.get(db, docId, queryParams),
     );
 
-    let documentForPermissionCheck: DatabaseDocument = documentToReturn;
-
-    if (db === 'app-attachments') {
-      documentForPermissionCheck = await firstValueFrom(
-        this.couchdbService.get('app', docId, queryParams),
-      );
-    }
-
-    if (userAbility.can('read', documentForPermissionCheck)) {
+    if (
+      await this.permissionService.isAllowedTo(
+        'read',
+        documentToReturn,
+        user,
+        db,
+      )
+    ) {
       return documentToReturn;
     } else {
       throw new UnauthorizedException('unauthorized', 'User is not permitted');
@@ -140,18 +137,46 @@ export class DocumentController {
     @User() user: UserInfo,
   ): Promise<DocSuccess> {
     document._id = docId;
-    const userAbility = this.permissionService.getAbilityFor(user);
+
     const existingDoc = await firstValueFrom(
       this.couchdbService.get(db, docId),
     ).catch(() => undefined); // Doc does not exist
 
-    if (!existingDoc && userAbility.can('create', document)) {
+    if (!existingDoc) {
       // Creating
+      if (
+        !(await this.permissionService.isAllowedTo(
+          'create',
+          document,
+          user,
+          db,
+        ))
+      ) {
+        throw new UnauthorizedException(
+          'unauthorized',
+          'User is not permitted',
+        );
+      }
+
       return firstValueFrom(this.couchdbService.put(db, document));
-    } else if (userAbility.can('update', existingDoc)) {
+    } else {
       // Updating
+      if (
+        !(await this.permissionService.isAllowedTo(
+          'update',
+          existingDoc,
+          user,
+          db,
+        ))
+      ) {
+        throw new UnauthorizedException(
+          'unauthorized',
+          'User is not permitted',
+        );
+      }
+
       const finalDoc = this.applyPermissions(
-        userAbility,
+        this.permissionService.getAbilityFor(user),
         existingDoc,
         document,
       );
@@ -159,8 +184,6 @@ export class DocumentController {
         document._rev = req.header('if-match');
       }
       return firstValueFrom(this.couchdbService.put(db, finalDoc));
-    } else {
-      throw new UnauthorizedException('unauthorized', 'User is not permitted');
     }
   }
 
@@ -179,11 +202,13 @@ export class DocumentController {
     @User() user: UserInfo,
     @Query() queryParams?: QueryParams,
   ) {
-    const userAbility = this.permissionService.getAbilityFor(user);
     const document = await firstValueFrom(
       this.couchdbService.get(db, docId, queryParams),
     );
-    if (userAbility.can('delete', document)) {
+
+    if (
+      await this.permissionService.isAllowedTo('delete', document, user, db)
+    ) {
       return firstValueFrom(this.couchdbService.delete(db, docId, queryParams));
     } else {
       throw new UnauthorizedException('unauthorized', 'User is not permitted');
