@@ -21,7 +21,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
-    "@casl/ability": "^6.7.1",
+    "@casl/ability": "^6.7.2",
     "@nestjs/axios": "^3.0.2",
     "@nestjs/cli": "^10.4.9",
     "@nestjs/common": "^10.3.10",
