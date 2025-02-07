@@ -6,9 +6,11 @@ import { CouchdbModule } from './couchdb/couchdb.module';
 import { AdminModule } from './admin/admin.module';
 import { setUser } from '@sentry/node';
 import { AppConfiguration } from './config/configuration';
+import { SentryModule } from '@sentry/nestjs/setup';
 
 @Module({
   imports: [
+    SentryModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       ignoreEnvFile: false,

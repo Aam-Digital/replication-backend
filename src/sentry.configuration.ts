@@ -2,7 +2,6 @@ import * as Sentry from '@sentry/node';
 import { ConfigService } from '@nestjs/config';
 import { ArgumentsHost, INestApplication } from '@nestjs/common';
 import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
-import { HttpException } from '@nestjs/common/exceptions/http.exception';
 
 export class SentryConfiguration {
   ENABLED: boolean = false;
@@ -58,18 +57,18 @@ function configureLoggingSentry(
     // Set sampling rate for profiling - this is relative to tracesSampleRate
     profilesSampleRate: 1.0,
 
-    beforeSend: (event, hint) => {
-      const error = hint.originalException;
-      if (
-        error instanceof HttpException &&
-        error.getStatus() >= 400 &&
-        error.getStatus() < 500
-      ) {
-        return null;
-      }
-
-      return event;
-    },
+    // beforeSend: (event, hint) => {
+    //   const error = hint.originalException;
+    //   if (
+    //     error instanceof HttpException &&
+    //     error.getStatus() >= 400 &&
+    //     error.getStatus() < 500
+    //   ) {
+    //     return null;
+    //   }
+    //
+    //   return event;
+    // },
   });
 
   app.use(Sentry.expressErrorHandler());
