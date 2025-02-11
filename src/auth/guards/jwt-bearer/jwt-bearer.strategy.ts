@@ -31,6 +31,7 @@ export class JwtBearerStrategy extends PassportStrategy(
     ).catch(() => {});
 
     return new UserInfo(
+      data.sub,
       data.username,
       data['_couchdb.roles'],
       user && user['projects'] ? user['projects'] : [],

@@ -24,7 +24,12 @@ describe('ChangesController', () => {
     childDoc,
     deletedChildDoc,
   ]);
-  const user: UserInfo = { name: 'username', roles: [], projects: [] };
+  const user: UserInfo = {
+    id: 'user-id',
+    name: 'username',
+    roles: [],
+    projects: [],
+  };
   const mockCouchdbService = { get: () => undefined } as CouchdbService;
   const getSpy = jest.spyOn(mockCouchdbService, 'get');
   const mockRulesService = {

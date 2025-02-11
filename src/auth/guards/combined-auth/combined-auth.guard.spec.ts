@@ -52,7 +52,7 @@ describe('CombinedAuthGuard', () => {
 
   it('[MIDDLEWARE/GUARD] should assign user to sentry after a successful authentication', async () => {
     jest.spyOn(basicAuthGuard, 'canActivate').mockResolvedValue(true);
-    const user = new UserInfo('testUser', []);
+    const user = new UserInfo('user-id', 'testUser', []);
     const setUserSpy = jest.spyOn(Sentry, 'setUser');
 
     await guard.use({ user } as any, undefined, () => undefined);
@@ -72,7 +72,7 @@ describe('CombinedAuthGuard', () => {
   it('[MIDDLEWARE] should call next if authentication passes', async () => {
     jest.spyOn(jwtCookieGuard, 'canActivate').mockResolvedValue(true);
     let funCalled = false;
-    const user = new UserInfo('testUser', []);
+    const user = new UserInfo('user-id', 'testUser', []);
 
     await guard.use({ user } as any, undefined, () => (funCalled = true));
 

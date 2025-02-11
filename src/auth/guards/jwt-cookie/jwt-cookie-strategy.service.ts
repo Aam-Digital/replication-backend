@@ -33,6 +33,7 @@ export class JwtCookieStrategy extends PassportStrategy(
     ).catch(() => {});
 
     return new UserInfo(
+      data.sub,
       data.name,
       data.sub,
       user && user['projects'] ? user['projects'] : [],

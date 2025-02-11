@@ -20,7 +20,7 @@ describe('SessionController', () => {
   });
 
   it('should return the user object on the request', () => {
-    const user = new UserInfo('user', ['user_app']);
+    const user = new UserInfo('user-id', 'user', ['user_app']);
 
     const response = controller.login(user);
 
@@ -28,7 +28,7 @@ describe('SessionController', () => {
   });
 
   it('should return user object from combinedAuth middleware if user is authenticated', async () => {
-    const user = new UserInfo('user', ['user_app']);
+    const user = new UserInfo('user-id', 'user', ['user_app']);
 
     const res = await controller.session(user);
 

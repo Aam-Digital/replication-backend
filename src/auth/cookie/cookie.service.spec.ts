@@ -26,7 +26,7 @@ describe('CookieService', () => {
   });
 
   it('should set a cookie containing the user info on the response', () => {
-    const user = new UserInfo('Username', ['user_app']);
+    const user = new UserInfo('user-id', 'Username', ['user_app']);
     const request = { user: user };
     const cookies = {};
     const setCookieMock = jest.fn(
