@@ -32,6 +32,7 @@ export class JwtCookieStrategy extends PassportStrategy(
       this.couchdbService.get('app', data['username']),
     ).catch(() => {});
 
+    // TODO
     return new UserInfo(
       data.name,
       data.sub,

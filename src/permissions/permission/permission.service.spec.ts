@@ -30,7 +30,7 @@ describe('PermissionService', () => {
 
     service = module.get<PermissionService>(PermissionService);
 
-    normalUser = new UserInfo('normalUser', ['user_app']);
+    normalUser = new UserInfo('user-id', 'normalUser', ['user_app']);
   });
 
   it('should be defined', () => {

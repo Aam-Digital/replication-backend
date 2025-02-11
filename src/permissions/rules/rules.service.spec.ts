@@ -18,8 +18,11 @@ describe('RulesService', () => {
   let testPermission: Permission;
   let changesResponse: ChangesResponse;
 
-  const normalUser = new UserInfo('normalUser', ['user_app']);
-  const adminUser = new UserInfo('superUser', ['user_app', 'admin_app']);
+  const normalUser = new UserInfo('user-normal', 'normalUser', ['user_app']);
+  const adminUser = new UserInfo('user-super', 'superUser', [
+    'user_app',
+    'admin_app',
+  ]);
   const DATABASE_NAME = 'app';
 
   beforeEach(async () => {
@@ -131,7 +134,10 @@ describe('RulesService', () => {
 
   it('should not fail if no rules exist for a given role', () => {
     const result = service.getRulesForUser(
-      new UserInfo('specialUser', ['user_app', 'non_existing_role']),
+      new UserInfo('user-special', 'specialUser', [
+        'user_app',
+        'non_existing_role',
+      ]),
     );
     expect(result).toEqual(userRules);
   });
@@ -152,7 +158,7 @@ describe('RulesService', () => {
       {
         subject: 'User',
         action: 'read',
-        conditions: { name: '${user.name}' },
+        conditions: { name: '${user.name}', id: '${user.id}' },
       },
     ];
 
@@ -162,7 +168,7 @@ describe('RulesService', () => {
       {
         subject: 'User',
         action: 'read',
-        conditions: { name: normalUser.name },
+        conditions: { name: normalUser.name, id: normalUser.id },
       },
     ]);
   });

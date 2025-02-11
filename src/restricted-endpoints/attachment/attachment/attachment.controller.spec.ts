@@ -16,7 +16,11 @@ describe('AttachmentController', () => {
   let mockCouchDB: CouchdbService;
   let mockPermissions: PermissionService;
 
+  let user: UserInfo;
+
   beforeEach(async () => {
+    user = new UserInfo('user-id', 'user', []);
+
     mockCouchDB = {
       get: () => of(undefined),
       delete: () => of(undefined),
@@ -68,7 +72,7 @@ describe('AttachmentController', () => {
         'docId',
         'prop',
         { rev: '1' },
-        new UserInfo('user', []),
+        user,
         undefined,
         undefined,
       ),
@@ -89,7 +93,7 @@ describe('AttachmentController', () => {
       'docId',
       'prop',
       { rev: '1' },
-      new UserInfo('user', []),
+      user,
       undefined,
       undefined,
     );
@@ -110,7 +114,7 @@ describe('AttachmentController', () => {
         'db',
         'docId',
         'prop',
-        new UserInfo('user', []),
+        user,
         undefined,
         undefined,
       ),
@@ -130,7 +134,7 @@ describe('AttachmentController', () => {
       'db',
       'docId',
       'prop',
-      new UserInfo('user', []),
+      user,
       undefined,
       undefined,
     );
@@ -150,7 +154,7 @@ describe('AttachmentController', () => {
         'docId',
         'prop',
         { rev: '1-rev' },
-        new UserInfo('user', []),
+        user,
       ),
     ).rejects.toThrow(ForbiddenException);
   });
@@ -168,7 +172,7 @@ describe('AttachmentController', () => {
       'docId',
       'prop',
       { rev: '1-rev' },
-      new UserInfo('user', []),
+      user,
     );
 
     expect(mockCouchDB.delete).toHaveBeenCalledWith('db', 'docId/prop', {

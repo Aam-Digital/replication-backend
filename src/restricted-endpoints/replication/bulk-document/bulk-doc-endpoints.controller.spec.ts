@@ -59,7 +59,7 @@ describe('BulkDocEndpointsController', () => {
     jest
       .spyOn(documentFilter, 'filterBulkGetResponse')
       .mockReturnValue(filteredResponse);
-    const user = new UserInfo('username', ['user']);
+    const user = new UserInfo('user-id', 'username', ['user']);
 
     const result = await firstValueFrom(
       controller.bulkGetPost(null, null, null, user),
@@ -107,7 +107,7 @@ describe('BulkDocEndpointsController', () => {
     jest
       .spyOn(documentFilter, 'filterAllDocsResponse')
       .mockReturnValue(filteredResponse);
-    const user = new UserInfo('username', ['user']);
+    const user = new UserInfo('user-id', 'username', ['user']);
 
     const result = await firstValueFrom(
       controller.allDocs('db', null, user, null),
@@ -153,7 +153,7 @@ describe('BulkDocEndpointsController', () => {
     jest
       .spyOn(documentFilter, 'filterBulkDocsRequest')
       .mockReturnValue(Promise.resolve(filteredRequest));
-    const user = new UserInfo('username', ['admin']);
+    const user = new UserInfo('user-id', 'username', ['admin']);
 
     await firstValueFrom(controller.bulkDocs('db', request, user));
 
@@ -197,7 +197,7 @@ describe('BulkDocEndpointsController', () => {
     jest
       .spyOn(documentFilter, 'filterFindResponse')
       .mockReturnValue(filteredResponse);
-    const user = new UserInfo('username', ['admin']);
+    const user = new UserInfo('user-id', 'username', ['admin']);
 
     await firstValueFrom(controller.find('db', request, user));
 

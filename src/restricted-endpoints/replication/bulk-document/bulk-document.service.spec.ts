@@ -30,7 +30,7 @@ describe('BulkDocumentService', () => {
     mockCouchDBService = {
       post: () => of({}),
     } as any;
-    normalUser = new UserInfo('normalUser', ['user']);
+    normalUser = new UserInfo('user-id', 'normalUser', ['user']);
     schoolDoc = getSchoolDoc();
     childDoc = getChildDoc();
 

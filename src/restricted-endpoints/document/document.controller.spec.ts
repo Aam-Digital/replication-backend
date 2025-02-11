@@ -33,7 +33,7 @@ describe('DocumentController', () => {
     roles: [],
     type: 'user',
   };
-  const requestingUser: UserInfo = new UserInfo('testUser', []);
+  const requestingUser: UserInfo = new UserInfo('user-id', 'testUser', []);
   const SUCCESS_RESPONSE: DocSuccess = {
     ok: true,
     id: userDoc._id,
@@ -329,6 +329,7 @@ describe('DocumentController', () => {
 
   it('should throw exception if the update permission is not given', async () => {
     const otherUser: UserInfo = {
+      id: 'user-other',
       name: 'anotherUser',
       roles: [],
       projects: [],
