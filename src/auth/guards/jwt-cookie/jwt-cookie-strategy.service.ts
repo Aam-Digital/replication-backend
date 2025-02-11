@@ -34,6 +34,7 @@ export class JwtCookieStrategy extends PassportStrategy(
 
     // TODO
     return new UserInfo(
+      data.sub,
       data.name,
       data.sub,
       user && user['projects'] ? user['projects'] : [],
