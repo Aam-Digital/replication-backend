@@ -1,4 +1,4 @@
-name: docker build and push
+name: On Semantic Release (build & publish image)
 
 on:
   release:
@@ -14,10 +14,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3

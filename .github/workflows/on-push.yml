@@ -1,13 +1,13 @@
-name: publish release
-
+name: On Branch Update
 on:
   push:
     branches:
       - master
+      - '**'
 
 jobs:
-  verify:
-    name: Verify replication-backend
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -29,11 +29,11 @@ jobs:
         with:
           coverageLocations: coverage/lcov.info:lcov
 
-  publish:
-    name: Publish Release
+  release:
+    name: Create Release
     runs-on: ubuntu-latest
     needs:
-      - verify
+      - test
     permissions:
       contents: write # to be able to publish a GitHub release
       issues: write # to be able to comment on released issues
