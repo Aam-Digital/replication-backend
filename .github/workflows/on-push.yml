@@ -5,6 +5,10 @@ on:
       - master
       - '**'
 
+permissions:
+  contents: read
+  id-token: write # for QLTY code coverage (https://docs.qlty.sh/migration/coverage)
+
 jobs:
   test:
     name: Test
@@ -23,11 +27,10 @@ jobs:
       - name: Run Tests with coverage
         run: npm run test:cov
 
-      - uses: paambaati/codeclimate-action@v5.0.0
-        env:
-          CC_TEST_REPORTER_ID: ${{ secrets.CODE_CLIMATE_ID }}
+      - uses: qltysh/qlty-action/coverage@v1
         with:
-          coverageLocations: coverage/lcov.info:lcov
+          oidc: true
+          files: coverage/lcov.info
 
   release:
     name: Create Release
