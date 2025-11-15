@@ -33,7 +33,7 @@
     "@nestjs/swagger": "^11.2.0",
     "@sentry/node": "^10.0.0",
     "@sentry/tracing": "^7.120.4",
-    "js-yaml": "4.1.0",
+    "js-yaml": "4.1.1",
     "cookie-parser": "^1.4.7",
     "http-proxy-middleware": "^3.0.5",
     "lodash": "^4.17.21",
