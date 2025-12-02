@@ -32,7 +32,6 @@
     "@nestjs/platform-express": "^11.1.9",
     "@nestjs/swagger": "^11.2.3",
     "@sentry/node": "^10.28.0",
-    "@sentry/tracing": "^7.120.4",
     "js-yaml": "4.1.1",
     "cookie-parser": "^1.4.7",
     "http-proxy-middleware": "^3.0.5",
