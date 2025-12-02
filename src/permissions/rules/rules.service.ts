@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { RawRuleOf } from '@casl/ability';
 import { DocumentAbility } from '../permission/permission.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
@@ -7,7 +7,7 @@ import { catchError, concatMap, defer, of, repeat, retry } from 'rxjs';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { ConfigService } from '@nestjs/config';
 import { ChangesResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
-import { get } from 'lodash';
+import { get, has } from 'lodash';
 import { AdminService } from '../../admin/admin.service';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
@@ -19,6 +19,9 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
 @Injectable()
 export class RulesService {
   static readonly ENV_PERMISSION_DB = 'PERMISSION_DB';
+  static readonly USER_PROPERTY_UNDEFINED = '__USER_PROPERTY_UNDEFINED__';
+
+  private readonly logger = new Logger(RulesService.name);
   private permission: RulesConfig;
   private lastSeq: string;
 
@@ -54,7 +57,7 @@ export class RulesService {
           this.couchdbService.get<ChangesResponse>(db, '_changes', params),
         ),
         catchError((err) => {
-          console.error('LOAD RULES ERROR:', err);
+          this.logger.error('LOAD RULES ERROR:', err);
           throw err;
         }),
         retry({ delay: 1000 }),
@@ -75,7 +78,7 @@ export class RulesService {
             setTimeout(
               () =>
                 this.adminService.clearLocal(db).then(() => {
-                  console.log(
+                  this.logger.log(
                     'Permissions changed - triggered clearLocal:' + db,
                   );
                 }),
@@ -109,17 +112,32 @@ export class RulesService {
     }
   }
 
-  private injectUserVariablesIntoRules(rules: DocumentRule[], user: UserInfo) {
+  private injectUserVariablesIntoRules(
+    rules: DocumentRule[],
+    user: UserInfo,
+  ): DocumentRule[] {
     return JSON.parse(JSON.stringify(rules), (that, rawValue) => {
-      if (rawValue[0] !== '$') {
+      if (typeof rawValue !== 'string' || !rawValue.startsWith('$')) {
         return rawValue;
       }
 
-      const name = rawValue.slice(2, -1);
-      const value = get({ user }, name);
+      let name = rawValue.slice(2, -1);
+      if (name === 'user.entityId') {
+        // the user account related entity (assured with prefix) should get stored in user.entityId in the future
+        // mapping the previously valid ${user.name} here for backward/forward compatibility
+        name = 'user.name';
+      }
 
-      if (typeof value === 'undefined') {
-        throw new ReferenceError(`Variable ${name} is not defined`);
+      if (!has({ user }, name)) {
+        // log instead of silent failure
+        this.logger.warn(`Variable ${name} is not defined for user ${user.id}`);
+        return RulesService.USER_PROPERTY_UNDEFINED;
+      }
+
+      const value = get({ user }, name);
+      if (value === undefined) {
+        // return placeholder instead of undefined to ensure conditions using this do not get ignored
+        return RulesService.USER_PROPERTY_UNDEFINED;
       }
 
       return value;
