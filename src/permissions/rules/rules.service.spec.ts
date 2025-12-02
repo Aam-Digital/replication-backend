@@ -160,7 +160,11 @@ describe('RulesService', () => {
       {
         subject: 'User',
         action: 'read',
-        conditions: { name: '${user.name}', id: '${user.id}' },
+        conditions: {
+          name: '${user.name}',
+          id: '${user.id}',
+          entityId: '${user.entityId}',
+        },
       },
     ];
 
@@ -170,7 +174,11 @@ describe('RulesService', () => {
       {
         subject: 'User',
         action: 'read',
-        conditions: { name: normalUser.name, id: normalUser.id },
+        conditions: {
+          name: normalUser.name,
+          id: normalUser.id,
+          entityId: normalUser.name,
+        },
       },
     ]);
   });
