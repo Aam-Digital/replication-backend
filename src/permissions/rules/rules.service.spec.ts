@@ -91,7 +91,9 @@ describe('RulesService', () => {
   it('should retry loading the rules if it fails', () => {
     jest.useFakeTimers();
     let calls = 0;
-    jest.spyOn(console, 'error').mockImplementation();
+    const loggerErrorSpy = jest
+      .spyOn(service['logger'], 'error')
+      .mockImplementation();
     const newPermissions = new Permission({
       [normalUser.roles[0]]: [{ action: 'manage', subject: 'Child' }],
     });
@@ -121,8 +123,8 @@ describe('RulesService', () => {
 
     // 2x error, 1x success, 1x waiting for next change
     expect(calls).toEqual(4);
-    expect(console.error).toHaveBeenCalledTimes(2);
-    expect(console.error).toHaveBeenCalledWith(
+    expect(loggerErrorSpy).toHaveBeenCalledTimes(2);
+    expect(loggerErrorSpy).toHaveBeenCalledWith(
       'LOAD RULES ERROR:',
       expect.any(Error),
     );
@@ -173,7 +175,7 @@ describe('RulesService', () => {
     ]);
   });
 
-  it('should throw an error if a unknown variable is encountered', () => {
+  it('should log a warning and replace with null if a unknown variable is encountered', () => {
     testPermission.data[normalUser.roles[0]] = [
       {
         subject: 'User',
@@ -181,7 +183,37 @@ describe('RulesService', () => {
         conditions: { name: '${user.notExistingProperty}' },
       },
     ];
-    expect(() => service.getRulesForUser(normalUser)).toThrow(ReferenceError);
+
+    const rules = service.getRulesForUser(normalUser);
+
+    expect(rules).toEqual([
+      {
+        subject: 'User',
+        action: 'update',
+        conditions: { name: RulesService.USER_PROPERTY_UNDEFINED },
+      },
+    ]);
+  });
+
+  it('should replace undefined user.name with null without errors', () => {
+    const userWithoutName = new UserInfo('user-id', undefined, ['user_app']);
+    testPermission.data[userWithoutName.roles[0]] = [
+      {
+        subject: 'User',
+        action: 'read',
+        conditions: { name: '${user.name}' },
+      },
+    ];
+
+    const rules = service.getRulesForUser(userWithoutName);
+
+    expect(rules).toEqual([
+      {
+        subject: 'User',
+        action: 'read',
+        conditions: { name: RulesService.USER_PROPERTY_UNDEFINED },
+      },
+    ]);
   });
 
   it("should only return 'public' rules if no user object is passed", () => {
