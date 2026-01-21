@@ -64,7 +64,7 @@ export class PermissionService {
         this.couchdbService.get('app', documentToAccess._id),
       ).catch(() => undefined);
 
-      // For attachment operations (non-read), allow if user has either create OR update permission
+      // For attachment operations, allow if user has either create OR update permission
       // since attachments logically modify a field of the entity
       if (action !== 'read') {
         return (
