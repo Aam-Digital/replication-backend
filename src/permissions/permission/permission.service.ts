@@ -56,6 +56,7 @@ export class PermissionService {
     db: string,
   ): Promise<boolean> {
     const userAbility = this.getAbilityFor(user);
+
     let documentForPermissionCheck: DatabaseDocument = documentToAccess;
 
     if (db === 'app-attachments') {
