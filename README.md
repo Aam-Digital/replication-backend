@@ -51,6 +51,26 @@ To run and test this project locally:
 2. `npm start` to run the application locally (see above for required environment variables)
 3. `npm test` to execute unit tests
 
+## Using with the aam-services docker stack
+Run this service locally while the rest of the stack runs in Docker:
+
+1. Start the docker stack (follow the setup guide):
+   https://github.com/Aam-Digital/aam-services/tree/main/docs/developer
+2. Configure local env in this repo:
+   - `cp .env.template .env`
+   - Set `JWT_PUBLIC_KEY` from `https://keycloak.localhost/realms/dummy-realm`
+3. Start replication-backend locally (port 3000):
+   - `npm start`
+4. Route `/db` to the local service:
+   - In `aam-services/docs/developer/Caddyfile`, enable:
+     `reverse_proxy http://host.docker.internal:3000`
+   - Restart Caddy:
+     `cd aam-services/docs/developer && docker compose restart reverse-proxy`
+
+Notes:
+- Keep the local replication-backend running; Caddy forwards `/db*` to it.
+- Ensure no replication-backend container is running when using the local service.
+
 ## Run in a fully local environment with other services
 Use the dockerized local environment to run a fully synced app including backend services on your machine:
 https://github.com/Aam-Digital/aam-services/tree/main/docs/developer
