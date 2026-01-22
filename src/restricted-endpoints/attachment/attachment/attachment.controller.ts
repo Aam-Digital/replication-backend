@@ -144,8 +144,6 @@ export class AttachmentController {
     docId: string,
     property: string,
   ) {
-    const permissionDb = db.replace(/_attachments$/, '-attachments');
-
     const doc = await firstValueFrom(
       this.couchDB.get(db.replace(/-attachments$/, ''), docId),
     );
@@ -153,7 +151,7 @@ export class AttachmentController {
       action,
       doc,
       user,
-      permissionDb,
+      db,
     );
 
     if (!permitted && user) {
