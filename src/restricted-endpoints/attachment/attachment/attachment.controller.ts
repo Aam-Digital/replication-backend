@@ -147,12 +147,7 @@ export class AttachmentController {
     const doc = await firstValueFrom(
       this.couchDB.get(db.replace(/-attachments$/, ''), docId),
     );
-    const permitted = await this.permissions.isAllowedTo(
-      action,
-      doc,
-      user,
-      db,
-    );
+    const permitted = await this.permissions.isAllowedTo(action, doc, user, db);
 
     if (!permitted && user) {
       throw new ForbiddenException('unauthorized', 'User is not permitted');
