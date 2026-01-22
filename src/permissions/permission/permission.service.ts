@@ -58,7 +58,6 @@ export class PermissionService {
     const userAbility = this.getAbilityFor(user);
 
     let documentForPermissionCheck: DatabaseDocument = documentToAccess;
-    let actionForPermissionCheck: Action = action;
 
     if (db === 'app-attachments') {
       // check permissions on the actual, full entity so that special condition rules can be applied
@@ -66,15 +65,17 @@ export class PermissionService {
         this.couchdbService.get('app', documentToAccess._id),
       ).catch(() => undefined);
 
-      // on app-attachments we are logically only editing a field of the entity, so update permission should be enough
+      // For attachment operations, allow if user has either create OR update permission
+      // since attachments logically modify a field of the entity
+      // create/update/delete the attachment doc can happen during create/update/delete of the entity - and therefore we do have to allow any of these edit actions if the user has any one of those permissions. `read` is more sensitive than these and needs to be handled strictly
       if (action !== 'read') {
-        actionForPermissionCheck = 'update';
+        return (
+          userAbility.can('create', documentForPermissionCheck) ||
+          userAbility.can('update', documentForPermissionCheck)
+        );
       }
     }
 
-    return userAbility.can(
-      actionForPermissionCheck,
-      documentForPermissionCheck,
-    );
+    return userAbility.can(action, documentForPermissionCheck);
   }
 }
