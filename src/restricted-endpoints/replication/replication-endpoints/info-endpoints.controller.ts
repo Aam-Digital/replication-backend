@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
+import { OnlyAuthenticated } from '../../../auth/only-authenticated.decorator';
 
 /**
  * Handle endpoints for the CouchDB replication process and bulk actions
@@ -46,6 +47,7 @@ export class InfoEndpointsController {
    * @param db
    * @param docId
    */
+  @OnlyAuthenticated()
   @Get(':db/_local/:docId')
   getLocalDoc(@Param('db') db: string, @Param('docId') docId: string) {
     return this.couchdbService.get(db, `_local/${docId}`);
@@ -57,6 +59,7 @@ export class InfoEndpointsController {
    * @param docId
    * @param body
    */
+  @OnlyAuthenticated()
   @Put(':db/_local/:docId')
   putLocalDoc(
     @Param('db') db: string,
@@ -71,6 +74,7 @@ export class InfoEndpointsController {
    * @param db
    * @param body
    */
+  @OnlyAuthenticated()
   @Post(':db/_revs_diff')
   revsDiff(@Param('db') db: string, @Body() body) {
     return this.couchdbService.post(db, '_revs_diff', body);
