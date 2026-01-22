@@ -67,6 +67,7 @@ export class PermissionService {
 
       // For attachment operations, allow if user has either create OR update permission
       // since attachments logically modify a field of the entity
+      // create/update/delete the attachment doc can happen during create/update/delete of the entity - and therefore we do have to allow any of these edit actions if the user has any one of those permissions. `read` is more sensitive than these and needs to be handled strictly
       if (action !== 'read') {
         return (
           userAbility.can('create', documentForPermissionCheck) ||
