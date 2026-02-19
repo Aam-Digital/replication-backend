@@ -2,6 +2,7 @@ import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import {
   ChangesParams,
   ChangesResponse,
+  LostPermissionsEntry,
 } from '../bulk-document/couchdb-dtos/changes.dto';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { firstValueFrom, map } from 'rxjs';
@@ -37,7 +38,7 @@ export class ChangesController {
     @Query() params?: ChangesParams,
   ): Promise<ChangesResponse> {
     const ability = this.permissionService.getAbilityFor(user);
-    const change = { results: [] } as ChangesResponse;
+    const change = { results: [], lostPermissions: [] } as ChangesResponse;
     let since = params?.since;
     while (true) {
       const res = await this.getPermittedChanges(
@@ -50,6 +51,7 @@ export class ChangesController {
       // overflow changes of this request
       const discarded = Math.max(res.results.length - missing, 0);
       change.results.push(...res.results.slice(0, missing));
+      change.lostPermissions.push(...(res.lostPermissions ?? []));
       if (discarded > 0) {
         // not all requested changes are used
         change.last_seq = change.results[change.results.length - 1].seq;
@@ -94,14 +96,27 @@ export class ChangesController {
     changes: ChangesResponse,
     ability: DocumentAbility,
   ): ChangesResponse {
+    const permitted = [];
+    const lostPermissions: LostPermissionsEntry[] = [];
+
+    for (const change of changes.results) {
+      const { doc } = change;
+      // deleted doc without properties besides _id, _rev and _deleted
+      if (doc._deleted && Object.keys(doc).length === 3) {
+        permitted.push(change);
+      } else if (ability.can('read', doc)) {
+        permitted.push(change);
+      } else {
+        // doc exists but user has no read permission - client should purge any local copy
+        // TODO: could be limited to only include docs that may have been accessible before (e.g. only if entity type has a `conditions` rule in permissions)
+        lostPermissions.push({ _id: doc._id, _rev: doc._rev });
+      }
+    }
+
     return {
       ...changes,
-      results: changes.results.filter(
-        ({ doc }) =>
-          // deleted doc without properties besides _id, _rev and _deleted
-          (doc._deleted && Object.keys(doc).length === 3) ||
-          ability.can('read', doc),
-      ),
+      results: permitted,
+      lostPermissions,
     };
   }
 }
