@@ -101,6 +101,10 @@ export class ChangesController {
 
     for (const change of changes.results) {
       const { doc } = change;
+      if (!doc) {
+        // skip changes without document content
+        continue;
+      }
       // deleted doc without properties besides _id, _rev and _deleted
       if (doc._deleted && Object.keys(doc).length === 3) {
         permitted.push(change);
