@@ -19,6 +19,7 @@ import {
 import { firstValueFrom } from 'rxjs';
 import { Ability } from '@casl/ability';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
+import { DocumentFilterService } from '../document-filter/document-filter.service';
 
 /**
  * Handle bulk document requests with the remote CouchDB server
@@ -29,6 +30,7 @@ export class BulkDocumentService {
   constructor(
     private permissionService: PermissionService,
     private couchdbService: CouchdbService,
+    private documentFilter: DocumentFilterService,
   ) {}
 
   filterBulkGetResponse(
@@ -36,12 +38,14 @@ export class BulkDocumentService {
     user: UserInfo,
   ): BulkGetResponse {
     const ability = this.permissionService.getAbilityFor(user);
-    const withPermissions: BulkGetResult[] = response.results.map((result) => ({
-      id: result.id,
-      docs: result.docs.filter((doc) =>
-        this.isPermittedBulkGetDoc(doc, ability),
-      ),
-    }));
+    const withPermissions: BulkGetResult[] = response.results
+      .filter((result) => this.documentFilter.isReplicable(result.id))
+      .map((result) => ({
+        id: result.id,
+        docs: result.docs.filter((doc) =>
+          this.isPermittedBulkGetDoc(doc, ability),
+        ),
+      }));
     // Only return results where at least one document is left
     return {
       results: withPermissions.filter((result) => result.docs.length > 0),
@@ -66,8 +70,10 @@ export class BulkDocumentService {
     return {
       total_rows: response.total_rows,
       offset: response.offset,
-      rows: response.rows.filter((row) =>
-        row.doc ? row.doc._deleted || ability.can('read', row.doc) : true,
+      rows: response.rows.filter(
+        (row) =>
+          this.documentFilter.isReplicable(row.id) &&
+          (row.doc ? row.doc._deleted || ability.can('read', row.doc) : true),
       ),
     };
   }
@@ -93,12 +99,15 @@ export class BulkDocumentService {
     );
     return {
       new_edits: request.new_edits,
-      docs: request.docs.filter((doc) =>
-        this.hasPermissionsForDoc(
-          doc,
-          response.rows.find((responseDoc) => responseDoc.id === doc._id)?.doc,
-          ability,
-        ),
+      docs: request.docs.filter(
+        (doc) =>
+          this.documentFilter.isReplicable(doc._id) &&
+          this.hasPermissionsForDoc(
+            doc,
+            response.rows.find((responseDoc) => responseDoc.id === doc._id)
+              ?.doc,
+            ability,
+          ),
       ),
     };
   }
@@ -108,7 +117,11 @@ export class BulkDocumentService {
     return {
       bookmark: request.bookmark,
       warning: request.warning,
-      docs: request.docs.filter((doc) => ability.can('read', doc)),
+      docs: request.docs.filter(
+        (doc) =>
+          this.documentFilter.isReplicable(doc._id) &&
+          ability.can('read', doc),
+      ),
     };
   }
 

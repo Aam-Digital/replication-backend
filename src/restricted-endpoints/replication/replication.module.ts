@@ -6,6 +6,7 @@ import { PermissionModule } from '../../permissions/permission.module';
 import { AuthModule } from '../../auth/auth.module';
 import { BulkDocEndpointsController } from './bulk-document/bulk-doc-endpoints.controller';
 import { ChangesController } from './changes/changes.controller';
+import { DocumentFilterService } from './document-filter/document-filter.service';
 
 @Module({
   imports: [HttpModule, PermissionModule, AuthModule],
@@ -14,6 +15,6 @@ import { ChangesController } from './changes/changes.controller';
     InfoEndpointsController,
     BulkDocEndpointsController,
   ],
-  providers: [BulkDocumentService],
+  providers: [BulkDocumentService, DocumentFilterService],
 })
 export class ReplicationModule {}

@@ -1,16 +1,18 @@
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
+import { of } from 'rxjs';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
+import { PermissionService } from '../../../permissions/permission/permission.service';
+import { RulesService } from '../../../permissions/rules/rules.service';
+import { UserInfo } from '../../session/user-auth.dto';
+import { DocumentFilterService } from '../document-filter/document-filter.service';
 import { BulkDocumentService } from './bulk-document.service';
-import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
   DatabaseDocument,
 } from './couchdb-dtos/bulk-docs.dto';
-import { UserInfo } from '../../session/user-auth.dto';
-import { PermissionService } from '../../../permissions/permission/permission.service';
-import { RulesService } from '../../../permissions/rules/rules.service';
-import { of } from 'rxjs';
-import { CouchdbService } from '../../../couchdb/couchdb.service';
+import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 
 describe('BulkDocumentService', () => {
   let service: BulkDocumentService;
@@ -38,6 +40,8 @@ describe('BulkDocumentService', () => {
       providers: [
         BulkDocumentService,
         PermissionService,
+        DocumentFilterService,
+        { provide: ConfigService, useValue: { get: () => undefined } },
         { provide: RulesService, useValue: mockRulesService },
         { provide: CouchdbService, useValue: mockCouchDBService },
       ],
@@ -205,6 +209,71 @@ describe('BulkDocumentService', () => {
       new_edits: false,
       docs: [deletedPublicSchool],
     });
+  });
+
+  it('should filter out _design/ docs in BulkGet', () => {
+    const designDoc: DatabaseDocument = {
+      _id: '_design/some-view',
+      _rev: 'rev1',
+    };
+    const bulkGetResponse = createBulkGetResponse(schoolDoc, designDoc);
+    jest
+      .spyOn(mockRulesService, 'getRulesForUser')
+      .mockReturnValue([{ action: 'manage', subject: 'all' }]);
+
+    const result = service.filterBulkGetResponse(bulkGetResponse, normalUser);
+
+    expect(result.results.map((r) => r.id)).toEqual([schoolDoc._id]);
+  });
+
+  it('should filter out _design/ docs in AllDocs', () => {
+    const designDoc: DatabaseDocument = {
+      _id: '_design/conflicts',
+      _rev: 'rev1',
+    };
+    const allDocsResponse = createAllDocsResponse(schoolDoc, designDoc);
+    jest
+      .spyOn(mockRulesService, 'getRulesForUser')
+      .mockReturnValue([{ action: 'manage', subject: 'all' }]);
+
+    const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
+
+    expect(result.rows.map((r) => r.id)).toEqual([schoolDoc._id]);
+  });
+
+  it('should filter out _design/ docs in BulkDocs writes', async () => {
+    const designDoc: DatabaseDocument = {
+      _id: '_design/search_index',
+      _rev: 'rev1',
+    };
+    const request: BulkDocsRequest = {
+      new_edits: false,
+      docs: [childDoc, designDoc],
+    };
+    jest
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValue(of(createAllDocsResponse(childDoc)));
+
+    const result = await service.filterBulkDocsRequest(request, normalUser, '');
+
+    expect(result.docs.map((d) => d._id)).toEqual([childDoc._id]);
+  });
+
+  it('should filter out _design/ docs in Find responses', () => {
+    const designDoc: DatabaseDocument = {
+      _id: '_design/some-index',
+      _rev: 'rev1',
+    };
+    jest
+      .spyOn(mockRulesService, 'getRulesForUser')
+      .mockReturnValue([{ action: 'manage', subject: 'all' }]);
+
+    const result = service.filterFindResponse(
+      { docs: [getSchoolDoc(), designDoc], bookmark: '' },
+      normalUser,
+    );
+
+    expect(result.docs.map((d) => d._id)).toEqual([schoolDoc._id]);
   });
 
   function getSchoolDoc(): DatabaseDocument {

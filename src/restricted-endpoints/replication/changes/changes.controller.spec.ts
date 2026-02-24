@@ -11,6 +11,8 @@ import {
   ChangesResponse,
 } from '../bulk-document/couchdb-dtos/changes.dto';
 import { ChangesController } from './changes.controller';
+import { DocumentFilterService } from '../document-filter/document-filter.service';
+import { ConfigService } from '@nestjs/config';
 
 describe('ChangesController', () => {
   let controller: ChangesController;
@@ -50,6 +52,8 @@ describe('ChangesController', () => {
         { provide: CouchdbService, useValue: mockCouchdbService },
         { provide: RulesService, useValue: mockRulesService },
         PermissionService,
+        DocumentFilterService,
+        { provide: ConfigService, useValue: { get: () => undefined } },
       ],
     }).compile();
 
@@ -326,6 +330,20 @@ describe('ChangesController', () => {
     });
 
     expect(res.results).toEqual([docToChange(deletedWithoutProps)]);
+  });
+
+  it('should silently skip _design/ documents without adding them to results or lostPermissions', async () => {
+    const designDoc: DatabaseDocument = { _id: '_design/some-view' };
+    getRulesSpy.mockReturnValue([{ subject: 'all', action: 'manage' }]);
+    getSpy.mockReturnValue(createChanges([schoolDoc, designDoc, childDoc]));
+
+    const res = await controller.changes('some-db', user);
+
+    expect(res.results.map((r) => r.id)).toEqual([
+      schoolDoc._id,
+      childDoc._id,
+    ]);
+    expect(res.lostPermissions).toEqual([]);
   });
 
   function createChanges(
