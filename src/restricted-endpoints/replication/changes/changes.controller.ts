@@ -1,19 +1,20 @@
 import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
-import {
-  ChangesParams,
-  ChangesResponse,
-  LostPermissionsEntry,
-} from '../bulk-document/couchdb-dtos/changes.dto';
-import { CouchdbService } from '../../../couchdb/couchdb.service';
+import { omit } from 'lodash';
 import { firstValueFrom, map } from 'rxjs';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../../auth/user.decorator';
-import { UserInfo } from '../../session/user-auth.dto';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
 import {
   DocumentAbility,
   PermissionService,
 } from '../../../permissions/permission/permission.service';
-import { omit } from 'lodash';
+import { UserInfo } from '../../session/user-auth.dto';
+import {
+  ChangeResult,
+  ChangesParams,
+  ChangesResponse,
+  LostPermissionsEntry,
+} from '../bulk-document/couchdb-dtos/changes.dto';
 
 @UseGuards(CombinedAuthGuard)
 @Controller()
@@ -96,17 +97,18 @@ export class ChangesController {
     changes: ChangesResponse,
     ability: DocumentAbility,
   ): ChangesResponse {
-    const permitted = [];
+    const permitted: ChangeResult[] = [];
     const lostPermissions: LostPermissionsEntry[] = [];
 
     for (const change of changes.results) {
       const { doc } = change;
       if (!doc) {
-        // skip changes without document content
-        continue;
-      }
-      // deleted doc without properties besides _id, _rev and _deleted
-      if (doc._deleted && Object.keys(doc).length === 3) {
+        // null doc can occur with some CouchDB-compatible servers for deleted documents
+        if (change.deleted) {
+          permitted.push(change); // treat like a tombstone so the client can clean up
+        }
+      } else if (doc._deleted && Object.keys(doc).length === 3) {
+        // deleted doc without properties besides _id, _rev and _deleted
         permitted.push(change);
       } else if (ability.can('read', doc)) {
         permitted.push(change);
