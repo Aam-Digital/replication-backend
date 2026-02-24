@@ -1,16 +1,16 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ChangesController } from './changes.controller';
+import { Observable, of } from 'rxjs';
+import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { PermissionService } from '../../../permissions/permission/permission.service';
-import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
+import { RulesService } from '../../../permissions/rules/rules.service';
+import { UserInfo } from '../../session/user-auth.dto';
+import { DatabaseDocument } from '../bulk-document/couchdb-dtos/bulk-docs.dto';
 import {
   ChangeResult,
   ChangesResponse,
 } from '../bulk-document/couchdb-dtos/changes.dto';
-import { DatabaseDocument } from '../bulk-document/couchdb-dtos/bulk-docs.dto';
-import { UserInfo } from '../../session/user-auth.dto';
-import { Observable, of } from 'rxjs';
-import { RulesService } from '../../../permissions/rules/rules.service';
+import { ChangesController } from './changes.controller';
 
 describe('ChangesController', () => {
   let controller: ChangesController;
@@ -102,6 +102,77 @@ describe('ChangesController', () => {
       childDoc._id,
       deletedChildDoc._id,
     ]);
+    expect(res.lostPermissions).toEqual([schoolDoc._id]);
+  });
+
+  it('should populate lostPermissions with all permission-denied non-deleted docs', async () => {
+    // No permissions at all
+    getRulesSpy.mockReturnValue([]);
+
+    const res = await controller.changes('some-db', user);
+
+    expect(res.lostPermissions).toEqual([
+      schoolDoc._id,
+      privateSchoolDoc._id,
+      childDoc._id,
+    ]);
+  });
+
+  it('should not include clean deletion tombstones in lostPermissions (they are forwarded via permitted changes)', async () => {
+    getRulesSpy.mockReturnValue([]);
+
+    const res = await controller.changes('some-db', user);
+
+    // Clean tombstones (_id, _rev, _deleted only) go into permitted results so
+    // PouchDB handles the deletion natively - no need to also purge via lostPermissions.
+    expect(res.lostPermissions).not.toContain(deletedChildDoc._id);
+  });
+
+  it('should include deleted docs with extra properties in lostPermissions if user cannot read them', async () => {
+    const deletedWithProps: DatabaseDocument = {
+      _id: 'School:deletedWith',
+      _rev: '1-rev-with',
+      _deleted: true,
+      private: true,
+    };
+    getSpy.mockReturnValue(createChanges([deletedWithProps]));
+    // No read permission for School
+    getRulesSpy.mockReturnValue([]);
+
+    const res = await controller.changes('some-db', user);
+
+    // Not forwarded as a permitted change (has extra props, no read permission)
+    expect(res.results.map((r) => r.id)).not.toContain(deletedWithProps._id);
+    // But client still needs to purge any local copy
+    expect(res.lostPermissions).toContain(deletedWithProps._id);
+  });
+
+  it('should not add doc to lostPermissions if user has access to the latest revision (even if a previous revision had lost permissions)', async () => {
+    // CouchDB _changes only returns the latest revision per doc.
+    // If a doc lost permissions at rev 4 but regained them at rev 5,
+    // the server only sees rev 5 (readable) - no purge signal should be sent.
+    const docCurrentlyReadable: DatabaseDocument = {
+      _id: 'School:regained',
+      someField: 'value',
+    };
+    getSpy.mockReturnValue(createChanges([docCurrentlyReadable]));
+    getRulesSpy.mockReturnValue([{ subject: 'School', action: 'read' }]);
+
+    const res = await controller.changes('some-db', user);
+
+    expect(res.results.map((r) => r.id)).toContain(docCurrentlyReadable._id);
+    expect(res.lostPermissions).not.toContain(docCurrentlyReadable._id);
+  });
+
+  it('should accumulate lostPermissions across paginated requests', async () => {
+    getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
+    getSpy
+      .mockReturnValueOnce(createChanges([schoolDoc, privateSchoolDoc], 2))
+      .mockReturnValueOnce(createChanges([childDoc, deletedChildDoc]));
+
+    const res = await controller.changes('some-db', user, { limit: 2 });
+
+    expect(res.lostPermissions).toEqual([schoolDoc._id, privateSchoolDoc._id]);
   });
 
   it('should always return deleted docs', async () => {
@@ -163,6 +234,49 @@ describe('ChangesController', () => {
     res.results.forEach(({ id }) => expect(id).toBe(childDoc._id));
   });
 
+  it('should only include lostPermissions within limit or trailing the permitted limit', async () => {
+    // Scenario: CouchDB returns [permitted, permitted, lost, permitted(overflow), lost]
+    // With limit=2, the first 2 permitted results are included.
+    // The lost entry (schoolDoc) between them and the next overflow permitted result
+    // IS included because lostPermissions don't count toward the limit.
+    // schoolDoc2 (after the overflow) is NOT included because scanning stops at the overflow.
+    const childDoc2: DatabaseDocument = { _id: 'Child:2' };
+    const schoolDoc2: DatabaseDocument = { _id: 'School:3' };
+    getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
+    getSpy.mockReturnValueOnce(
+      createChanges([childDoc, childDoc2, schoolDoc, childDoc, schoolDoc2], 0),
+    );
+
+    const res = await controller.changes('some-db', user, { limit: 2 });
+
+    expect(res.results.map((r) => r.id)).toEqual([childDoc._id, childDoc2._id]);
+    // schoolDoc comes after the 2nd permitted result but before the overflow,
+    // so it IS included in lostPermissions for this page
+    expect(res.lostPermissions).toEqual([schoolDoc._id]);
+    // The overflow permitted result (childDoc) + schoolDoc2 are unprocessed
+    expect(res.pending).toBe(2);
+    expect(res.last_seq).toBe(docToChange(schoolDoc).seq);
+  });
+
+  it('should include lostPermissions that precede the last included result when limit is hit', async () => {
+    // Scenario: CouchDB returns [permitted, lost, permitted, permitted(overflow)]
+    // With limit=2, the lost entry (between the two included permitted results)
+    // should be in lostPermissions because it falls within the page boundary.
+    const childDoc2: DatabaseDocument = { _id: 'Child:2' };
+    getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
+    getSpy.mockReturnValueOnce(
+      createChanges([childDoc, schoolDoc, childDoc2, childDoc], 0),
+    );
+
+    const res = await controller.changes('some-db', user, { limit: 2 });
+
+    expect(res.results.map((r) => r.id)).toEqual([childDoc._id, childDoc2._id]);
+    // schoolDoc comes BEFORE the 2nd permitted result, so it IS included
+    expect(res.lostPermissions).toEqual([schoolDoc._id]);
+    expect(res.pending).toBe(1);
+    expect(res.last_seq).toBe(docToChange(childDoc2).seq);
+  });
+
   it('should only return remaining changes if not enough were found', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
 
@@ -188,6 +302,7 @@ describe('ChangesController', () => {
     expect(res.pending).toBe(0);
     expect(res.last_seq).toBe(lastSeq);
     expect(res.results).toEqual([]);
+    expect(res.lostPermissions).toEqual([schoolDoc._id, childDoc._id]);
   });
 
   it('should not return docs of deleted documents that still have other properties', async () => {
