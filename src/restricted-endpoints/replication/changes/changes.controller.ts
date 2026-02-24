@@ -102,6 +102,7 @@ export class ChangesController {
       const change = changes.results[i];
 
       if (!this.documentFilter.isReplicable(change.id)) {
+        lastProcessedSeq = change.seq;
         continue;
       }
 
