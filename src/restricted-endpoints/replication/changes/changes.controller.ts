@@ -14,6 +14,7 @@ import {
   ChangesParams,
   ChangesResponse,
 } from '../bulk-document/couchdb-dtos/changes.dto';
+import { DocumentFilterService } from '../document-filter/document-filter.service';
 
 @UseGuards(CombinedAuthGuard)
 @Controller()
@@ -21,6 +22,7 @@ export class ChangesController {
   constructor(
     private couchdbService: CouchdbService,
     private permissionService: PermissionService,
+    private documentFilter: DocumentFilterService,
   ) {}
 
   /**
@@ -98,6 +100,12 @@ export class ChangesController {
 
     for (let i = 0; i < changes.results.length; i++) {
       const change = changes.results[i];
+
+      if (!this.documentFilter.isReplicable(change.id)) {
+        lastProcessedSeq = change.seq;
+        continue;
+      }
+
       const { doc } = change;
 
       const isPermitted = !doc
