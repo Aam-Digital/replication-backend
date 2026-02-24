@@ -6,7 +6,8 @@ import { ConfigService } from '@nestjs/config';
  *
  * By default, documents whose IDs start with `_design/` are excluded.
  * This can be overridden via the `REPLICATION_IGNORED_PREFIXES` environment
- * variable (comma-separated list of prefixes).
+ * variable (comma-separated list of prefixes). If set to an empty string,
+ * filtering is disabled.
  */
 @Injectable()
 export class DocumentFilterService {
@@ -15,13 +16,16 @@ export class DocumentFilterService {
   private readonly ignoredPrefixes: string[];
 
   constructor(configService: ConfigService) {
-    const envValue = configService.get<string>('REPLICATION_IGNORED_PREFIXES');
-    this.ignoredPrefixes = envValue
-      ? envValue
-          .split(',')
-          .map((p) => p.trim())
-          .filter((p) => p.length > 0)
-      : DocumentFilterService.DEFAULT_IGNORED_PREFIXES;
+    const envValue = configService.get<string | undefined>(
+      'REPLICATION_IGNORED_PREFIXES',
+    );
+    this.ignoredPrefixes =
+      envValue === undefined
+        ? DocumentFilterService.DEFAULT_IGNORED_PREFIXES
+        : envValue
+            .split(',')
+            .map((p) => p.trim())
+            .filter((p) => p.length > 0);
   }
 
   /**
