@@ -161,9 +161,7 @@ describe('ChangesController', () => {
     const res = await controller.changes('some-db', user);
 
     expect(res.results.map((r) => r.id)).toContain(docCurrentlyReadable._id);
-    expect(res.lostPermissions).not.toContain(
-      docCurrentlyReadable._id,
-    );
+    expect(res.lostPermissions).not.toContain(docCurrentlyReadable._id);
   });
 
   it('should accumulate lostPermissions across paginated requests', async () => {
@@ -174,10 +172,7 @@ describe('ChangesController', () => {
 
     const res = await controller.changes('some-db', user, { limit: 2 });
 
-    expect(res.lostPermissions).toEqual([
-      schoolDoc._id,
-      privateSchoolDoc._id,
-    ]);
+    expect(res.lostPermissions).toEqual([schoolDoc._id, privateSchoolDoc._id]);
   });
 
   it('should always return deleted docs', async () => {
@@ -307,10 +302,7 @@ describe('ChangesController', () => {
     expect(res.pending).toBe(0);
     expect(res.last_seq).toBe(lastSeq);
     expect(res.results).toEqual([]);
-    expect(res.lostPermissions).toEqual([
-      schoolDoc._id,
-      childDoc._id,
-    ]);
+    expect(res.lostPermissions).toEqual([schoolDoc._id, childDoc._id]);
   });
 
   it('should not return docs of deleted documents that still have other properties', async () => {
