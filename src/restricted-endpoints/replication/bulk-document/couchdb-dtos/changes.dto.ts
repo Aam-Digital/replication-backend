@@ -13,14 +13,17 @@ export interface ChangesResponse {
   pending: number;
 
   /**
-   * List of documents that were part of the changes feed but were not included in the results due to lost permissions.
-   * Each entry contains the document ID and revision that the user lost access to.
+   * List of document IDs that were part of the changes feed but were not
+   * included in the results due to lost permissions.
    *
    * This is a custom extension to the standard CouchDB _changes response.
    * PouchDB ignores this extra field, but the client's fetch wrapper reads it
    * to purge the corresponding local documents after sync.
+   *
+   * Only IDs are sent — the client looks up the local revision before purging,
+   * because the server-side revision may not match the locally stored one.
    */
-  lostPermissions?: LostPermissionsEntry[];
+  lostPermissions?: string[];
 }
 
 export interface ChangeResult {
@@ -36,9 +39,4 @@ export interface ChangesParams {
   since?: string;
   include_docs?: string;
   [key: string]: any;
-}
-
-export interface LostPermissionsEntry {
-  _id: string;
-  _rev: string;
 }

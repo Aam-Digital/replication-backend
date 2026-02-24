@@ -9,7 +9,6 @@ import { DatabaseDocument } from '../bulk-document/couchdb-dtos/bulk-docs.dto';
 import {
   ChangeResult,
   ChangesResponse,
-  LostPermissionsEntry,
 } from '../bulk-document/couchdb-dtos/changes.dto';
 import { ChangesController } from './changes.controller';
 
@@ -103,10 +102,7 @@ describe('ChangesController', () => {
       childDoc._id,
       deletedChildDoc._id,
     ]);
-    const expectedLost: LostPermissionsEntry[] = [
-      { _id: schoolDoc._id, _rev: docToChange(schoolDoc).doc._rev },
-    ];
-    expect(res.lostPermissions).toEqual(expectedLost);
+    expect(res.lostPermissions).toEqual([schoolDoc._id]);
   });
 
   it('should populate lostPermissions with all permission-denied non-deleted docs', async () => {
@@ -115,12 +111,11 @@ describe('ChangesController', () => {
 
     const res = await controller.changes('some-db', user);
 
-    const expectedLost: LostPermissionsEntry[] = [
-      schoolDoc,
-      privateSchoolDoc,
-      childDoc,
-    ].map((doc) => ({ _id: doc._id, _rev: docToChange(doc).doc._rev }));
-    expect(res.lostPermissions).toEqual(expectedLost);
+    expect(res.lostPermissions).toEqual([
+      schoolDoc._id,
+      privateSchoolDoc._id,
+      childDoc._id,
+    ]);
   });
 
   it('should not include clean deletion tombstones in lostPermissions (they are forwarded via permitted changes)', async () => {
@@ -130,9 +125,7 @@ describe('ChangesController', () => {
 
     // Clean tombstones (_id, _rev, _deleted only) go into permitted results so
     // PouchDB handles the deletion natively - no need to also purge via lostPermissions.
-    expect(res.lostPermissions.map((e) => e._id)).not.toContain(
-      deletedChildDoc._id,
-    );
+    expect(res.lostPermissions).not.toContain(deletedChildDoc._id);
   });
 
   it('should include deleted docs with extra properties in lostPermissions if user cannot read them', async () => {
@@ -151,10 +144,7 @@ describe('ChangesController', () => {
     // Not forwarded as a permitted change (has extra props, no read permission)
     expect(res.results.map((r) => r.id)).not.toContain(deletedWithProps._id);
     // But client still needs to purge any local copy
-    expect(res.lostPermissions).toContainEqual({
-      _id: deletedWithProps._id,
-      _rev: docToChange(deletedWithProps).doc._rev,
-    });
+    expect(res.lostPermissions).toContain(deletedWithProps._id);
   });
 
   it('should not add doc to lostPermissions if user has access to the latest revision (even if a previous revision had lost permissions)', async () => {
@@ -171,7 +161,7 @@ describe('ChangesController', () => {
     const res = await controller.changes('some-db', user);
 
     expect(res.results.map((r) => r.id)).toContain(docCurrentlyReadable._id);
-    expect(res.lostPermissions.map((e) => e._id)).not.toContain(
+    expect(res.lostPermissions).not.toContain(
       docCurrentlyReadable._id,
     );
   });
@@ -184,11 +174,10 @@ describe('ChangesController', () => {
 
     const res = await controller.changes('some-db', user, { limit: 2 });
 
-    const expectedLost: LostPermissionsEntry[] = [
-      schoolDoc,
-      privateSchoolDoc,
-    ].map((doc) => ({ _id: doc._id, _rev: docToChange(doc).doc._rev }));
-    expect(res.lostPermissions).toEqual(expectedLost);
+    expect(res.lostPermissions).toEqual([
+      schoolDoc._id,
+      privateSchoolDoc._id,
+    ]);
   });
 
   it('should always return deleted docs', async () => {
@@ -268,9 +257,7 @@ describe('ChangesController', () => {
     expect(res.results.map((r) => r.id)).toEqual([childDoc._id, childDoc2._id]);
     // schoolDoc comes after the 2nd permitted result but before the overflow,
     // so it IS included in lostPermissions for this page
-    expect(res.lostPermissions).toEqual([
-      { _id: schoolDoc._id, _rev: docToChange(schoolDoc).doc._rev },
-    ]);
+    expect(res.lostPermissions).toEqual([schoolDoc._id]);
     // The overflow permitted result (childDoc) + schoolDoc2 are unprocessed
     expect(res.pending).toBe(2);
     expect(res.last_seq).toBe(docToChange(schoolDoc).seq);
@@ -290,9 +277,7 @@ describe('ChangesController', () => {
 
     expect(res.results.map((r) => r.id)).toEqual([childDoc._id, childDoc2._id]);
     // schoolDoc comes BEFORE the 2nd permitted result, so it IS included
-    expect(res.lostPermissions).toEqual([
-      { _id: schoolDoc._id, _rev: docToChange(schoolDoc).doc._rev },
-    ]);
+    expect(res.lostPermissions).toEqual([schoolDoc._id]);
     expect(res.pending).toBe(1);
     expect(res.last_seq).toBe(docToChange(childDoc2).seq);
   });
@@ -323,8 +308,8 @@ describe('ChangesController', () => {
     expect(res.last_seq).toBe(lastSeq);
     expect(res.results).toEqual([]);
     expect(res.lostPermissions).toEqual([
-      { _id: schoolDoc._id, _rev: docToChange(schoolDoc).doc._rev },
-      { _id: childDoc._id, _rev: docToChange(childDoc).doc._rev },
+      schoolDoc._id,
+      childDoc._id,
     ]);
   });
 

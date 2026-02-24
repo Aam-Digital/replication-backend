@@ -13,7 +13,6 @@ import {
   ChangeResult,
   ChangesParams,
   ChangesResponse,
-  LostPermissionsEntry,
 } from '../bulk-document/couchdb-dtos/changes.dto';
 
 @UseGuards(CombinedAuthGuard)
@@ -93,7 +92,7 @@ export class ChangesController {
     limit: number = Infinity,
   ): ChangesResponse {
     const permitted: ChangeResult[] = [];
-    const lostPermissions: LostPermissionsEntry[] = [];
+    const lostPermissions: string[] = [];
     let lastProcessedSeq = changes.last_seq;
     let unprocessedCount = 0;
 
@@ -116,7 +115,7 @@ export class ChangesController {
       } else if (doc) {
         // doc exists but user has no read permission - client should purge any local copy
         // TODO: could be limited to only include docs that may have been accessible before (e.g. only if entity type has a `conditions` rule in permissions)
-        lostPermissions.push({ _id: doc._id, _rev: doc._rev });
+        lostPermissions.push(doc._id);
       }
 
       lastProcessedSeq = change.seq;
