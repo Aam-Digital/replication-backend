@@ -17,6 +17,8 @@ export interface ChangesResponse {
    * Each entry contains the document ID and revision that the user lost access to.
    *
    * This is a custom extension to the standard CouchDB _changes response.
+   * PouchDB ignores this extra field, but the client's fetch wrapper reads it
+   * to purge the corresponding local documents after sync.
    */
   lostPermissions?: LostPermissionsEntry[];
 }

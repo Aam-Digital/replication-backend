@@ -250,6 +250,53 @@ describe('ChangesController', () => {
     res.results.forEach(({ id }) => expect(id).toBe(childDoc._id));
   });
 
+  it('should only include lostPermissions within limit or trailing the permitted limit', async () => {
+    // Scenario: CouchDB returns [permitted, permitted, lost, permitted(overflow), lost]
+    // With limit=2, the first 2 permitted results are included.
+    // The lost entry (schoolDoc) between them and the next overflow permitted result
+    // IS included because lostPermissions don't count toward the limit.
+    // schoolDoc2 (after the overflow) is NOT included because scanning stops at the overflow.
+    const childDoc2: DatabaseDocument = { _id: 'Child:2' };
+    const schoolDoc2: DatabaseDocument = { _id: 'School:3' };
+    getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
+    getSpy.mockReturnValueOnce(
+      createChanges([childDoc, childDoc2, schoolDoc, childDoc, schoolDoc2], 0),
+    );
+
+    const res = await controller.changes('some-db', user, { limit: 2 });
+
+    expect(res.results.map((r) => r.id)).toEqual([childDoc._id, childDoc2._id]);
+    // schoolDoc comes after the 2nd permitted result but before the overflow,
+    // so it IS included in lostPermissions for this page
+    expect(res.lostPermissions).toEqual([
+      { _id: schoolDoc._id, _rev: docToChange(schoolDoc).doc._rev },
+    ]);
+    // The overflow permitted result (childDoc) + schoolDoc2 are unprocessed
+    expect(res.pending).toBe(2);
+    expect(res.last_seq).toBe(docToChange(schoolDoc).seq);
+  });
+
+  it('should include lostPermissions that precede the last included result when limit is hit', async () => {
+    // Scenario: CouchDB returns [permitted, lost, permitted, permitted(overflow)]
+    // With limit=2, the lost entry (between the two included permitted results)
+    // should be in lostPermissions because it falls within the page boundary.
+    const childDoc2: DatabaseDocument = { _id: 'Child:2' };
+    getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
+    getSpy.mockReturnValueOnce(
+      createChanges([childDoc, schoolDoc, childDoc2, childDoc], 0),
+    );
+
+    const res = await controller.changes('some-db', user, { limit: 2 });
+
+    expect(res.results.map((r) => r.id)).toEqual([childDoc._id, childDoc2._id]);
+    // schoolDoc comes BEFORE the 2nd permitted result, so it IS included
+    expect(res.lostPermissions).toEqual([
+      { _id: schoolDoc._id, _rev: docToChange(schoolDoc).doc._rev },
+    ]);
+    expect(res.pending).toBe(1);
+    expect(res.last_seq).toBe(docToChange(childDoc2).seq);
+  });
+
   it('should only return remaining changes if not enough were found', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
 

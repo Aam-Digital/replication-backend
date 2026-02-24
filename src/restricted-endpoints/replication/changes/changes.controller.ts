@@ -42,25 +42,18 @@ export class ChangesController {
     const change = { results: [], lostPermissions: [] } as ChangesResponse;
     let since = params?.since;
     while (true) {
+      const remainingChangesUntilLimit =
+        (params?.limit ?? Infinity) - change.results.length;
       const res = await this.getPermittedChanges(
         db,
         { ...params, since },
         ability,
+        remainingChangesUntilLimit,
       );
-      // missing changes till limit
-      const missing = (params?.limit ?? Infinity) - change.results.length;
-      // overflow changes of this request
-      const discarded = Math.max(res.results.length - missing, 0);
-      change.results.push(...res.results.slice(0, missing));
+      change.results.push(...res.results);
       change.lostPermissions.push(...(res.lostPermissions ?? []));
-      if (discarded > 0) {
-        // not all requested changes are used
-        change.last_seq = change.results[change.results.length - 1].seq;
-      } else {
-        // all changes were used
-        change.last_seq = res.last_seq;
-      }
-      change.pending = res.pending + discarded;
+      change.last_seq = res.last_seq;
+      change.pending = res.pending;
       if (
         !params?.limit ||
         change.pending === 0 ||
@@ -82,6 +75,7 @@ export class ChangesController {
     db: string,
     params: ChangesParams,
     ability: DocumentAbility,
+    limit: number = Infinity,
   ): Promise<ChangesResponse> {
     return firstValueFrom(
       this.couchdbService
@@ -89,40 +83,51 @@ export class ChangesController {
           ...params,
           include_docs: true,
         })
-        .pipe(map((res) => this.filterChanges(res, ability))),
+        .pipe(map((res) => this.filterChanges(res, ability, limit))),
     );
   }
 
   private filterChanges(
     changes: ChangesResponse,
     ability: DocumentAbility,
+    limit: number = Infinity,
   ): ChangesResponse {
     const permitted: ChangeResult[] = [];
     const lostPermissions: LostPermissionsEntry[] = [];
+    let lastProcessedSeq = changes.last_seq;
+    let unprocessedCount = 0;
 
-    for (const change of changes.results) {
+    for (let i = 0; i < changes.results.length; i++) {
+      const change = changes.results[i];
       const { doc } = change;
-      if (!doc) {
-        // null doc can occur with some CouchDB-compatible servers for deleted documents
-        if (change.deleted) {
-          permitted.push(change); // treat like a tombstone so the client can clean up
+
+      const isPermitted = !doc
+        ? change.deleted // tombstone with null doc
+        : (doc._deleted && Object.keys(doc).length === 3) ||
+          ability.can('read', doc);
+
+      if (isPermitted) {
+        if (permitted.length >= limit) {
+          // This permitted result exceeds the limit - stop here
+          unprocessedCount = changes.results.length - i;
+          break;
         }
-      } else if (doc._deleted && Object.keys(doc).length === 3) {
-        // deleted doc without properties besides _id, _rev and _deleted
         permitted.push(change);
-      } else if (ability.can('read', doc)) {
-        permitted.push(change);
-      } else {
+      } else if (doc) {
         // doc exists but user has no read permission - client should purge any local copy
         // TODO: could be limited to only include docs that may have been accessible before (e.g. only if entity type has a `conditions` rule in permissions)
         lostPermissions.push({ _id: doc._id, _rev: doc._rev });
       }
+
+      lastProcessedSeq = change.seq;
     }
 
     return {
       ...changes,
       results: permitted,
       lostPermissions,
+      last_seq: unprocessedCount > 0 ? lastProcessedSeq : changes.last_seq,
+      pending: changes.pending + unprocessedCount,
     };
   }
 }
