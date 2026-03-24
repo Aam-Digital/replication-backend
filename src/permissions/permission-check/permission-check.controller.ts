@@ -1,7 +1,9 @@
 import {
+  BadGatewayException,
   BadRequestException,
   Body,
   Controller,
+  Logger,
   Post,
   UseGuards,
 } from '@nestjs/common';
@@ -14,6 +16,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { AxiosError } from 'axios';
 import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
 import { OnlyAuthenticated } from '../../auth/only-authenticated.decorator';
 import { PermissionService } from '../permission/permission.service';
@@ -29,6 +32,8 @@ import { PermissionCheckRequestDto } from './permission-check.request.dto';
 @UseGuards(CombinedAuthGuard)
 @Controller('permissions')
 export class PermissionCheckController {
+  private readonly logger = new Logger(PermissionCheckController.name);
+
   constructor(
     private readonly userIdentityService: UserIdentityService,
     private readonly permissionService: PermissionService,
@@ -52,7 +57,15 @@ export class PermissionCheckController {
         type: 'object',
         properties: {
           permitted: { type: 'boolean' },
+          error: {
+            type: 'string',
+            enum: ['NOT_FOUND', 'ERROR'],
+            description:
+              'Present only when the check failed for this user. ' +
+              'NOT_FOUND = unknown userId, ERROR = unexpected failure.',
+          },
         },
+        required: ['permitted'],
       },
     },
   })
@@ -83,7 +96,29 @@ export class PermissionCheckController {
 
           return [userId, { permitted }] as const;
         } catch (error) {
-          return [userId, { permitted: false }] as const;
+          // Infrastructure failure: Keycloak unreachable or returned a server error → fail the whole batch
+          if (
+            error instanceof AxiosError &&
+            (!error.response || error.response.status >= 500)
+          ) {
+            throw new BadGatewayException(
+              'Upstream identity provider is unavailable',
+            );
+          }
+
+          // User not found in Keycloak
+          if (
+            error instanceof AxiosError &&
+            error.response?.status === 404
+          ) {
+            return [userId, { permitted: false, error: 'NOT_FOUND' }] as const;
+          }
+
+          this.logger.error(
+            `Failed to evaluate permissions for user ${userId}`,
+            error?.stack || error,
+          );
+          return [userId, { permitted: false, error: 'ERROR' }] as const;
         }
       }),
     );

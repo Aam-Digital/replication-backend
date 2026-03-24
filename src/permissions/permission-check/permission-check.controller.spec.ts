@@ -1,4 +1,6 @@
+import { BadGatewayException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { AxiosError, AxiosHeaders, AxiosResponse } from 'axios';
 import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
 import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
@@ -55,7 +57,7 @@ describe('PermissionCheckController', () => {
     });
   });
 
-  it('should mark user as denied if lookup fails', async () => {
+  it('should return error ERROR when lookup fails with unexpected error', async () => {
     jest
       .spyOn(mockUserIdentityService, 'resolveUser')
       .mockRejectedValue(new Error('lookup failed'));
@@ -66,6 +68,80 @@ describe('PermissionCheckController', () => {
       action: 'read',
     });
 
-    expect(result).toEqual({ u1: { permitted: false } });
+    expect(result).toEqual({ u1: { permitted: false, error: 'ERROR' } });
+  });
+
+  it('should return error NOT_FOUND when Keycloak returns 404', async () => {
+    const axiosResponse = {
+      status: 404,
+      statusText: 'Not Found',
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+      data: {},
+    } as AxiosResponse;
+    const notFoundError = new AxiosError(
+      'Not Found',
+      '404',
+      undefined,
+      undefined,
+      axiosResponse,
+    );
+
+    jest
+      .spyOn(mockUserIdentityService, 'resolveUser')
+      .mockRejectedValue(notFoundError);
+
+    const result = await controller.checkPermissions({
+      userIds: ['u1'],
+      entityDoc: { _id: 'Child:1' },
+      action: 'read',
+    });
+
+    expect(result).toEqual({ u1: { permitted: false, error: 'NOT_FOUND' } });
+  });
+
+  it('should throw BadGatewayException when Keycloak is unreachable', async () => {
+    const networkError = new AxiosError('connect ECONNREFUSED', 'ECONNREFUSED');
+
+    jest
+      .spyOn(mockUserIdentityService, 'resolveUser')
+      .mockRejectedValue(networkError);
+
+    await expect(
+      controller.checkPermissions({
+        userIds: ['u1'],
+        entityDoc: { _id: 'Child:1' },
+        action: 'read',
+      }),
+    ).rejects.toThrow(BadGatewayException);
+  });
+
+  it('should throw BadGatewayException when Keycloak returns 500', async () => {
+    const axiosResponse = {
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+      data: {},
+    } as AxiosResponse;
+    const serverError = new AxiosError(
+      'Internal Server Error',
+      '500',
+      undefined,
+      undefined,
+      axiosResponse,
+    );
+
+    jest
+      .spyOn(mockUserIdentityService, 'resolveUser')
+      .mockRejectedValue(serverError);
+
+    await expect(
+      controller.checkPermissions({
+        userIds: ['u1'],
+        entityDoc: { _id: 'Child:1' },
+        action: 'read',
+      }),
+    ).rejects.toThrow(BadGatewayException);
   });
 });
