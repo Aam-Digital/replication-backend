@@ -1,0 +1,64 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { catchError, concatMap, defer, of, repeat, retry, Subject } from 'rxjs';
+import { ChangeResult, ChangesResponse } from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
+import { CouchdbService } from './couchdb.service';
+
+/**
+ * Maintains a single CouchDB _changes longpoll feed per database
+ * and multicasts individual change results to subscribers.
+ */
+@Injectable()
+export class DocumentChangesService {
+  private readonly logger = new Logger(DocumentChangesService.name);
+  private readonly feeds = new Map<string, Subject<ChangeResult>>();
+
+  constructor(private readonly couchdbService: CouchdbService) {}
+
+  /**
+   * Returns an Observable that emits each individual ChangeResult
+   * from the _changes feed of the given database.
+   *
+   * The underlying longpoll connection is started lazily on first
+   * subscription and shared across all subscribers for that database.
+   */
+  getChanges(db: string): Subject<ChangeResult> {
+    if (!this.feeds.has(db)) {
+      const subject = new Subject<ChangeResult>();
+      this.feeds.set(db, subject);
+      this.startFeed(db, subject);
+    }
+    return this.feeds.get(db);
+  }
+
+  private startFeed(db: string, subject: Subject<ChangeResult>): void {
+    let lastSeq: string = 'now';
+
+    const getParams = defer(() =>
+      of({
+        feed: 'longpoll',
+        since: lastSeq,
+        include_docs: true,
+        timeout: 50000,
+      }),
+    );
+
+    getParams
+      .pipe(
+        concatMap((params) =>
+          this.couchdbService.get<ChangesResponse>(db, '_changes', params),
+        ),
+        catchError((err) => {
+          this.logger.error(`Changes feed error for "${db}":`, err);
+          throw err;
+        }),
+        retry({ delay: 1000 }),
+        repeat(),
+      )
+      .subscribe((changes) => {
+        lastSeq = changes.last_seq;
+        for (const result of changes.results ?? []) {
+          subject.next(result);
+        }
+      });
+  }
+}
