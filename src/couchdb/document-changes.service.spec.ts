@@ -115,7 +115,9 @@ describe('DocumentChangesService', () => {
     jest.spyOn(mockCouchdbService, 'get').mockImplementation(() => {
       callCount += 1;
       if (callCount === 1) {
-        return throwError(() => new Error('temporary changes feed error')) as any;
+        return throwError(
+          () => new Error('temporary changes feed error'),
+        ) as any;
       }
       return changesSubject as any;
     });

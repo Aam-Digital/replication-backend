@@ -1,6 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { catchError, concatMap, defer, of, repeat, retry, Subject } from 'rxjs';
-import { ChangeResult, ChangesResponse } from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
+import {
+  ChangeResult,
+  ChangesResponse,
+} from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
 import { CouchdbService } from './couchdb.service';
 
 /**

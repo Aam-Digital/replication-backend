@@ -3,7 +3,10 @@ import { of, Subject, throwError } from 'rxjs';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { DocumentChangesService } from '../../couchdb/document-changes.service';
 import { ChangeResult } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
-import { UserAccount, UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
+import {
+  UserAccount,
+  UserInfo,
+} from '../../restricted-endpoints/session/user-auth.dto';
 import { UserAdminService } from './user-admin.service';
 import { UserIdentityService } from './user-identity.service';
 
@@ -47,7 +50,9 @@ describe('UserIdentityService', () => {
 
     const result = await service.resolveUser('u1');
 
-    expect(result).toEqual(new UserInfo('u1', 'User:john', ['user_app'], ['Project:1']));
+    expect(result).toEqual(
+      new UserInfo('u1', 'User:john', ['user_app'], ['Project:1']),
+    );
   });
 
   it('should cache resolved users', async () => {
@@ -97,7 +102,9 @@ describe('UserIdentityService', () => {
     // Use a non-User: prefixed entity to prove invalidation works for any entity type
     jest
       .spyOn(mockUserAdminService, 'getUserAccount')
-      .mockResolvedValue(new UserAccount('u1', 'Participant:john', ['user_app']));
+      .mockResolvedValue(
+        new UserAccount('u1', 'Participant:john', ['user_app']),
+      );
     jest
       .spyOn(mockCouchdbService, 'get')
       .mockReturnValue(of({ projects: ['Project:1'] }));
@@ -120,7 +127,9 @@ describe('UserIdentityService', () => {
   it('should not invalidate cache for changes to entities not linked to any cached user', async () => {
     jest
       .spyOn(mockUserAdminService, 'getUserAccount')
-      .mockResolvedValue(new UserAccount('u1', 'Participant:john', ['user_app']));
+      .mockResolvedValue(
+        new UserAccount('u1', 'Participant:john', ['user_app']),
+      );
     jest
       .spyOn(mockCouchdbService, 'get')
       .mockReturnValue(of({ projects: ['Project:1'] }));

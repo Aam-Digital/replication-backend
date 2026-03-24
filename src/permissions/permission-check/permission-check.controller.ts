@@ -75,6 +75,11 @@ export class PermissionCheckController {
   })
   @ApiUnauthorizedResponse({ description: 'Authentication required.' })
   async checkPermissions(@Body() body: PermissionCheckRequestDto) {
+    this.logger.debug(
+      `Incoming permission check: userIds=${JSON.stringify(body?.userIds)}, ` +
+        `entityDoc._id=${body?.entityDoc?._id}, action=${body?.action}, ` +
+        `body keys=${body ? Object.keys(body) : 'null'}`,
+    );
     if (!body?.userIds?.length) {
       throw new BadRequestException('userIds is required');
     }
@@ -107,10 +112,7 @@ export class PermissionCheckController {
           }
 
           // User not found in Keycloak
-          if (
-            error instanceof AxiosError &&
-            error.response?.status === 404
-          ) {
+          if (error instanceof AxiosError && error.response?.status === 404) {
             return [userId, { permitted: false, error: 'NOT_FOUND' }] as const;
           }
 
