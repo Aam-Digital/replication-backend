@@ -1,5 +1,4 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { DatabaseDocument } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { Action } from '../permission/permission.service';
 
 /**
@@ -13,15 +12,12 @@ export class PermissionCheckRequestDto {
   userIds: string[];
 
   @ApiProperty({
-    description: 'Target entity document used for permission evaluation.',
-    type: 'object',
-    additionalProperties: true,
-    required: ['_id'],
-    properties: {
-      _id: { type: 'string' },
-    },
+    description:
+      'The _id of the target entity document to check permissions against.',
+    type: 'string',
+    example: 'Child:1',
   })
-  entityDoc: DatabaseDocument;
+  entityId: string;
 
   @ApiProperty({
     description: 'Action to evaluate.',

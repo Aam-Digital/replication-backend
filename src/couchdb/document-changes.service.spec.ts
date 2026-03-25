@@ -62,10 +62,9 @@ describe('DocumentChangesService', () => {
   });
 
   it('should reuse the same feed for the same database', () => {
-    const subject1 = service.getChanges('app');
-    const subject2 = service.getChanges('app');
+    service.getChanges('app');
+    service.getChanges('app');
 
-    expect(subject1).toBe(subject2);
     // Only one _changes request should be started
     expect(mockCouchdbService.get).toHaveBeenCalledTimes(1);
   });
@@ -76,10 +75,9 @@ describe('DocumentChangesService', () => {
       .spyOn(mockCouchdbService, 'get')
       .mockReturnValue(changesSubject as any);
 
-    const subject1 = service.getChanges('app');
-    const subject2 = service.getChanges('other-db');
+    service.getChanges('app');
+    service.getChanges('other-db');
 
-    expect(subject1).not.toBe(subject2);
     expect(mockCouchdbService.get).toHaveBeenCalledTimes(2);
   });
 

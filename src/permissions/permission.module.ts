@@ -26,7 +26,7 @@ export const KEYCLOAK_HTTP_SERVICE = 'KEYCLOAK_HTTP_SERVICE';
       // CouchDB basic-auth headers and an error interceptor, which would
       // cause Keycloak admin API requests to fail with 401.
       provide: KEYCLOAK_HTTP_SERVICE,
-      useFactory: () => new HttpService(axios.create()),
+      useFactory: () => new HttpService(axios.create({ timeout: 5000 })),
     },
     {
       provide: UserAdminService,

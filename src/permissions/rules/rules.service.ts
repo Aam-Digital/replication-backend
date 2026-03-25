@@ -73,11 +73,19 @@ export class RulesService {
         this.userIdentityService.clearCache();
         setTimeout(
           () =>
-            this.adminService.clearLocal(db).then(() => {
-              this.logger.log(
-                'Permissions changed - triggered clearLocal:' + db,
-              );
-            }),
+            this.adminService
+              .clearLocal(db)
+              .then(() => {
+                this.logger.log(
+                  'Permissions changed - triggered clearLocal:' + db,
+                );
+              })
+              .catch((error) => {
+                this.logger.error(
+                  `Failed to clear local docs after permission update for ${db}`,
+                  error?.stack || error,
+                );
+              }),
           1000,
         );
       }

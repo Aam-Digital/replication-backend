@@ -14,6 +14,7 @@ describe('UserIdentityService', () => {
   let service: UserIdentityService;
   let mockUserAdminService: UserAdminService;
   let mockCouchdbService: CouchdbService;
+  let mockDocumentChangesService: Pick<DocumentChangesService, 'getChanges'>;
   let changesSubject: Subject<ChangeResult>;
 
   beforeEach(async () => {
@@ -24,6 +25,9 @@ describe('UserIdentityService', () => {
       get: jest.fn(),
     } as any;
     changesSubject = new Subject<ChangeResult>();
+    mockDocumentChangesService = {
+      getChanges: jest.fn().mockReturnValue(changesSubject),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -32,7 +36,7 @@ describe('UserIdentityService', () => {
         { provide: CouchdbService, useValue: mockCouchdbService },
         {
           provide: DocumentChangesService,
-          useValue: { getChanges: jest.fn().mockReturnValue(changesSubject) },
+          useValue: mockDocumentChangesService,
         },
       ],
     }).compile();
@@ -50,6 +54,7 @@ describe('UserIdentityService', () => {
 
     const result = await service.resolveUser('u1');
 
+    expect(mockDocumentChangesService.getChanges).toHaveBeenCalledWith('app');
     expect(result).toEqual(
       new UserInfo('u1', 'User:john', ['user_app'], ['Project:1']),
     );

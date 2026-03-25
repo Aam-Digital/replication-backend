@@ -1,5 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { catchError, concatMap, defer, of, repeat, retry, Subject } from 'rxjs';
+import {
+  catchError,
+  concatMap,
+  defer,
+  Observable,
+  of,
+  repeat,
+  retry,
+  Subject,
+} from 'rxjs';
 import {
   ChangeResult,
   ChangesResponse,
@@ -24,13 +33,13 @@ export class DocumentChangesService {
    * The underlying longpoll connection is started lazily on first
    * subscription and shared across all subscribers for that database.
    */
-  getChanges(db: string): Subject<ChangeResult> {
+  getChanges(db: string): Observable<ChangeResult> {
     if (!this.feeds.has(db)) {
       const subject = new Subject<ChangeResult>();
       this.feeds.set(db, subject);
       this.startFeed(db, subject);
     }
-    return this.feeds.get(db);
+    return this.feeds.get(db).asObservable();
   }
 
   private startFeed(db: string, subject: Subject<ChangeResult>): void {

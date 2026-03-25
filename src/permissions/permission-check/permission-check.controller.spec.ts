@@ -1,8 +1,14 @@
-import { BadGatewayException } from '@nestjs/common';
+import {
+  BadGatewayException,
+  BadRequestException,
+  HttpException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { AxiosError, AxiosHeaders, AxiosResponse } from 'axios';
+import { of } from 'rxjs';
 import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
-import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
+import { BasicAuthGuard } from '../../auth/guards/basic-auth/basic-auth.guard';
+import { CouchdbService } from '../../couchdb/couchdb.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { PermissionService } from '../permission/permission.service';
 import { UserIdentityService } from '../user-identity/user-identity.service';
@@ -12,6 +18,7 @@ describe('PermissionCheckController', () => {
   let controller: PermissionCheckController;
   let mockUserIdentityService: UserIdentityService;
   let mockPermissionService: PermissionService;
+  let mockCouchdbService: CouchdbService;
 
   beforeEach(async () => {
     mockUserIdentityService = {
@@ -20,14 +27,18 @@ describe('PermissionCheckController', () => {
     mockPermissionService = {
       isAllowedTo: jest.fn(),
     } as any;
+    mockCouchdbService = {
+      get: jest.fn().mockReturnValue(of({ _id: 'Child:1' })),
+    } as any;
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PermissionCheckController],
       providers: [
         ...authGuardMockProviders,
-        { provide: CombinedAuthGuard, useValue: {} },
+        { provide: BasicAuthGuard, useValue: {} },
         { provide: UserIdentityService, useValue: mockUserIdentityService },
         { provide: PermissionService, useValue: mockPermissionService },
+        { provide: CouchdbService, useValue: mockCouchdbService },
       ],
     }).compile();
 
@@ -47,10 +58,11 @@ describe('PermissionCheckController', () => {
 
     const result = await controller.checkPermissions({
       userIds: ['u1', 'u2'],
-      entityDoc: { _id: 'Child:1' },
+      entityId: 'Child:1',
       action: 'read',
     });
 
+    expect(mockCouchdbService.get).toHaveBeenCalledWith('app', 'Child:1');
     expect(result).toEqual({
       u1: { permitted: true },
       u2: { permitted: false },
@@ -64,7 +76,7 @@ describe('PermissionCheckController', () => {
 
     const result = await controller.checkPermissions({
       userIds: ['u1'],
-      entityDoc: { _id: 'Child:1' },
+      entityId: 'Child:1',
       action: 'read',
     });
 
@@ -93,7 +105,21 @@ describe('PermissionCheckController', () => {
 
     const result = await controller.checkPermissions({
       userIds: ['u1'],
-      entityDoc: { _id: 'Child:1' },
+      entityId: 'Child:1',
+      action: 'read',
+    });
+
+    expect(result).toEqual({ u1: { permitted: false, error: 'NOT_FOUND' } });
+  });
+
+  it('should return NOT_FOUND when user lookup throws HttpException 404', async () => {
+    jest
+      .spyOn(mockUserIdentityService, 'resolveUser')
+      .mockRejectedValue(new HttpException('User not found', 404));
+
+    const result = await controller.checkPermissions({
+      userIds: ['u1'],
+      entityId: 'Child:1',
       action: 'read',
     });
 
@@ -110,7 +136,7 @@ describe('PermissionCheckController', () => {
     await expect(
       controller.checkPermissions({
         userIds: ['u1'],
-        entityDoc: { _id: 'Child:1' },
+        entityId: 'Child:1',
         action: 'read',
       }),
     ).rejects.toThrow(BadGatewayException);
@@ -139,9 +165,45 @@ describe('PermissionCheckController', () => {
     await expect(
       controller.checkPermissions({
         userIds: ['u1'],
-        entityDoc: { _id: 'Child:1' },
+        entityId: 'Child:1',
         action: 'read',
       }),
     ).rejects.toThrow(BadGatewayException);
+  });
+
+  it('should throw BadRequestException for malformed userIds', async () => {
+    await expect(
+      controller.checkPermissions({
+        userIds: 'u1' as any,
+        entityId: 'Child:1',
+        action: 'read',
+      }),
+    ).rejects.toThrow('userIds is required');
+  });
+
+  it('should throw BadRequestException for invalid action', async () => {
+    await expect(
+      controller.checkPermissions({
+        userIds: ['u1'],
+        entityId: 'Child:1',
+        action: 'approve' as any,
+      }),
+    ).rejects.toThrow('action is invalid');
+  });
+
+  it('should throw BadRequestException when entity document is not found', async () => {
+    jest.spyOn(mockCouchdbService, 'get').mockReturnValue({
+      subscribe: (observer) => {
+        observer.error(new HttpException('not found', 404));
+      },
+    } as any);
+
+    await expect(
+      controller.checkPermissions({
+        userIds: ['u1'],
+        entityId: 'Child:doesnotexist',
+        action: 'read',
+      }),
+    ).rejects.toThrow(BadRequestException);
   });
 });
