@@ -30,8 +30,8 @@ export class DocumentChangesService {
    * Returns an Observable that emits each individual ChangeResult
    * from the _changes feed of the given database.
    *
-   * The underlying longpoll connection is started lazily on first
-   * subscription and shared across all subscribers for that database.
+   * The underlying longpoll connection is started on the first call
+   * and shared across all callers for that database.
    */
   getChanges(db: string): Observable<ChangeResult> {
     if (!this.feeds.has(db)) {
@@ -60,7 +60,7 @@ export class DocumentChangesService {
           this.couchdbService.get<ChangesResponse>(db, '_changes', params),
         ),
         catchError((err) => {
-          this.logger.error(`Changes feed error for "${db}":`, err);
+          this.logger.error(`Changes feed error for "${db}":`, err?.stack || String(err));
           throw err;
         }),
         retry({ delay: 1000 }),

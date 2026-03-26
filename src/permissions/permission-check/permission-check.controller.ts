@@ -42,6 +42,7 @@ export class PermissionCheckController {
     'delete',
     'manage',
   ]);
+  private static readonly MAX_USER_IDS_PER_REQUEST = 100;
 
   constructor(
     private readonly userIdentityService: UserIdentityService,
@@ -117,6 +118,15 @@ export class PermissionCheckController {
     }
 
     if (
+      body.userIds.length >
+      PermissionCheckController.MAX_USER_IDS_PER_REQUEST
+    ) {
+      throw new BadRequestException(
+        `userIds must contain at most ${PermissionCheckController.MAX_USER_IDS_PER_REQUEST} entries`,
+      );
+    }
+
+    if (
       !body?.entityId ||
       typeof body.entityId !== 'string' ||
       body.entityId.trim() === ''
@@ -153,19 +163,23 @@ export class PermissionCheckController {
   }
 
   private handlePermissionEvaluationError(userId: string, error: unknown) {
-    // Infrastructure failure: Keycloak unreachable or returned a server error -> fail the whole batch
-    if (
-      error instanceof AxiosError &&
-      (!error.response || error.response.status >= 500)
-    ) {
+    const status = this.extractStatusCode(error);
+
+    if (status !== undefined) {
+      // User not found (404) or bad user ID format (400)
+      if (status === 400 || status === 404) {
+        return [userId, { permitted: false, error: 'NOT_FOUND' }] as const;
+      }
+      // Infrastructure failure: server error, auth, or rate-limit -> fail the whole batch
       throw new BadGatewayException('Upstream identity provider is unavailable');
     }
 
-    // User not found in Keycloak (404) or bad user ID format (400)
-    if (this.isClientError(error)) {
-      return [userId, { permitted: false, error: 'NOT_FOUND' }] as const;
+    // Network-level failure (no response at all) -> fail the whole batch
+    if (error instanceof AxiosError) {
+      throw new BadGatewayException('Upstream identity provider is unavailable');
     }
 
+    // Unknown/unexpected error -> log and report per-user
     this.logger.error(
       `Failed to evaluate permissions for user ${userId}`,
       error instanceof Error ? error.stack || error.message : String(error),
@@ -173,16 +187,14 @@ export class PermissionCheckController {
     return [userId, { permitted: false, error: 'ERROR' }] as const;
   }
 
-  private isClientError(error: unknown) {
-    return (
-      (error instanceof AxiosError &&
-        error.response?.status !== undefined &&
-        error.response.status >= 400 &&
-        error.response.status < 500) ||
-      (error instanceof HttpException &&
-        error.getStatus() >= 400 &&
-        error.getStatus() < 500)
-    );
+  private extractStatusCode(error: unknown): number | undefined {
+    if (error instanceof AxiosError) {
+      return error.response?.status;
+    }
+    if (error instanceof HttpException) {
+      return error.getStatus();
+    }
+    return undefined;
   }
 
   private async loadCanonicalEntityDoc(entityId: string) {

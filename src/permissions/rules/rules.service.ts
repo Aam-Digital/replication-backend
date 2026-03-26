@@ -1,5 +1,5 @@
 import { RawRuleOf } from '@casl/ability';
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { get, has } from 'lodash';
 import { firstValueFrom } from 'rxjs';
@@ -18,7 +18,7 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
  * The format of the rules is derived from CASL, see {@link https://casl.js.org/v5/en/guide/define-rules#json-objects}
  */
 @Injectable()
-export class RulesService {
+export class RulesService implements OnModuleInit {
   static readonly ENV_PERMISSION_DB = 'PERMISSION_DB';
   static readonly USER_PROPERTY_UNDEFINED = '__USER_PROPERTY_UNDEFINED__';
 
@@ -31,11 +31,13 @@ export class RulesService {
     private userIdentityService: UserIdentityService,
     private couchdbService: CouchdbService,
     private documentChangesService: DocumentChangesService,
-  ) {
+  ) {}
+
+  async onModuleInit(): Promise<void> {
     const permissionDbName = this.configService.get(
       RulesService.ENV_PERMISSION_DB,
     );
-    this.loadInitialPermissions(permissionDbName);
+    await this.loadInitialPermissions(permissionDbName);
     this.watchPermissionChanges(permissionDbName);
   }
 
@@ -63,6 +65,13 @@ export class RulesService {
 
       const prevPermissions = this.permission;
       const newPermissions = change.doc?.data;
+
+      if (!newPermissions) {
+        this.logger.warn(
+          `Permissions change for ${db} did not contain valid data; keeping previous in-memory permissions.`,
+        );
+        return;
+      }
 
       this.permission = newPermissions;
 

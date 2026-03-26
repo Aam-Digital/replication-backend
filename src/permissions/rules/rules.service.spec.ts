@@ -77,6 +77,7 @@ describe('RulesService', () => {
     }).compile();
 
     service = module.get(RulesService);
+    await service.onModuleInit();
   });
 
   it('should be defined', () => {

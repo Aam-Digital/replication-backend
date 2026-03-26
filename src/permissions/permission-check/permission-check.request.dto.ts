@@ -25,5 +25,5 @@ export class PermissionCheckRequestDto {
     default: 'read',
     required: false,
   })
-  action: Action;
+  action?: Action;
 }
