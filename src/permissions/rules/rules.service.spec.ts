@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { of, Subject } from 'rxjs';
+import { of, Subject, throwError } from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { DocumentChangesService } from '../../couchdb/document-changes.service';
@@ -231,5 +231,50 @@ describe('RulesService', () => {
     expect(mockAdminService.clearLocal).toHaveBeenCalled();
 
     jest.useRealTimers();
+  });
+
+  it('should start without permissions when initial load fails and recover via changes feed', async () => {
+    // Create a fresh service whose initial load will fail
+    const failingCouchdbService = {
+      get: jest.fn().mockReturnValue(throwError(() => new Error('connection refused'))),
+    } as any;
+    const freshChangesSubject = new Subject<ChangeResult>();
+    const freshModule = await Test.createTestingModule({
+      providers: [
+        RulesService,
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({
+            [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
+          }),
+        },
+        { provide: AdminService, useValue: mockAdminService },
+        { provide: UserIdentityService, useValue: mockUserIdentityService },
+        { provide: CouchdbService, useValue: failingCouchdbService },
+        {
+          provide: DocumentChangesService,
+          useValue: { getChanges: jest.fn().mockReturnValue(freshChangesSubject) },
+        },
+      ],
+    }).compile();
+
+    const freshService = freshModule.get(RulesService);
+    await freshService.onModuleInit();
+
+    // No permissions loaded — falls back to "allow everything"
+    expect(freshService.getRulesForUser(normalUser)).toEqual([
+      { subject: 'all', action: 'manage' },
+    ]);
+
+    // Permissions arrive via changes feed
+    freshChangesSubject.next({
+      doc: testPermission,
+      seq: '1',
+      changes: [{ rev: '1-a' }],
+      id: testPermission._id,
+    });
+
+    // Now rules should be available
+    expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
   });
 });

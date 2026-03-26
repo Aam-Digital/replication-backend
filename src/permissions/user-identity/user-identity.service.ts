@@ -80,10 +80,18 @@ export class UserIdentityService {
    * Uses the set of currently cached entity names for efficient O(1) filtering.
    */
   private watchUserEntityChanges(db = 'app'): void {
-    this.documentChangesService.getChanges(db).subscribe((change) => {
-      if (this.entityNameIndex.has(change.id)) {
-        this.invalidateByEntityName(change.id);
-      }
+    this.documentChangesService.getChanges(db).subscribe({
+      next: (change) => {
+        if (this.entityNameIndex.has(change.id)) {
+          this.invalidateByEntityName(change.id);
+        }
+      },
+      error: (err) => {
+        this.logger.error(
+          `Entity changes feed terminated unexpectedly; cache invalidation disabled`,
+          err?.stack || String(err),
+        );
+      },
     });
   }
 

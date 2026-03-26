@@ -1,5 +1,5 @@
 import { HttpService } from '@nestjs/axios';
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { UserAccount } from '../../restricted-endpoints/session/user-auth.dto';
@@ -34,6 +34,7 @@ export class KeycloakUserAdminService extends UserAdminService {
   static readonly ENV_KEYCLOAK_ADMIN_CLIENT_SECRET =
     'KEYCLOAK_ADMIN_CLIENT_SECRET';
 
+  private readonly logger = new Logger(KeycloakUserAdminService.name);
   private tokenCache: { token: string; expiresAtMs: number } | undefined;
 
   constructor(
@@ -74,13 +75,22 @@ export class KeycloakUserAdminService extends UserAdminService {
       client_secret: this.getClientSecret(),
     });
 
-    const response = await firstValueFrom(
-      this.httpService.post<TokenResponse>(tokenEndpoint, body.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      }),
-    );
+    let response;
+    try {
+      response = await firstValueFrom(
+        this.httpService.post<TokenResponse>(tokenEndpoint, body.toString(), {
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+        }),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to obtain Keycloak access token`,
+        error?.stack || String(error),
+      );
+      throw error;
+    }
 
     const token = response.data?.access_token;
     const expiresInSec = response.data?.expires_in ?? 60;
@@ -103,36 +113,50 @@ export class KeycloakUserAdminService extends UserAdminService {
     userId: string,
     accessToken: string,
   ): Promise<KeycloakUserResponse> {
-    const response = await firstValueFrom(
-      this.httpService.get<KeycloakUserResponse>(
-        `${this.getRealmAdminBaseUrl()}/users/${userId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<KeycloakUserResponse>(
+          `${this.getRealmAdminBaseUrl()}/users/${userId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
           },
-        },
-      ),
-    );
-
-    return response.data;
+        ),
+      );
+      return response.data;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to fetch Keycloak user ${userId}`,
+        error?.stack || String(error),
+      );
+      throw error;
+    }
   }
 
   private async fetchUserRoles(
     userId: string,
     accessToken: string,
   ): Promise<string[]> {
-    const response = await firstValueFrom(
-      this.httpService.get<KeycloakRole[]>(
-        `${this.getRealmAdminBaseUrl()}/users/${userId}/role-mappings/realm`,
-        {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get<KeycloakRole[]>(
+          `${this.getRealmAdminBaseUrl()}/users/${userId}/role-mappings/realm`,
+          {
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+            },
           },
-        },
-      ),
-    );
-
-    return (response.data ?? []).map((role) => role.name).filter(Boolean);
+        ),
+      );
+      return (response.data ?? []).map((role) => role.name).filter(Boolean);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to fetch roles for Keycloak user ${userId}`,
+        error?.stack || String(error),
+      );
+      throw error;
+    }
   }
 
   private resolveEntityName(user: KeycloakUserResponse): string | undefined {

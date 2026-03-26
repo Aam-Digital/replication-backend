@@ -93,8 +93,9 @@ export class PermissionCheckController {
     const action: Action = body.action ?? 'read';
     const entityDoc = await this.loadCanonicalEntityDoc(body.entityId);
 
+    const uniqueUserIds = [...new Set(body.userIds)];
     const results = await Promise.all(
-      body.userIds.map((userId) => this.evaluatePermissionForUser(userId, action, entityDoc)),
+      uniqueUserIds.map((userId) => this.evaluatePermissionForUser(userId, action, entityDoc)),
     );
 
     return Object.fromEntries(results);

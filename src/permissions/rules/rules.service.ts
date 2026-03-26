@@ -37,8 +37,8 @@ export class RulesService implements OnModuleInit {
     const permissionDbName = this.configService.get(
       RulesService.ENV_PERMISSION_DB,
     );
-    await this.loadInitialPermissions(permissionDbName);
     this.watchPermissionChanges(permissionDbName);
+    await this.loadInitialPermissions(permissionDbName);
   }
 
   private async loadInitialPermissions(db = 'app'): Promise<void> {
@@ -52,8 +52,10 @@ export class RulesService implements OnModuleInit {
         this.permission = permissionDoc?.data;
       }
     } catch (error) {
-      this.logger.warn(`Failed to load initial permissions from ${db}`);
-      this.logger.debug(error?.stack || error);
+      this.logger.warn(
+        `Failed to load initial permissions from ${db}: ${error instanceof Error ? error.message : String(error)}`,
+        error?.stack,
+      );
     }
   }
 

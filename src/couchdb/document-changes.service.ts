@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import {
   catchError,
   concatMap,
@@ -8,6 +8,7 @@ import {
   repeat,
   retry,
   Subject,
+  Subscription,
 } from 'rxjs';
 import {
   ChangeResult,
@@ -20,11 +21,21 @@ import { CouchdbService } from './couchdb.service';
  * and multicasts individual change results to subscribers.
  */
 @Injectable()
-export class DocumentChangesService {
+export class DocumentChangesService implements OnModuleDestroy {
   private readonly logger = new Logger(DocumentChangesService.name);
   private readonly feeds = new Map<string, Subject<ChangeResult>>();
+  private readonly subscriptions = new Map<string, Subscription>();
 
   constructor(private readonly couchdbService: CouchdbService) {}
+
+  onModuleDestroy(): void {
+    for (const [db, subscription] of this.subscriptions) {
+      subscription.unsubscribe();
+      this.feeds.get(db)?.complete();
+    }
+    this.subscriptions.clear();
+    this.feeds.clear();
+  }
 
   /**
    * Returns an Observable that emits each individual ChangeResult
@@ -54,7 +65,7 @@ export class DocumentChangesService {
       }),
     );
 
-    getParams
+    const subscription = getParams
       .pipe(
         concatMap((params) =>
           this.couchdbService.get<ChangesResponse>(db, '_changes', params),
@@ -66,11 +77,21 @@ export class DocumentChangesService {
         retry({ delay: 1000 }),
         repeat(),
       )
-      .subscribe((changes) => {
-        lastSeq = changes.last_seq;
-        for (const result of changes.results ?? []) {
-          subject.next(result);
-        }
+      .subscribe({
+        next: (changes) => {
+          lastSeq = changes.last_seq;
+          for (const result of changes.results ?? []) {
+            subject.next(result);
+          }
+        },
+        error: (err) => {
+          this.logger.error(
+            `Changes feed for "${db}" terminated unexpectedly:`,
+            err?.stack || String(err),
+          );
+        },
       });
+
+    this.subscriptions.set(db, subscription);
   }
 }
