@@ -3,6 +3,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  HttpCode,
   HttpException,
   Logger,
   Post,
@@ -57,8 +58,9 @@ export class PermissionCheckController {
     description: 'List of user ids and one target document to evaluate.',
     type: PermissionCheckRequestDto,
   })
+  @HttpCode(200)
   @ApiResponse({
-    status: 201,
+    status: 200,
     description: 'Permission result for each user id.',
     schema: {
       type: 'object',
@@ -84,12 +86,28 @@ export class PermissionCheckController {
   })
   @ApiUnauthorizedResponse({ description: 'Authentication required.' })
   async checkPermissions(@Body() body: PermissionCheckRequestDto) {
+    this.logPermissionCheckRequest(body);
+    this.validatePermissionCheckRequest(body);
+
+    const action: Action = body.action ?? 'read';
+    const entityDoc = await this.loadCanonicalEntityDoc(body.entityId);
+
+    const results = await Promise.all(
+      body.userIds.map((userId) => this.evaluatePermissionForUser(userId, action, entityDoc)),
+    );
+
+    return Object.fromEntries(results);
+  }
+
+  private logPermissionCheckRequest(body: PermissionCheckRequestDto) {
     this.logger.debug(
       `Incoming permission check: userCount=${Array.isArray(body?.userIds) ? body.userIds.length : 0}, ` +
         `entityId=${body?.entityId}, action=${body?.action ?? 'read'}, ` +
         `body keys=${body ? Object.keys(body) : 'null'}`,
     );
+  }
 
+  private validatePermissionCheckRequest(body: PermissionCheckRequestDto) {
     if (
       !Array.isArray(body?.userIds) ||
       body.userIds.length === 0 ||
@@ -112,55 +130,59 @@ export class PermissionCheckController {
     ) {
       throw new BadRequestException('action is invalid');
     }
+  }
 
-    const action: Action = body.action ?? 'read';
-    const entityDoc = await this.loadCanonicalEntityDoc(body.entityId);
+  private async evaluatePermissionForUser(
+    userId: string,
+    action: Action,
+    entityDoc: unknown,
+  ) {
+    try {
+      const user = await this.userIdentityService.resolveUser(userId);
+      const permitted = await this.permissionService.isAllowedTo(
+        action,
+        entityDoc,
+        user,
+        'app',
+      );
 
-    const results = await Promise.all(
-      body.userIds.map(async (userId) => {
-        try {
-          const user = await this.userIdentityService.resolveUser(userId);
-          const permitted = await this.permissionService.isAllowedTo(
-            action,
-            entityDoc,
-            user,
-            'app',
-          );
+      return [userId, { permitted }] as const;
+    } catch (error) {
+      return this.handlePermissionEvaluationError(userId, error);
+    }
+  }
 
-          return [userId, { permitted }] as const;
-        } catch (error) {
-          // Infrastructure failure: Keycloak unreachable or returned a server error → fail the whole batch
-          if (
-            error instanceof AxiosError &&
-            (!error.response || error.response.status >= 500)
-          ) {
-            throw new BadGatewayException(
-              'Upstream identity provider is unavailable',
-            );
-          }
+  private handlePermissionEvaluationError(userId: string, error: unknown) {
+    // Infrastructure failure: Keycloak unreachable or returned a server error -> fail the whole batch
+    if (
+      error instanceof AxiosError &&
+      (!error.response || error.response.status >= 500)
+    ) {
+      throw new BadGatewayException('Upstream identity provider is unavailable');
+    }
 
-          // User not found in Keycloak (404) or bad user ID format (400)
-          if (
-            (error instanceof AxiosError &&
-              error.response?.status >= 400 &&
-              error.response?.status < 500) ||
-            (error instanceof HttpException &&
-              error.getStatus() >= 400 &&
-              error.getStatus() < 500)
-          ) {
-            return [userId, { permitted: false, error: 'NOT_FOUND' }] as const;
-          }
+    // User not found in Keycloak (404) or bad user ID format (400)
+    if (this.isClientError(error)) {
+      return [userId, { permitted: false, error: 'NOT_FOUND' }] as const;
+    }
 
-          this.logger.error(
-            `Failed to evaluate permissions for user ${userId}`,
-            error?.stack || error,
-          );
-          return [userId, { permitted: false, error: 'ERROR' }] as const;
-        }
-      }),
+    this.logger.error(
+      `Failed to evaluate permissions for user ${userId}`,
+      error instanceof Error ? error.stack || error.message : String(error),
     );
+    return [userId, { permitted: false, error: 'ERROR' }] as const;
+  }
 
-    return Object.fromEntries(results);
+  private isClientError(error: unknown) {
+    return (
+      (error instanceof AxiosError &&
+        error.response?.status !== undefined &&
+        error.response.status >= 400 &&
+        error.response.status < 500) ||
+      (error instanceof HttpException &&
+        error.getStatus() >= 400 &&
+        error.getStatus() < 500)
+    );
   }
 
   private async loadCanonicalEntityDoc(entityId: string) {
