@@ -1,14 +1,15 @@
-import { Injectable, Logger } from '@nestjs/common';
 import { RawRuleOf } from '@casl/ability';
-import { DocumentAbility } from '../permission/permission.service';
-import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
-import { Permission, RulesConfig } from './permission';
-import { catchError, concatMap, defer, of, repeat, retry } from 'rxjs';
-import { CouchdbService } from '../../couchdb/couchdb.service';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ChangesResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
 import { get, has } from 'lodash';
+import { firstValueFrom } from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
+import { CouchdbService } from '../../couchdb/couchdb.service';
+import { DocumentChangesService } from '../../couchdb/document-changes.service';
+import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
+import { DocumentAbility } from '../permission/permission.service';
+import { UserIdentityService } from '../user-identity/user-identity.service';
+import { Permission, RulesConfig } from './permission';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 
@@ -17,76 +18,89 @@ export type DocumentRule = RawRuleOf<DocumentAbility>;
  * The format of the rules is derived from CASL, see {@link https://casl.js.org/v5/en/guide/define-rules#json-objects}
  */
 @Injectable()
-export class RulesService {
+export class RulesService implements OnModuleInit {
   static readonly ENV_PERMISSION_DB = 'PERMISSION_DB';
   static readonly USER_PROPERTY_UNDEFINED = '__USER_PROPERTY_UNDEFINED__';
 
   private readonly logger = new Logger(RulesService.name);
   private permission: RulesConfig;
-  private lastSeq: string;
 
   constructor(
-    private couchdbService: CouchdbService,
     private configService: ConfigService,
     private adminService: AdminService,
-  ) {
+    private userIdentityService: UserIdentityService,
+    private couchdbService: CouchdbService,
+    private documentChangesService: DocumentChangesService,
+  ) {}
+
+  async onModuleInit(): Promise<void> {
     const permissionDbName = this.configService.get(
       RulesService.ENV_PERMISSION_DB,
     );
-    this.loadRulesContinuously(permissionDbName);
+    this.watchPermissionChanges(permissionDbName);
+    await this.loadInitialPermissions(permissionDbName);
   }
 
-  loadRulesContinuously(db = 'app') {
-    // Rebuild params when observable is retried/repeated
-    const getParams = defer(() =>
-      of({
-        filter: '_doc_ids',
-        feed: 'longpoll',
-        limit: '1',
-        since: this.lastSeq,
-        include_docs: true,
-        doc_ids: JSON.stringify([Permission.DOC_ID]),
-        // requests somehow time out after 1 minute
-        timeout: 50000,
-      }),
-    );
+  private async loadInitialPermissions(db = 'app'): Promise<void> {
+    try {
+      const permissionDoc = await firstValueFrom(
+        this.couchdbService.get<Permission>(db, Permission.DOC_ID),
+      );
 
-    return getParams
-      .pipe(
-        concatMap((params) =>
-          this.couchdbService.get<ChangesResponse>(db, '_changes', params),
-        ),
-        catchError((err) => {
-          this.logger.error('LOAD RULES ERROR:', err);
-          throw err;
-        }),
-        retry({ delay: 1000 }),
-        repeat(),
-      )
-      .subscribe((changes) => {
-        this.lastSeq = changes.last_seq;
-        if (changes.results?.length > 0) {
-          const prevPermissions = this.permission;
-          const newPermissions = changes.results[0].doc.data;
+      // Do not overwrite permissions that may have arrived from the live feed already.
+      if (this.permission === undefined) {
+        this.permission = permissionDoc?.data;
+      }
+    } catch (error) {
+      this.logger.warn(
+        `Failed to load initial permissions from ${db}: ${error instanceof Error ? error.message : String(error)}`,
+        error?.stack,
+      );
+    }
+  }
 
-          this.permission = newPermissions;
+  private watchPermissionChanges(db = 'app') {
+    this.documentChangesService.getChanges(db).subscribe((change) => {
+      if (change.id !== Permission.DOC_ID) {
+        return;
+      }
 
-          if (
-            prevPermissions !== undefined && // do not clear upon restart of the API
-            JSON.stringify(prevPermissions) !== JSON.stringify(newPermissions)
-          ) {
-            setTimeout(
-              () =>
-                this.adminService.clearLocal(db).then(() => {
-                  this.logger.log(
-                    'Permissions changed - triggered clearLocal:' + db,
-                  );
-                }),
-              1000,
-            );
-          }
-        }
-      });
+      const prevPermissions = this.permission;
+      const newPermissions = change.doc?.data;
+
+      if (!newPermissions) {
+        this.logger.warn(
+          `Permissions change for ${db} did not contain valid data; keeping previous in-memory permissions.`,
+        );
+        return;
+      }
+
+      this.permission = newPermissions;
+
+      if (
+        prevPermissions !== undefined && // do not clear upon restart of the API
+        JSON.stringify(prevPermissions) !== JSON.stringify(newPermissions)
+      ) {
+        this.userIdentityService.clearCache();
+        setTimeout(
+          () =>
+            this.adminService
+              .clearLocal(db)
+              .then(() => {
+                this.logger.log(
+                  'Permissions changed - triggered clearLocal:' + db,
+                );
+              })
+              .catch((error) => {
+                this.logger.error(
+                  `Failed to clear local docs after permission update for ${db}`,
+                  error?.stack || error,
+                );
+              }),
+          1000,
+        );
+      }
+    });
   }
   /**
    * Get all rules that are related to the roles of the user

@@ -1,22 +1,25 @@
-import { Test } from '@nestjs/testing';
-import { DocumentRule, RulesService } from './rules.service';
-import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
-import { defer, NEVER, of, throwError } from 'rxjs';
-import { Permission } from './permission';
 import { ConfigService } from '@nestjs/config';
-import { CouchdbService } from '../../couchdb/couchdb.service';
-import { ChangesResponse } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
+import { Test } from '@nestjs/testing';
+import { of, Subject, throwError } from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
+import { CouchdbService } from '../../couchdb/couchdb.service';
+import { DocumentChangesService } from '../../couchdb/document-changes.service';
+import { ChangeResult } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
+import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
+import { UserIdentityService } from '../user-identity/user-identity.service';
+import { Permission } from './permission';
+import { DocumentRule, RulesService } from './rules.service';
 
 describe('RulesService', () => {
   let service: RulesService;
   let adminRules: DocumentRule[];
   let userRules: DocumentRule[];
-  let mockCouchDBService: CouchdbService;
   let mockAdminService: AdminService;
+  let mockUserIdentityService: UserIdentityService;
+  let mockCouchdbService: CouchdbService;
+  let changesSubject: Subject<ChangeResult>;
 
   let testPermission: Permission;
-  let changesResponse: ChangesResponse;
 
   const normalUser = new UserInfo('user-normal', 'normalUser', ['user_app']);
   const adminUser = new UserInfo('user-super', 'superUser', [
@@ -36,23 +39,22 @@ describe('RulesService', () => {
     userRules = testPermission.data[normalUser.roles[0]];
     adminRules = testPermission.data[adminUser.roles[1]];
 
-    changesResponse = {
-      last_seq: 'initial_seq',
-      results: [
-        { doc: testPermission, seq: '', changes: [], id: testPermission._id },
-      ],
-      pending: 0,
-    };
-    mockCouchDBService = {
-      get: () => undefined,
-    } as any;
-    jest
-      .spyOn(mockCouchDBService, 'get')
-      .mockReturnValueOnce(of(changesResponse))
-      .mockReturnValueOnce(NEVER);
+    changesSubject = new Subject<ChangeResult>();
 
     mockAdminService = {
       clearLocal: jest.fn().mockResolvedValue(undefined),
+    } as any;
+
+    mockUserIdentityService = {
+      clearCache: jest.fn(),
+    } as any;
+
+    mockCouchdbService = {
+      get: jest.fn().mockReturnValue(of(testPermission)),
+    } as any;
+
+    const mockDocumentChangesService = {
+      getChanges: jest.fn().mockReturnValue(changesSubject),
     } as any;
 
     const module = await Test.createTestingModule({
@@ -64,74 +66,45 @@ describe('RulesService', () => {
             [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
           }),
         },
-        { provide: CouchdbService, useValue: mockCouchDBService },
         { provide: AdminService, useValue: mockAdminService },
+        { provide: UserIdentityService, useValue: mockUserIdentityService },
+        { provide: CouchdbService, useValue: mockCouchdbService },
+        {
+          provide: DocumentChangesService,
+          useValue: mockDocumentChangesService,
+        },
       ],
     }).compile();
 
     service = module.get(RulesService);
+    await service.onModuleInit();
   });
 
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
 
-  it('should fetch the rules from the db on startup', () => {
-    expect(mockCouchDBService.get).toHaveBeenCalledWith(
-      DATABASE_NAME,
-      '_changes',
-      expect.anything(),
-    );
+  it('should load rules from initial permission document during init', () => {
     expect(service.getRulesForUser(normalUser)).toEqual(userRules);
     expect(service.getRulesForUser(adminUser)).toEqual(
       userRules.concat(adminRules),
     );
+    expect(mockCouchdbService.get).toHaveBeenCalledWith(
+      DATABASE_NAME,
+      Permission.DOC_ID,
+    );
   });
 
-  it('should retry loading the rules if it fails', () => {
-    jest.useFakeTimers();
-    let calls = 0;
-    const loggerErrorSpy = jest
-      .spyOn(service['logger'], 'error')
-      .mockImplementation();
-    const newPermissions = new Permission({
-      [normalUser.roles[0]]: [{ action: 'manage', subject: 'Child' }],
+  it('should ignore changes for non-permission documents', () => {
+    changesSubject.next({
+      doc: { _id: 'Child:1' },
+      seq: '2',
+      changes: [{ rev: '1-a' }],
+      id: 'Child:1',
     });
-    const newResponse: ChangesResponse = {
-      last_seq: 'new_seq',
-      results: [{ ...changesResponse.results[0], doc: newPermissions }],
-      pending: 0,
-    };
 
-    jest
-      .spyOn(mockCouchDBService, 'get')
-      .mockImplementation((db, path, params) =>
-        defer(() => {
-          calls++;
-          if (calls < 3) {
-            return throwError(() => new Error());
-          } else if (params.since === 'new_seq') {
-            return NEVER;
-          } else {
-            return of(newResponse);
-          }
-        }),
-      );
-
-    service.loadRulesContinuously('app');
-    jest.advanceTimersByTime(30000);
-
-    // 2x error, 1x success, 1x waiting for next change
-    expect(calls).toEqual(4);
-    expect(loggerErrorSpy).toHaveBeenCalledTimes(2);
-    expect(loggerErrorSpy).toHaveBeenCalledWith(
-      'LOAD RULES ERROR:',
-      expect.any(Error),
-    );
-    expect(service.getRulesForUser(normalUser)).toEqual(
-      newPermissions.data[normalUser.roles[0]],
-    );
-    jest.useRealTimers();
+    // Rules should remain unchanged
+    expect(service.getRulesForUser(normalUser)).toEqual(userRules);
   });
 
   it('should not fail if no rules exist for a given role', () => {
@@ -235,39 +208,77 @@ describe('RulesService', () => {
     expect(result).not.toContain(testPermission.data.default);
   });
 
-  it('should update rules and call clear_local when permission doc changed', () => {
+  it('should update rules and call clearCache and clearLocal when permission doc changed', () => {
     jest.useFakeTimers();
 
     const updatedPermission = new Permission({
       user_app: [{ action: 'manage', subject: 'all' }],
     });
-    const updatedPermissionChange = {
-      last_seq: '1',
-      results: [
-        {
-          doc: updatedPermission,
-          seq: '1',
-          changes: [],
-          id: updatedPermission._id,
-        },
-      ],
-      pending: 0,
-    };
 
-    jest
-      .spyOn(mockCouchDBService, 'get')
-      .mockReturnValueOnce(of(changesResponse))
-      .mockReturnValueOnce(of(updatedPermissionChange))
-      .mockReturnValue(NEVER);
+    changesSubject.next({
+      doc: updatedPermission,
+      seq: '1',
+      changes: [],
+      id: updatedPermission._id,
+    });
 
-    service.loadRulesContinuously('app');
     jest.advanceTimersByTime(1500);
 
     expect(service.getRulesForUser(normalUser)).toEqual([
       { action: 'manage', subject: 'all' },
     ]);
+    expect(mockUserIdentityService.clearCache).toHaveBeenCalled();
     expect(mockAdminService.clearLocal).toHaveBeenCalled();
 
     jest.useRealTimers();
+  });
+
+  it('should start without permissions when initial load fails and recover via changes feed', async () => {
+    // Create a fresh service whose initial load will fail
+    const failingCouchdbService = {
+      get: jest
+        .fn()
+        .mockReturnValue(throwError(() => new Error('connection refused'))),
+    } as any;
+    const freshChangesSubject = new Subject<ChangeResult>();
+    const freshModule = await Test.createTestingModule({
+      providers: [
+        RulesService,
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({
+            [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
+          }),
+        },
+        { provide: AdminService, useValue: mockAdminService },
+        { provide: UserIdentityService, useValue: mockUserIdentityService },
+        { provide: CouchdbService, useValue: failingCouchdbService },
+        {
+          provide: DocumentChangesService,
+          useValue: {
+            getChanges: jest.fn().mockReturnValue(freshChangesSubject),
+          },
+        },
+      ],
+    }).compile();
+
+    const freshService = freshModule.get(RulesService);
+    await freshService.onModuleInit();
+
+    // No permissions loaded — falls back to "allow everything"
+    expect(freshService.getRulesForUser(normalUser)).toEqual([
+      { subject: 'all', action: 'manage' },
+    ]);
+
+    // Permissions arrive via changes feed
+    freshChangesSubject.next({
+      doc: testPermission,
+      seq: '1',
+      changes: [{ rev: '1-a' }],
+      id: testPermission._id,
+    });
+
+    // Now rules should be available
+    expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
   });
 });

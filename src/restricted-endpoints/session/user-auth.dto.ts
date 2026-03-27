@@ -7,7 +7,25 @@ export class UserCredentials {
 }
 
 /**
- * User object as used by CouchDB
+ * IAM account data as retrieved from the identity provider (e.g. Keycloak).
+ * Does not include application-level data like projects.
+ */
+export class UserAccount {
+  /**
+   * @param id The account id (Keycloak user id)
+   * @param name The entityId of the user profile (e.g. User:123 -> CouchDB)
+   * @param roles The realm roles assigned to the account
+   */
+  constructor(
+    public id: string,
+    public name: string,
+    public roles: string[],
+  ) {}
+}
+
+/**
+ * Internal user context used across authorization and permission checks.
+ * It is assembled from authentication claims and profile data.
  */
 export class UserInfo {
   /**

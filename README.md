@@ -28,6 +28,7 @@ In both cases the following environment variables should be defined:
 - `JWT_SECRET` a secret to create JWT tokens. They are used in the JWT auth which works similar to CouchDB's `POST /_session` endpoint. This should be changed to prevent others to create fake JWT tokens.
 - `JWT_PUBLIC_KEY` the public key which can be used to validate a JWT in the authorization header (bearer). The structure is the same as and compatible with [CouchDB JWT auth](https://docs.couchdb.org/en/stable/api/server/authn.html#jwt-authentication).
 - `SENTRY_DSN` (optional) the [Sentry DSN](https://docs.sentry.io/product/sentry-basics/dsn-explainer/). If defined, error messages are sent to the sentry.io application monitoring & logging service.
+  When `KEYCLOAK_ADMIN_BASE_URL` uses HTTPS with a self-signed CA (e.g. the local Caddy proxy), set `NODE_EXTRA_CA_CERTS` to the CA cert path before starting Node (see the local dev section below).
 
 In case the backend is run through Docker, the args can be provided like this
 
@@ -71,9 +72,16 @@ Run this service locally while the rest of the stack runs in Docker:
 2. Configure local env in this repo:
    - `cp .env.template .env`
    - Set `JWT_PUBLIC_KEY` from `https://keycloak.localhost/realms/dummy-realm`
-3. Start replication-backend locally (port 3000):
+   - Set `KEYCLOAK_ADMIN_CLIENT_SECRET` from the Keycloak client credentials
+3. Trust the Caddy self-signed CA for HTTPS calls to `keycloak.localhost`:
+
+   ```bash
+   export NODE_EXTRA_CA_CERTS=/path/to/aam-services/docs/developer/container-data/caddy-authorities/root.crt
+   ```
+
+4. Start replication-backend locally (port 3000):
    - `npm start`
-4. Route `/db` to the local service:
+5. Route `/db` to the local service:
    - In `aam-services/docs/developer/Caddyfile`, enable:
      `reverse_proxy http://host.docker.internal:3000`
    - Restart Caddy:
