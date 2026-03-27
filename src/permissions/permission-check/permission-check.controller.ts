@@ -95,7 +95,9 @@ export class PermissionCheckController {
 
     const uniqueUserIds = [...new Set(body.userIds)];
     const results = await Promise.all(
-      uniqueUserIds.map((userId) => this.evaluatePermissionForUser(userId, action, entityDoc)),
+      uniqueUserIds.map((userId) =>
+        this.evaluatePermissionForUser(userId, action, entityDoc),
+      ),
     );
 
     return Object.fromEntries(results);
@@ -119,8 +121,7 @@ export class PermissionCheckController {
     }
 
     if (
-      body.userIds.length >
-      PermissionCheckController.MAX_USER_IDS_PER_REQUEST
+      body.userIds.length > PermissionCheckController.MAX_USER_IDS_PER_REQUEST
     ) {
       throw new BadRequestException(
         `userIds must contain at most ${PermissionCheckController.MAX_USER_IDS_PER_REQUEST} entries`,
@@ -172,12 +173,16 @@ export class PermissionCheckController {
         return [userId, { permitted: false, error: 'NOT_FOUND' }] as const;
       }
       // Infrastructure failure: server error, auth, or rate-limit -> fail the whole batch
-      throw new BadGatewayException('Upstream identity provider is unavailable');
+      throw new BadGatewayException(
+        'Upstream identity provider is unavailable',
+      );
     }
 
     // Network-level failure (no response at all) -> fail the whole batch
     if (error instanceof AxiosError) {
-      throw new BadGatewayException('Upstream identity provider is unavailable');
+      throw new BadGatewayException(
+        'Upstream identity provider is unavailable',
+      );
     }
 
     // Unknown/unexpected error -> log and report per-user

@@ -71,7 +71,10 @@ export class DocumentChangesService implements OnModuleDestroy {
           this.couchdbService.get<ChangesResponse>(db, '_changes', params),
         ),
         catchError((err) => {
-          this.logger.error(`Changes feed error for "${db}":`, err?.stack || String(err));
+          this.logger.error(
+            `Changes feed error for "${db}":`,
+            err?.stack || String(err),
+          );
           throw err;
         }),
         retry({ delay: 1000 }),

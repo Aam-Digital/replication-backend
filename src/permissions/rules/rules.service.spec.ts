@@ -236,7 +236,9 @@ describe('RulesService', () => {
   it('should start without permissions when initial load fails and recover via changes feed', async () => {
     // Create a fresh service whose initial load will fail
     const failingCouchdbService = {
-      get: jest.fn().mockReturnValue(throwError(() => new Error('connection refused'))),
+      get: jest
+        .fn()
+        .mockReturnValue(throwError(() => new Error('connection refused'))),
     } as any;
     const freshChangesSubject = new Subject<ChangeResult>();
     const freshModule = await Test.createTestingModule({
@@ -253,7 +255,9 @@ describe('RulesService', () => {
         { provide: CouchdbService, useValue: failingCouchdbService },
         {
           provide: DocumentChangesService,
-          useValue: { getChanges: jest.fn().mockReturnValue(freshChangesSubject) },
+          useValue: {
+            getChanges: jest.fn().mockReturnValue(freshChangesSubject),
+          },
         },
       ],
     }).compile();
