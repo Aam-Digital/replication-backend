@@ -29,7 +29,7 @@ import { DocumentFilterService } from '../document-filter/document-filter.servic
  * CouchDB round-trip reduces the number of iterations needed to fill the
  * client's requested limit.
  */
-const INTERNAL_LIMIT_MULTIPLIER = 3;
+const INTERNAL_LIMIT_MULTIPLIER = 5;
 
 @UseGuards(CombinedAuthGuard)
 @Controller()
