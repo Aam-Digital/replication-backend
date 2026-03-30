@@ -1,4 +1,11 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Logger,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { omit } from 'lodash';
 import { firstValueFrom, map } from 'rxjs';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
@@ -16,9 +23,19 @@ import {
 } from '../bulk-document/couchdb-dtos/changes.dto';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
 
+/**
+ * Multiplier applied to the client-requested limit when fetching from CouchDB.
+ * Since permission filtering removes a fraction of results, fetching more per
+ * CouchDB round-trip reduces the number of iterations needed to fill the
+ * client's requested limit.
+ */
+const INTERNAL_LIMIT_MULTIPLIER = 3;
+
 @UseGuards(CombinedAuthGuard)
 @Controller()
 export class ChangesController {
+  private readonly logger = new Logger(ChangesController.name);
+
   constructor(
     private couchdbService: CouchdbService,
     private permissionService: PermissionService,
@@ -39,10 +56,14 @@ export class ChangesController {
     @User() user: UserInfo,
     @Query() params?: ChangesParams,
   ): Promise<ChangesResponse> {
+    const startTime = Date.now();
     const ability = this.permissionService.getAbilityFor(user);
     const change = { results: [], lostPermissions: [] } as ChangesResponse;
     let since = params?.since;
+    let iterations = 0;
+    let totalFetched = 0;
     while (true) {
+      iterations++;
       const remainingChangesUntilLimit =
         (params?.limit ?? Infinity) - change.results.length;
       const res = await this.getPermittedChanges(
@@ -51,6 +72,7 @@ export class ChangesController {
         ability,
         remainingChangesUntilLimit,
       );
+      totalFetched += (res as any)._totalFetchedFromCouch ?? 0;
       change.results.push(...res.results);
       change.lostPermissions.push(...(res.lostPermissions ?? []));
       change.last_seq = res.last_seq;
@@ -69,6 +91,22 @@ export class ChangesController {
       // remove doc content if not requested
       change.results = change.results.map((c) => omit(c, 'doc'));
     }
+
+    const duration = Date.now() - startTime;
+    if (duration > 2000 || iterations > 2) {
+      this.logger.warn(
+        `_changes for "${db}" user="${user.name}" took ${duration}ms ` +
+          `(${iterations} iterations, ${totalFetched} fetched from CouchDB, ` +
+          `${change.results.length} permitted, ${change.lostPermissions?.length ?? 0} lost, ` +
+          `since=${params?.since ?? 'undefined'}, limit=${params?.limit ?? 'none'}, pending=${change.pending})`,
+      );
+    } else {
+      this.logger.debug(
+        `_changes for "${db}" user="${user.name}": ${duration}ms, ` +
+          `${iterations} iterations, ${change.results.length} results`,
+      );
+    }
+
     return change;
   }
 
@@ -78,13 +116,30 @@ export class ChangesController {
     ability: DocumentAbility,
     limit: number = Infinity,
   ): Promise<ChangesResponse> {
+    // Fetch more from CouchDB than the client needs, since permission filtering
+    // will discard a portion of results. This reduces the number of sequential
+    // CouchDB round-trips needed to fill the requested limit.
+    const internalLimit =
+      params?.limit != null
+        ? params.limit * INTERNAL_LIMIT_MULTIPLIER
+        : params?.limit;
+
     return firstValueFrom(
       this.couchdbService
         .get<ChangesResponse>(db, '_changes', {
           ...params,
+          limit: internalLimit,
           include_docs: true,
         })
-        .pipe(map((res) => this.filterChanges(res, ability, limit))),
+        .pipe(
+          map((res) => {
+            const totalFetched = res.results?.length ?? 0;
+            const filtered = this.filterChanges(res, ability, limit);
+            // Attach metadata for logging (not sent to client — stripped by JSON serialization)
+            (filtered as any)._totalFetchedFromCouch = totalFetched;
+            return filtered;
+          }),
+        ),
     );
   }
 
