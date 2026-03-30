@@ -76,7 +76,7 @@ describe('ChangesController', () => {
 
     expect(mockCouchdbService.get).toHaveBeenCalledWith('some-db', '_changes', {
       ...params,
-      limit: 1500,
+      limit: 2500,
       include_docs: true,
     });
   });

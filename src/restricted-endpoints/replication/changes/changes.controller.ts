@@ -31,6 +31,15 @@ import { DocumentFilterService } from '../document-filter/document-filter.servic
  */
 const INTERNAL_LIMIT_MULTIPLIER = 5;
 
+/**
+ * Maximum time (ms) to spend iterating through CouchDB changes before
+ * returning a partial response. Browsers (Chrome in particular) abort idle
+ * HTTP connections after ~10 s with ERR_NETWORK_CHANGED, so we must respond
+ * well within that window. The client (PouchDB) will follow up with another
+ * `_changes` request using the returned `last_seq`.
+ */
+const MAX_PROCESSING_TIME_MS = 8000;
+
 @UseGuards(CombinedAuthGuard)
 @Controller()
 export class ChangesController {
@@ -77,12 +86,14 @@ export class ChangesController {
       change.lostPermissions.push(...(res.lostPermissions ?? []));
       change.last_seq = res.last_seq;
       change.pending = res.pending;
+      const elapsed = Date.now() - startTime;
       if (
         !params?.limit ||
         change.pending === 0 ||
-        change.results.length >= params.limit
+        change.results.length >= params.limit ||
+        elapsed >= MAX_PROCESSING_TIME_MS
       ) {
-        // enough changes found or none left
+        // enough changes found, none left, or time budget exhausted
         break;
       }
       since = res.last_seq;
