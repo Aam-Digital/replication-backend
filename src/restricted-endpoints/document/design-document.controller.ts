@@ -109,23 +109,22 @@ export class DesignDocumentController {
 
     // Only filter rows if include_docs was requested (otherwise there's no doc to check)
     const includeDocs =
-      queryParams?.include_docs === true || queryParams?.include_docs === 'true';
+      queryParams?.include_docs === true ||
+      queryParams?.include_docs === 'true';
     if (includeDocs && result.rows) {
       const ability = this.permissionService.getAbilityFor(user);
-      result.rows = result.rows.filter(
-        (row) => {
-          const isDeletedRow =
-            row?.doc?._deleted === true ||
-            row?.value?.deleted === true ||
-            row?.deleted === true;
+      result.rows = result.rows.filter((row) => {
+        const isDeletedRow =
+          row?.doc?._deleted === true ||
+          row?.value?.deleted === true ||
+          row?.deleted === true;
 
-          if (isDeletedRow) {
-            return true;
-          }
+        if (isDeletedRow) {
+          return true;
+        }
 
-          return !!row?.doc && ability.can('read', row.doc);
-        },
-      );
+        return !!row?.doc && ability.can('read', row.doc);
+      });
     }
 
     return result;
