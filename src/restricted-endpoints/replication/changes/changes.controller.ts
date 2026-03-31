@@ -40,6 +40,12 @@ const INTERNAL_LIMIT_MULTIPLIER = 5;
  */
 const MAX_PROCESSING_TIME_MS = 8000;
 
+/**
+ * Hard upper cap on the number of changes requested from CouchDB in a single
+ * round-trip. Protects the backend from very large client-supplied limits.
+ */
+const MAX_INTERNAL_LIMIT = 1000;
+
 @UseGuards(CombinedAuthGuard)
 @Controller()
 export class ChangesController {
@@ -127,13 +133,14 @@ export class ChangesController {
     ability: DocumentAbility,
     limit: number = Infinity,
   ): Promise<ChangesResponse> {
-    // Fetch more from CouchDB than the client needs, since permission filtering
-    // will discard a portion of results. This reduces the number of sequential
-    // CouchDB round-trips needed to fill the requested limit.
-    const internalLimit =
-      params?.limit != null
-        ? params.limit * INTERNAL_LIMIT_MULTIPLIER
-        : params?.limit;
+    // Fetch more from CouchDB than needed, since permission filtering will
+    // discard a portion of results. Base the multiplier on the *remaining*
+    // limit (which shrinks each iteration) rather than the original client
+    // limit, and apply a hard cap to protect against very large requests.
+    const internalLimit = Math.min(
+      limit * INTERNAL_LIMIT_MULTIPLIER,
+      MAX_INTERNAL_LIMIT,
+    );
 
     return firstValueFrom(
       this.couchdbService

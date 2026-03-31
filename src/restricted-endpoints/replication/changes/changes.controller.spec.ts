@@ -1,3 +1,4 @@
+import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Observable, of } from 'rxjs';
 import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
@@ -10,9 +11,8 @@ import {
   ChangeResult,
   ChangesResponse,
 } from '../bulk-document/couchdb-dtos/changes.dto';
-import { ChangesController } from './changes.controller';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
-import { ConfigService } from '@nestjs/config';
+import { ChangesController } from './changes.controller';
 
 describe('ChangesController', () => {
   let controller: ChangesController;
@@ -76,7 +76,7 @@ describe('ChangesController', () => {
 
     expect(mockCouchdbService.get).toHaveBeenCalledWith('some-db', '_changes', {
       ...params,
-      limit: 2500,
+      limit: 1000,
       include_docs: true,
     });
   });
@@ -340,10 +340,7 @@ describe('ChangesController', () => {
 
     const res = await controller.changes('some-db', user);
 
-    expect(res.results.map((r) => r.id)).toEqual([
-      schoolDoc._id,
-      childDoc._id,
-    ]);
+    expect(res.results.map((r) => r.id)).toEqual([schoolDoc._id, childDoc._id]);
     expect(res.lostPermissions).toEqual([]);
   });
 
