@@ -28,6 +28,10 @@ In both cases the following environment variables should be defined:
 - `JWT_SECRET` a secret to create JWT tokens. They are used in the JWT auth which works similar to CouchDB's `POST /_session` endpoint. This should be changed to prevent others to create fake JWT tokens.
 - `JWT_PUBLIC_KEY` the public key which can be used to validate a JWT in the authorization header (bearer). The structure is the same as and compatible with [CouchDB JWT auth](https://docs.couchdb.org/en/stable/api/server/authn.html#jwt-authentication).
 - `SENTRY_DSN` (optional) the [Sentry DSN](https://docs.sentry.io/product/sentry-basics/dsn-explainer/). If defined, error messages are sent to the sentry.io application monitoring & logging service.
+- `KEYCLOAK_ADMIN_BASE_URL` (optional) the base URL of the Keycloak server (e.g. `https://keycloak.example.com`). Required to enable the `/api/v1/permissions/check` endpoint, which resolves user roles via the Keycloak Admin API. If not set, the endpoint returns a 502 error but all other functionality continues to work.
+- `KEYCLOAK_REALM` (optional, required together with `KEYCLOAK_ADMIN_BASE_URL`) the Keycloak realm name.
+- `KEYCLOAK_ADMIN_CLIENT_ID` (optional, required together with `KEYCLOAK_ADMIN_BASE_URL`) the Keycloak client ID used to authenticate against the Keycloak Admin API.
+- `KEYCLOAK_ADMIN_CLIENT_SECRET` (optional, required together with `KEYCLOAK_ADMIN_BASE_URL`) the client secret for `KEYCLOAK_ADMIN_CLIENT_ID`.
   When `KEYCLOAK_ADMIN_BASE_URL` uses HTTPS with a self-signed CA (e.g. the local Caddy proxy), set `NODE_EXTRA_CA_CERTS` to the CA cert path before starting Node (see the local dev section below).
 
 In case the backend is run through Docker, the args can be provided like this

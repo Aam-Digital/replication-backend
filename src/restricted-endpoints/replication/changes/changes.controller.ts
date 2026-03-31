@@ -1,4 +1,11 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Logger,
+  Param,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { omit } from 'lodash';
 import { firstValueFrom, map } from 'rxjs';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
@@ -16,9 +23,34 @@ import {
 } from '../bulk-document/couchdb-dtos/changes.dto';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
 
+/**
+ * Multiplier applied to the client-requested limit when fetching from CouchDB.
+ * Since permission filtering removes a fraction of results, fetching more per
+ * CouchDB round-trip reduces the number of iterations needed to fill the
+ * client's requested limit.
+ */
+const INTERNAL_LIMIT_MULTIPLIER = 5;
+
+/**
+ * Maximum time (ms) to spend iterating through CouchDB changes before
+ * returning a partial response. Browsers (Chrome in particular) abort idle
+ * HTTP connections after ~10 s with ERR_NETWORK_CHANGED, so we must respond
+ * well within that window. The client (PouchDB) will follow up with another
+ * `_changes` request using the returned `last_seq`.
+ */
+const MAX_PROCESSING_TIME_MS = 8000;
+
+/**
+ * Hard upper cap on the number of changes requested from CouchDB in a single
+ * round-trip. Protects the backend from very large client-supplied limits.
+ */
+const MAX_INTERNAL_LIMIT = 1000;
+
 @UseGuards(CombinedAuthGuard)
 @Controller()
 export class ChangesController {
+  private readonly logger = new Logger(ChangesController.name);
+
   constructor(
     private couchdbService: CouchdbService,
     private permissionService: PermissionService,
@@ -39,10 +71,14 @@ export class ChangesController {
     @User() user: UserInfo,
     @Query() params?: ChangesParams,
   ): Promise<ChangesResponse> {
+    const startTime = Date.now();
     const ability = this.permissionService.getAbilityFor(user);
     const change = { results: [], lostPermissions: [] } as ChangesResponse;
     let since = params?.since;
+    let iterations = 0;
+    let totalFetched = 0;
     while (true) {
+      iterations++;
       const remainingChangesUntilLimit =
         (params?.limit ?? Infinity) - change.results.length;
       const res = await this.getPermittedChanges(
@@ -51,16 +87,19 @@ export class ChangesController {
         ability,
         remainingChangesUntilLimit,
       );
+      totalFetched += (res as any)._totalFetchedFromCouch ?? 0;
       change.results.push(...res.results);
       change.lostPermissions.push(...(res.lostPermissions ?? []));
       change.last_seq = res.last_seq;
       change.pending = res.pending;
+      const elapsed = Date.now() - startTime;
       if (
         !params?.limit ||
         change.pending === 0 ||
-        change.results.length >= params.limit
+        change.results.length >= params.limit ||
+        elapsed >= MAX_PROCESSING_TIME_MS
       ) {
-        // enough changes found or none left
+        // enough changes found, none left, or time budget exhausted
         break;
       }
       since = res.last_seq;
@@ -69,6 +108,22 @@ export class ChangesController {
       // remove doc content if not requested
       change.results = change.results.map((c) => omit(c, 'doc'));
     }
+
+    const duration = Date.now() - startTime;
+    if (duration > 2000 || iterations > 2) {
+      this.logger.warn(
+        `_changes for "${db}" user="${user.name}" took ${duration}ms ` +
+          `(${iterations} iterations, ${totalFetched} fetched from CouchDB, ` +
+          `${change.results.length} permitted, ${change.lostPermissions?.length ?? 0} lost, ` +
+          `since=${params?.since ?? 'undefined'}, limit=${params?.limit ?? 'none'}, pending=${change.pending})`,
+      );
+    } else {
+      this.logger.debug(
+        `_changes for "${db}" user="${user.name}": ${duration}ms, ` +
+          `${iterations} iterations, ${change.results.length} results`,
+      );
+    }
+
     return change;
   }
 
@@ -78,13 +133,31 @@ export class ChangesController {
     ability: DocumentAbility,
     limit: number = Infinity,
   ): Promise<ChangesResponse> {
+    // Fetch more from CouchDB than needed, since permission filtering will
+    // discard a portion of results. Base the multiplier on the *remaining*
+    // limit (which shrinks each iteration) rather than the original client
+    // limit, and apply a hard cap to protect against very large requests.
+    const internalLimit = Math.min(
+      limit * INTERNAL_LIMIT_MULTIPLIER,
+      MAX_INTERNAL_LIMIT,
+    );
+
     return firstValueFrom(
       this.couchdbService
         .get<ChangesResponse>(db, '_changes', {
           ...params,
+          limit: internalLimit,
           include_docs: true,
         })
-        .pipe(map((res) => this.filterChanges(res, ability, limit))),
+        .pipe(
+          map((res) => {
+            const totalFetched = res.results?.length ?? 0;
+            const filtered = this.filterChanges(res, ability, limit);
+            // Attach metadata for logging (not sent to client — stripped by JSON serialization)
+            (filtered as any)._totalFetchedFromCouch = totalFetched;
+            return filtered;
+          }),
+        ),
     );
   }
 
