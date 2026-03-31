@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   Put,
@@ -30,8 +31,8 @@ import { UserInfo } from '../session/user-auth.dto';
 @Controller()
 export class DesignDocumentController {
   constructor(
-    private couchdbService: CouchdbService,
-    private permissionService: PermissionService,
+    private readonly couchdbService: CouchdbService,
+    private readonly permissionService: PermissionService,
   ) {}
 
   /**
@@ -69,6 +70,13 @@ export class DesignDocumentController {
     @Body() document: DatabaseDocument,
     @User() user: UserInfo,
   ): Promise<DocSuccess> {
+    const ability = this.permissionService.getAbilityFor(user);
+    if (!ability.can('manage', '_design')) {
+      throw new ForbiddenException(
+        'Missing permission to manage design documents',
+      );
+    }
+
     document._id = `_design/${designName}`;
     return firstValueFrom(this.couchdbService.put(db, document));
   }
@@ -100,10 +108,23 @@ export class DesignDocumentController {
     );
 
     // Only filter rows if include_docs was requested (otherwise there's no doc to check)
-    if (queryParams?.include_docs === 'true' && result.rows) {
+    const includeDocs =
+      queryParams?.include_docs === true || queryParams?.include_docs === 'true';
+    if (includeDocs && result.rows) {
       const ability = this.permissionService.getAbilityFor(user);
       result.rows = result.rows.filter(
-        (row) => !row.doc || row.doc._deleted || ability.can('read', row.doc),
+        (row) => {
+          const isDeletedRow =
+            row?.doc?._deleted === true ||
+            row?.value?.deleted === true ||
+            row?.deleted === true;
+
+          if (isDeletedRow) {
+            return true;
+          }
+
+          return !!row?.doc && ability.can('read', row.doc);
+        },
       );
     }
 

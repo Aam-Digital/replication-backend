@@ -1,3 +1,4 @@
+import { ForbiddenException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { of } from 'rxjs';
 import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
@@ -102,7 +103,14 @@ describe('DesignDocumentController', () => {
   });
 
   describe('putDesignDoc', () => {
+    const adminAbility = new DocumentAbility(
+      [{ action: 'manage', subject: '_design' }],
+      { detectSubjectType: detectDocumentType },
+    );
+
     it('should create a design document in CouchDB', async () => {
+      mockPermissionService.getAbilityFor = jest.fn(() => adminAbility);
+
       const result = await controller.putDesignDoc(
         databaseName,
         'search_index',
@@ -118,6 +126,7 @@ describe('DesignDocumentController', () => {
     });
 
     it('should set the _id from the URL path', async () => {
+      mockPermissionService.getAbilityFor = jest.fn(() => adminAbility);
       const docWithoutId = { views: designDoc.views } as any;
 
       await controller.putDesignDoc(
@@ -131,6 +140,23 @@ describe('DesignDocumentController', () => {
         databaseName,
         expect.objectContaining({ _id: '_design/my_view' }),
       );
+    });
+
+    it('should reject if user lacks manage permission on _design', async () => {
+      const readOnlyAbility = new DocumentAbility(
+        [{ action: 'read', subject: 'all' }],
+        { detectSubjectType: detectDocumentType },
+      );
+      mockPermissionService.getAbilityFor = jest.fn(() => readOnlyAbility);
+
+      await expect(
+        controller.putDesignDoc(
+          databaseName,
+          'search_index',
+          { ...designDoc },
+          requestingUser,
+        ),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 
@@ -211,6 +237,81 @@ describe('DesignDocumentController', () => {
       );
 
       expect(result.rows).toHaveLength(3);
+    });
+
+    it('should filter rows when include_docs is boolean true', async () => {
+      const ability = new DocumentAbility(
+        [{ action: 'read', subject: 'Child', conditions: { _id: 'Child:1' } }],
+        { detectSubjectType: detectDocumentType },
+      );
+      mockPermissionService.getAbilityFor = jest.fn(() => ability);
+      jest
+        .spyOn(mockCouchDBService, 'get')
+        .mockReturnValue(of(JSON.parse(JSON.stringify(viewResult))));
+
+      const result = await controller.queryView(
+        databaseName,
+        'search_index',
+        'by_name',
+        requestingUser,
+        { include_docs: true },
+      );
+
+      expect(result.rows).toHaveLength(2);
+      expect(result.rows[0].id).toBe('Child:1');
+      expect(result.rows[1].id).toBe('Child:3');
+    });
+
+    it('should keep deletion rows without doc and drop ambiguous rows without doc', async () => {
+      const ability = new DocumentAbility(
+        [{ action: 'read', subject: 'Child', conditions: { _id: 'Child:1' } }],
+        { detectSubjectType: detectDocumentType },
+      );
+      mockPermissionService.getAbilityFor = jest.fn(() => ability);
+      jest.spyOn(mockCouchDBService, 'get').mockReturnValue(
+        of({
+          total_rows: 4,
+          offset: 0,
+          rows: [
+            {
+              id: 'Deleted:from-view',
+              key: 'Deleted:from-view',
+              value: { deleted: true },
+            },
+            {
+              id: 'Unknown:no-doc',
+              key: 'Unknown:no-doc',
+              value: null,
+            },
+            {
+              id: 'Child:1',
+              key: 'Child:1',
+              value: null,
+              doc: { _id: 'Child:1', name: 'Alice' },
+            },
+            {
+              id: 'Child:2',
+              key: 'Child:2',
+              value: null,
+              doc: { _id: 'Child:2', name: 'Bob' },
+            },
+          ],
+        }),
+      );
+
+      const result = await controller.queryView(
+        databaseName,
+        'search_index',
+        'by_name',
+        requestingUser,
+        { include_docs: 'true' },
+      );
+
+      expect(result.rows).toHaveLength(2);
+      expect(result.rows.map((row) => row.id)).toEqual([
+        'Deleted:from-view',
+        'Child:1',
+      ]);
     });
   });
 });

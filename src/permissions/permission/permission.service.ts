@@ -1,10 +1,10 @@
-import { Injectable } from '@nestjs/common';
-import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
-import { RulesService } from '../rules/rules.service';
 import { Ability, AbilityClass, InferSubjects } from '@casl/ability';
-import { DatabaseDocument } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
+import { Injectable } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import { CouchdbService } from '../../couchdb/couchdb.service';
+import { DatabaseDocument } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
+import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
+import { RulesService } from '../rules/rules.service';
 
 const actions = [
   'read',
