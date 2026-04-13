@@ -94,9 +94,9 @@ export class ChangesController {
       change.pending = res.pending;
       const elapsed = Date.now() - startTime;
       if (
-        !params?.limit ||
         change.pending === 0 ||
-        change.results.length >= params.limit ||
+        (params?.limit !== undefined &&
+          change.results.length >= params.limit) ||
         elapsed >= MAX_PROCESSING_TIME_MS
       ) {
         // enough changes found, none left, or time budget exhausted
