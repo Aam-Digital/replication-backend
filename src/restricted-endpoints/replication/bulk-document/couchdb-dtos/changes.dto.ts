@@ -4,7 +4,7 @@ import { DatabaseDocument } from './bulk-docs.dto';
  * DTOs for the /_changes endpoint of CouchDB used in the replication process.
  * These are not exact representations of the CouchDB API but are adapted to fit the needs of our application,
  * especially regarding permission handling.
- * 
+ *
  * see https://docs.couchdb.org/en/stable/api/database/changes.html
  */
 export interface ChangesResponse {
