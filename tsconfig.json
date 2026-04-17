@@ -12,6 +12,8 @@
     "baseUrl": "./",
     "incremental": true,
     "skipLibCheck": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "strict": false,
+    "types": ["jest", "node"]
   }
 }
