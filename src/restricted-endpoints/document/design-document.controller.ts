@@ -20,6 +20,19 @@ import {
 } from '../replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../session/user-auth.dto';
 
+type ViewResponseRow = {
+  id: string;
+  key?: unknown;
+  doc?: DatabaseDocument;
+  value?: Record<string, unknown>;
+  deleted?: boolean;
+};
+
+type ViewResponse = {
+  rows: ViewResponseRow[];
+  [key: string]: unknown;
+};
+
 /**
  * Handle design document and view query endpoints that contain slashes
  * in their path (e.g. `_design/viewname` or `_design/viewname/_view/by_field`).
@@ -48,7 +61,7 @@ export class DesignDocumentController {
     @Param('db') db: string,
     @Param('designName') designName: string,
     @User() user: UserInfo,
-    @Query() queryParams?: any,
+    @Query() queryParams?: Record<string, string>,
   ) {
     return this.couchdbService.get(db, `_design/${designName}`, queryParams);
   }
@@ -100,20 +113,23 @@ export class DesignDocumentController {
     @Param('designName') designName: string,
     @Param('viewName') viewName: string,
     @User() user: UserInfo,
-    @Query() queryParams?: any,
+    @Query() queryParams?: Record<string, string>,
   ) {
     const viewPath = `_design/${designName}/_view/${viewName}`;
     const result = await firstValueFrom(
-      this.couchdbService.get(db, viewPath, queryParams),
+      this.couchdbService.get<ViewResponse>(db, viewPath, queryParams),
     );
 
-    // Only filter rows if include_docs was requested (otherwise there's no doc to check)
+    // Only filter rows if include_docs was requested (otherwise there's no doc to check).
+    // Keep both checks as a safeguard for boolean and string query parser variants.
+    const includeDocsParam = (
+      queryParams as Record<string, unknown> | undefined
+    )?.include_docs;
     const includeDocs =
-      queryParams?.include_docs === true ||
-      queryParams?.include_docs === 'true';
-    if (includeDocs && result.rows) {
+      includeDocsParam === true || includeDocsParam === 'true';
+    if (includeDocs) {
       const ability = this.permissionService.getAbilityFor(user);
-      result.rows = result.rows.filter((row) => {
+      result.rows = result.rows.filter((row: ViewResponseRow) => {
         const isDeletedRow =
           row?.doc?._deleted === true ||
           row?.value?.deleted === true ||

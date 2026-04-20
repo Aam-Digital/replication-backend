@@ -22,6 +22,7 @@ import { AxiosError } from 'axios';
 import { firstValueFrom } from 'rxjs';
 import { BasicAuthGuard } from '../../auth/guards/basic-auth/basic-auth.guard';
 import { CouchdbService } from '../../couchdb/couchdb.service';
+import { DatabaseDocument } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { Action, PermissionService } from '../permission/permission.service';
 import { UserIdentityService } from '../user-identity/user-identity.service';
 import { PermissionCheckRequestDto } from './permission-check.request.dto';
@@ -147,7 +148,7 @@ export class PermissionCheckController {
   private async evaluatePermissionForUser(
     userId: string,
     action: Action,
-    entityDoc: unknown,
+    entityDoc: DatabaseDocument,
   ) {
     try {
       const user = await this.userIdentityService.resolveUser(userId);
@@ -213,7 +214,7 @@ export class PermissionCheckController {
 
       this.logger.error(
         `Failed to load canonical entity document ${entityId}`,
-        error?.stack || error,
+        error instanceof Error ? error.stack : String(error),
       );
       throw new BadGatewayException('Failed to load target entity document');
     }

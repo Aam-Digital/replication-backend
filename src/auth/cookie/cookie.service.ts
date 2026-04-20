@@ -1,6 +1,7 @@
 import { ExecutionContext, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
+import { CookieJwtPayload } from '../jwt-payload.types';
 
 export const TOKEN_KEY = 'access_token';
 export const COOKIE_EXPIRATION_TIME = 1000 * 60 * 60 * 2; // 2h expiration time
@@ -18,8 +19,11 @@ export class CookieService {
     const user = request.user as UserInfo;
     const response = context.switchToHttp().getResponse();
 
-    // TODO align structure with CouchDB's JWT structure
-    const payload = { name: user.name, sub: user.roles };
+    const payload: CookieJwtPayload = {
+      sub: user.id,
+      name: user.name,
+      roles: user.roles,
+    };
     const jwtToken = this.jwtService.sign(payload);
 
     response.cookie(TOKEN_KEY, jwtToken, {

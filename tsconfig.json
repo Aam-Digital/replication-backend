@@ -13,7 +13,7 @@
     "incremental": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "strict": false,
+    "strict": true,
     "types": ["jest", "node"]
   }
 }

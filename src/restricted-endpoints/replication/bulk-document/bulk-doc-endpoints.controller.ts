@@ -7,20 +7,20 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ApiOperation } from '@nestjs/swagger';
 import { from, map, Observable, of, switchMap } from 'rxjs';
+import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
+import { User } from '../../../auth/user.decorator';
+import { CouchdbService } from '../../../couchdb/couchdb.service';
+import { UserInfo } from '../../session/user-auth.dto';
+import { BulkDocumentService } from './bulk-document.service';
+import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
   BulkDocsResponse,
   FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
 import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
-import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
-import { BulkDocumentService } from './bulk-document.service';
-import { UserInfo } from '../../session/user-auth.dto';
-import { ApiOperation } from '@nestjs/swagger';
-import { CouchdbService } from '../../../couchdb/couchdb.service';
-import { User } from '../../../auth/user.decorator';
-import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 
 /**
  * Handle endpoints for the CouchDB replication process and bulk actions
@@ -104,7 +104,7 @@ export class BulkDocEndpointsController {
   @Post('/:db/_bulk_get')
   bulkGetPost(
     @Param('db') db: string,
-    @Query() queryParams: any,
+    @Query() queryParams: Record<string, string>,
     @Body() body: BulkGetRequest,
     @User() user: UserInfo,
   ): Observable<BulkGetResponse> {
@@ -130,7 +130,7 @@ export class BulkDocEndpointsController {
   @Post('/:db/_all_docs')
   allDocs(
     @Param('db') db: string,
-    @Query() queryParams: any,
+    @Query() queryParams: Record<string, string>,
     @User() user: UserInfo,
     @Body() body: AllDocsRequest,
   ): Observable<AllDocsResponse> {
@@ -146,7 +146,7 @@ export class BulkDocEndpointsController {
   @Get('/:db/_all_docs')
   allDocsGet(
     @Param('db') db: string,
-    @Query() queryParams: any,
+    @Query() queryParams: Record<string, string>,
     @User() user: UserInfo,
   ) {
     return this.couchdbService

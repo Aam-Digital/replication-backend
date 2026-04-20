@@ -85,7 +85,7 @@ export class BulkDocumentService {
   ): Promise<BulkDocsRequest> {
     const ability = this.permissionService.getAbilityFor(user);
     const allDocsRequest: AllDocsRequest = {
-      keys: request.docs.map((doc) => doc._id),
+      keys: request.docs.map((doc) => doc._id!),
     };
     const response = await firstValueFrom(
       this.couchdbService.post<AllDocsResponse>(
@@ -101,11 +101,11 @@ export class BulkDocumentService {
       new_edits: request.new_edits,
       docs: request.docs.filter(
         (doc) =>
-          this.documentFilter.isReplicable(doc._id) &&
+          this.documentFilter.isReplicable(doc._id!) &&
           this.hasPermissionsForDoc(
             doc,
             response.rows.find((responseDoc) => responseDoc.id === doc._id)
-              ?.doc,
+              ?.doc ?? undefined,
             ability,
           ),
       ),
@@ -119,14 +119,14 @@ export class BulkDocumentService {
       warning: request.warning,
       docs: request.docs.filter(
         (doc) =>
-          this.documentFilter.isReplicable(doc._id) && ability.can('read', doc),
+          this.documentFilter.isReplicable(doc._id!) && ability.can('read', doc),
       ),
     };
   }
 
   private hasPermissionsForDoc(
     updatedDoc: DatabaseDocument,
-    existingDoc: DatabaseDocument,
+    existingDoc: DatabaseDocument | undefined,
     ability: DocumentAbility,
   ) {
     if (existingDoc) {

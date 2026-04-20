@@ -24,7 +24,7 @@ import {
   DocumentAbility,
   PermissionService,
 } from '../../permissions/permission/permission.service';
-import { EMPTY, firstValueFrom, map, Observable, throwError } from 'rxjs';
+import { firstValueFrom, map, Observable, tap, throwError } from 'rxjs';
 import { permittedFieldsOf } from '@casl/ability/extra';
 import { pick } from 'lodash';
 import { Request as Req } from 'express';
@@ -59,8 +59,8 @@ export class DocumentController {
     @Param('db') db: string,
     @Param('docId') docId: string,
     @User() user: UserInfo,
-    @Query() queryParams?: any,
-  ): Observable<any> {
+    @Query() queryParams?: Record<string, string>,
+  ): Observable<void> {
     const userAbility = this.permissionService.getAbilityFor(user);
 
     if (
@@ -75,14 +75,14 @@ export class DocumentController {
     }
 
     return this.couchdbService.head(db, docId, queryParams).pipe(
-      map((res) => {
+      tap((res) => {
         this.forwardHeader(res, req, [
           'ETag',
           'X-Couch-Request-ID',
           'X-CouchDB-Body-Time',
         ]);
-        return EMPTY;
       }),
+      map(() => undefined),
     );
   }
 
@@ -99,7 +99,7 @@ export class DocumentController {
     @Param('db') db: string,
     @Param('docId') docId: string,
     @User() user: UserInfo,
-    @Query() queryParams?: any,
+    @Query() queryParams?: Record<string, string>,
   ): Promise<DatabaseDocument> {
     const documentToReturn: DatabaseDocument = await firstValueFrom(
       this.couchdbService.get(db, docId, queryParams),
@@ -245,14 +245,19 @@ export class DocumentController {
   }
 
   private forwardHeader(
-    res: AxiosResponse<any, any>,
+    res: AxiosResponse,
     req: Req,
     headers: string[],
-  ) {
+  ): void {
+    const response = req.res;
+    if (!response) {
+      return;
+    }
+
     for (let i = 0; i < headers.length; i++) {
       const header = headers[i];
       if (res.headers[header.toLowerCase()]) {
-        req.res.setHeader(header, res.headers[header.toLowerCase()]);
+        response.setHeader(header, res.headers[header.toLowerCase()]);
       }
     }
   }

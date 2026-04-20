@@ -54,9 +54,9 @@ describe('AttachmentController', () => {
         'docId',
         'prop',
         { rev: '1' },
-        undefined,
-        undefined,
-        undefined,
+        undefined as any,
+        undefined as any,
+        undefined as any,
       ),
     ).rejects.toThrow(UnauthorizedException);
   });
@@ -71,8 +71,8 @@ describe('AttachmentController', () => {
         'prop',
         { rev: '1' },
         user,
-        undefined,
-        undefined,
+        undefined as any,
+        undefined as any,
       ),
     ).rejects.toThrow(ForbiddenException);
   });
@@ -88,12 +88,12 @@ describe('AttachmentController', () => {
       'prop',
       { rev: '1' },
       user,
-      undefined,
-      undefined,
+      undefined as any,
+      undefined as any,
     );
 
     expect(controller.proxy).toHaveBeenCalled();
-    controller.proxy = undefined;
+    controller.proxy = undefined as any;
   });
 
   it('should throw ForbiddenException if user is not permitted to view attachment', () => {
@@ -105,8 +105,8 @@ describe('AttachmentController', () => {
         'docId',
         'prop',
         user,
-        undefined,
-        undefined,
+        undefined as any,
+        undefined as any,
       ),
     ).rejects.toThrow(ForbiddenException);
   });
@@ -121,12 +121,12 @@ describe('AttachmentController', () => {
       'docId',
       'prop',
       user,
-      undefined,
-      undefined,
+      undefined as any,
+      undefined as any,
     );
 
     expect(controller.proxy).toHaveBeenCalled();
-    controller.proxy = undefined;
+    controller.proxy = undefined as any;
   });
 
   it('should throw ForbiddenException if user is not permitted to delete attachment', () => {

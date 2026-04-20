@@ -37,7 +37,7 @@ describe('AdminService', () => {
     jest
       .spyOn(mockCouchDBService, 'get')
       .mockReturnValue(of(mockAllDocsResponse));
-    jest.spyOn(mockCouchDBService, 'delete').mockReturnValue(of(undefined));
+    jest.spyOn(mockCouchDBService, 'delete').mockReturnValue(of(undefined as any));
     const dbName = 'app';
 
     await service.clearLocal(dbName);

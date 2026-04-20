@@ -10,7 +10,7 @@ import { DocumentRule } from './rules.service';
 export type RulesConfig = {
   public?: DocumentRule[];
   default?: DocumentRule[];
-  [key: string]: DocumentRule[];
+  [key: string]: DocumentRule[] | undefined;
 };
 
 /**

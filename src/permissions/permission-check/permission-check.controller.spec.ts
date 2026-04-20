@@ -193,7 +193,7 @@ describe('PermissionCheckController', () => {
 
   it('should throw BadRequestException when entity document is not found', async () => {
     jest.spyOn(mockCouchdbService, 'get').mockReturnValue({
-      subscribe: (observer) => {
+      subscribe: (observer: any) => {
         observer.error(new HttpException('not found', 404));
       },
     } as any);

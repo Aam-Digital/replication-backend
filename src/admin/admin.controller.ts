@@ -13,7 +13,7 @@ export class AdminController {
   constructor(private adminService: AdminService) {}
 
   @Post('/clear_local/:db')
-  async clearLocal(@Param('db') db: string): Promise<any> {
+  async clearLocal(@Param('db') db: string): Promise<boolean> {
     await this.adminService.clearLocal(db);
     return true;
   }

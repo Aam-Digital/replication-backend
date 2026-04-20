@@ -91,7 +91,7 @@ export class KeycloakUserAdminService extends UserAdminService {
     } catch (error) {
       this.logger.error(
         `Failed to obtain Keycloak access token`,
-        error?.stack || String(error),
+        error instanceof Error ? error.stack : String(error),
       );
       throw error;
     }
@@ -132,7 +132,7 @@ export class KeycloakUserAdminService extends UserAdminService {
     } catch (error) {
       this.logger.warn(
         `Failed to fetch Keycloak user ${userId}`,
-        error?.stack || String(error),
+        error instanceof Error ? error.stack : String(error),
       );
       throw error;
     }
@@ -157,7 +157,7 @@ export class KeycloakUserAdminService extends UserAdminService {
     } catch (error) {
       this.logger.warn(
         `Failed to fetch roles for Keycloak user ${userId}`,
-        error?.stack || String(error),
+        error instanceof Error ? error.stack : String(error),
       );
       throw error;
     }

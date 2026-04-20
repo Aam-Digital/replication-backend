@@ -9,7 +9,7 @@ export class PermissionCheckRequestDto {
     description: 'List of keycloak user ids to evaluate.',
     type: [String],
   })
-  userIds: string[];
+  userIds!: string[];
 
   @ApiProperty({
     description:
@@ -17,7 +17,7 @@ export class PermissionCheckRequestDto {
     type: 'string',
     example: 'Child:1',
   })
-  entityId: string;
+  entityId!: string;
 
   @ApiProperty({
     description: 'Action to evaluate.',

@@ -62,7 +62,7 @@ describe('BulkDocEndpointsController', () => {
     const user = new UserInfo('user-id', 'username', ['user']);
 
     const result = await firstValueFrom(
-      controller.bulkGetPost(null, null, null, user),
+      controller.bulkGetPost(null as any, null as any, null as any, user),
     );
 
     expect(documentFilter.filterBulkGetResponse).toHaveBeenCalledWith(
@@ -81,13 +81,13 @@ describe('BulkDocEndpointsController', () => {
           id: 'someID',
           key: 'someKey',
           value: { rev: 'someRev' },
-          doc: null,
+          doc: undefined,
         },
         {
           id: 'otherID',
           key: 'otherKey',
           value: { rev: 'otherRev' },
-          doc: null,
+          doc: undefined,
         },
       ],
     };
@@ -100,7 +100,7 @@ describe('BulkDocEndpointsController', () => {
           id: 'someID',
           key: 'someKey',
           value: { rev: 'someRev' },
-          doc: null,
+          doc: undefined,
         },
       ],
     };
@@ -110,7 +110,7 @@ describe('BulkDocEndpointsController', () => {
     const user = new UserInfo('user-id', 'username', ['user']);
 
     const result = await firstValueFrom(
-      controller.allDocs('db', null, user, null),
+      controller.allDocs('db', null as any, user, null as any),
     );
 
     expect(documentFilter.filterAllDocsResponse).toHaveBeenCalledWith(

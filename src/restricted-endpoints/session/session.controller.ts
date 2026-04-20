@@ -12,6 +12,7 @@ import { ApiBody } from '@nestjs/swagger';
 import { TOKEN_KEY } from '../../auth/cookie/cookie.service';
 import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../auth/user.decorator';
+import { Response as ExpressResponse } from 'express';
 
 @Controller('/_session')
 export class SessionController {
@@ -32,7 +33,7 @@ export class SessionController {
    * @param response
    */
   @Delete()
-  logout(@Response() response) {
+  logout(@Response() response: ExpressResponse) {
     response.cookie(TOKEN_KEY, '', { httpOnly: true });
     response.send({ ok: true });
   }

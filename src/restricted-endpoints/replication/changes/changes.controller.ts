@@ -46,6 +46,11 @@ const MAX_PROCESSING_TIME_MS = 8000;
  */
 const MAX_INTERNAL_LIMIT = 1000;
 
+/** Internal extension of ChangesResponse with logging metadata. */
+interface InternalChangesResponse extends ChangesResponse {
+  _totalFetchedFromCouch?: number;
+}
+
 @UseGuards(CombinedAuthGuard)
 @Controller()
 export class ChangesController {
@@ -73,7 +78,12 @@ export class ChangesController {
   ): Promise<ChangesResponse> {
     const startTime = Date.now();
     const ability = this.permissionService.getAbilityFor(user);
-    const change = { results: [], lostPermissions: [] } as ChangesResponse;
+    const change: ChangesResponse = {
+      results: [],
+      lostPermissions: [],
+      last_seq: '',
+      pending: 0,
+    };
     let since = params?.since;
     let iterations = 0;
     let totalFetched = 0;
@@ -87,9 +97,11 @@ export class ChangesController {
         ability,
         remainingChangesUntilLimit,
       );
-      totalFetched += (res as any)._totalFetchedFromCouch ?? 0;
+      totalFetched += res._totalFetchedFromCouch ?? 0;
       change.results.push(...res.results);
-      change.lostPermissions.push(...(res.lostPermissions ?? []));
+      if (change.lostPermissions) {
+        change.lostPermissions.push(...(res.lostPermissions ?? []));
+      }
       change.last_seq = res.last_seq;
       change.pending = res.pending;
       const elapsed = Date.now() - startTime;
@@ -132,7 +144,7 @@ export class ChangesController {
     params: ChangesParams,
     ability: DocumentAbility,
     limit: number = Infinity,
-  ): Promise<ChangesResponse> {
+  ): Promise<InternalChangesResponse> {
     // Fetch more from CouchDB than needed, since permission filtering will
     // discard a portion of results. Base the multiplier on the *remaining*
     // limit (which shrinks each iteration) rather than the original client
@@ -152,9 +164,13 @@ export class ChangesController {
         .pipe(
           map((res) => {
             const totalFetched = res.results?.length ?? 0;
-            const filtered = this.filterChanges(res, ability, limit);
+            const filtered: InternalChangesResponse = this.filterChanges(
+              res,
+              ability,
+              limit,
+            );
             // Attach metadata for logging (not sent to client — stripped by JSON serialization)
-            (filtered as any)._totalFetchedFromCouch = totalFetched;
+            filtered._totalFetchedFromCouch = totalFetched;
             return filtered;
           }),
         ),
@@ -196,7 +212,7 @@ export class ChangesController {
       } else if (doc) {
         // doc exists but user has no read permission - client should purge any local copy
         // TODO: could be limited to only include docs that may have been accessible before (e.g. only if entity type has a `conditions` rule in permissions)
-        lostPermissions.push(doc._id);
+        lostPermissions.push(doc._id!);
       }
 
       lastProcessedSeq = change.seq;

@@ -1,18 +1,18 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { json, urlencoded } from 'express';
-import { DocumentModule } from './document/document.module';
-import { ReplicationModule } from './replication/replication.module';
-import { SessionController } from './session/session.controller';
 import { AuthModule } from '../auth/auth.module';
 import { CombinedAuthGuard } from '../auth/guards/combined-auth/combined-auth.guard';
 import { AttachmentModule } from './attachment/attachment.module';
+import { DocumentModule } from './document/document.module';
+import { ReplicationModule } from './replication/replication.module';
+import { SessionController } from './session/session.controller';
 
 @Module({
   imports: [ReplicationModule, AuthModule, DocumentModule, AttachmentModule],
   controllers: [SessionController],
 })
 export class RestrictedEndpointsModule implements NestModule {
-  configure(consumer: MiddlewareConsumer): any {
+  configure(consumer: MiddlewareConsumer): void {
     consumer
       .apply(
         json({ limit: '10mb' }),

@@ -4,12 +4,13 @@ import {
   Injectable,
   NestMiddleware,
 } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { setUser } from '@sentry/node';
+import { Request, Response } from 'express';
+import { ONLY_AUTHENTICATED_KEY } from '../../only-authenticated.decorator';
 import { BasicAuthGuard } from '../basic-auth/basic-auth.guard';
 import { JwtBearerGuard } from '../jwt-bearer/jwt-bearer.guard';
 import { JwtCookieGuard } from '../jwt-cookie/jwt-cookie.guard';
-import { ONLY_AUTHENTICATED_KEY } from '../../only-authenticated.decorator';
-import { Reflector } from '@nestjs/core';
-import { setUser } from '@sentry/node';
 
 /**
  * This can be used as middleware or guard.
@@ -71,7 +72,7 @@ export class CombinedAuthGuard implements CanActivate, NestMiddleware {
    * @param res
    * @param next
    */
-  use(req: any, res: any, next: () => void) {
+  use(req: Request, res: Response, next: () => void) {
     const context = {
       switchToHttp: () => ({
         getRequest: () => req,
@@ -79,7 +80,11 @@ export class CombinedAuthGuard implements CanActivate, NestMiddleware {
       }),
     } as ExecutionContext;
     return this.authenticateViaGuards(context)
-      .then(() => setUser({ username: req.user.name }))
+      .then(() =>
+        setUser({
+          username: (req as Request & { user?: { name?: string } }).user?.name,
+        }),
+      )
       .then(() => next());
   }
 

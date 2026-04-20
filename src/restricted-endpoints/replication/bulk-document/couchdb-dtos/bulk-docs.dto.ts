@@ -1,11 +1,11 @@
 export class BulkDocsRequest {
-  new_edits: boolean;
-  docs: DatabaseDocument[];
+  new_edits!: boolean;
+  docs!: DatabaseDocument[];
 }
 
 export class FindResponse {
-  docs: DatabaseDocument[];
-  bookmark: string;
+  docs!: DatabaseDocument[];
+  bookmark!: string;
   warning?: string;
 }
 
@@ -19,20 +19,20 @@ export class DatabaseDocument {
     start: number;
     ids: string[];
   };
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export type BulkDocsResponse = (DocSuccess | DocError)[];
 
 export class DocSuccess {
-  ok: boolean;
-  id: string;
-  rev: string;
+  ok!: boolean;
+  id!: string;
+  rev!: string;
 }
 
 export class DocError {
-  error: string;
-  id: string;
-  reason: string;
-  rev: string;
+  error!: string;
+  id!: string;
+  reason!: string;
+  rev!: string;
 }

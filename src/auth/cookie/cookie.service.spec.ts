@@ -28,7 +28,7 @@ describe('CookieService', () => {
   it('should set a cookie containing the user info on the response', () => {
     const user = new UserInfo('user-id', 'Username', ['user_app']);
     const request = { user: user };
-    const cookies = {};
+    const cookies: Record<string, string> = {};
     const setCookieMock = jest.fn(
       (key: string, value: string) => (cookies[key] = value),
     );
@@ -52,8 +52,9 @@ describe('CookieService', () => {
       expect.anything(),
     );
     expect(mockJwtService.sign).toHaveBeenCalledWith({
+      sub: 'user-id',
       name: 'Username',
-      sub: ['user_app'],
+      roles: ['user_app'],
     });
     expect(response['cookies'][TOKEN_KEY]).toBe(jwtToken);
   });

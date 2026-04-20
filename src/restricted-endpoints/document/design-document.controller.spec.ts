@@ -254,7 +254,7 @@ describe('DesignDocumentController', () => {
         'search_index',
         'by_name',
         requestingUser,
-        { include_docs: true },
+        { include_docs: 'true' },
       );
 
       expect(result.rows).toHaveLength(2);
@@ -308,7 +308,7 @@ describe('DesignDocumentController', () => {
       );
 
       expect(result.rows).toHaveLength(2);
-      expect(result.rows.map((row) => row.id)).toEqual([
+      expect(result.rows.map((row: any) => row.id)).toEqual([
         'Deleted:from-view',
         'Child:1',
       ]);

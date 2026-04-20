@@ -23,7 +23,7 @@ export class RulesService implements OnModuleInit {
   static readonly USER_PROPERTY_UNDEFINED = '__USER_PROPERTY_UNDEFINED__';
 
   private readonly logger = new Logger(RulesService.name);
-  private permission: RulesConfig;
+  private permission!: RulesConfig;
 
   constructor(
     private configService: ConfigService,
@@ -54,7 +54,7 @@ export class RulesService implements OnModuleInit {
     } catch (error) {
       this.logger.warn(
         `Failed to load initial permissions from ${db}: ${error instanceof Error ? error.message : String(error)}`,
-        error?.stack,
+        error instanceof Error ? error.stack : undefined,
       );
     }
   }
@@ -68,14 +68,14 @@ export class RulesService implements OnModuleInit {
       const prevPermissions = this.permission;
       const newPermissions = change.doc?.data;
 
-      if (!newPermissions) {
+      if (!newPermissions || typeof newPermissions !== 'object') {
         this.logger.warn(
           `Permissions change for ${db} did not contain valid data; keeping previous in-memory permissions.`,
         );
         return;
       }
 
-      this.permission = newPermissions;
+      this.permission = newPermissions as RulesConfig;
 
       if (
         prevPermissions !== undefined && // do not clear upon restart of the API
@@ -91,10 +91,10 @@ export class RulesService implements OnModuleInit {
                   'Permissions changed - triggered clearLocal:' + db,
                 );
               })
-              .catch((error) => {
+              .catch((error: unknown) => {
                 this.logger.error(
                   `Failed to clear local docs after permission update for ${db}`,
-                  error?.stack || error,
+                  error instanceof Error ? error.stack : String(error),
                 );
               }),
           1000,
@@ -116,6 +116,7 @@ export class RulesService implements OnModuleInit {
       const userRules = user.roles
         .filter((role) => this.permission.hasOwnProperty(role))
         .map((role) => this.permission[role])
+        .filter((rules): rules is DocumentRule[] => rules !== undefined)
         .flat();
       if (this.permission.default) {
         userRules.unshift(...this.permission.default);
