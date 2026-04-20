@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:24-alpine
 
 USER node
 
@@ -32,4 +32,4 @@ ENV SENTRY_DSN=""
 ENV PORT=""
 
 # Start the server using the production build
-CMD [ "node", "dist/main.js" ]
+CMD ["node", "dist/main.js"]

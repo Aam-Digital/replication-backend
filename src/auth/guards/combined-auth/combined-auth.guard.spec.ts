@@ -1,11 +1,16 @@
-import { CombinedAuthGuard } from './combined-auth.guard';
-import { BasicAuthGuard } from '../basic-auth/basic-auth.guard';
-import { JwtCookieGuard } from '../jwt-cookie/jwt-cookie.guard';
-import { JwtBearerGuard } from '../jwt-bearer/jwt-bearer.guard';
-import { Reflector } from '@nestjs/core';
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
-import * as Sentry from '@sentry/node';
+import { Reflector } from '@nestjs/core';
+import { setUser } from '@sentry/node';
 import { UserInfo } from '../../../restricted-endpoints/session/user-auth.dto';
+import { BasicAuthGuard } from '../basic-auth/basic-auth.guard';
+import { JwtBearerGuard } from '../jwt-bearer/jwt-bearer.guard';
+import { JwtCookieGuard } from '../jwt-cookie/jwt-cookie.guard';
+import { CombinedAuthGuard } from './combined-auth.guard';
+
+jest.mock('@sentry/node', () => ({
+  ...jest.requireActual('@sentry/node'),
+  setUser: jest.fn(),
+}));
 
 describe('CombinedAuthGuard', () => {
   const basicAuthGuard: BasicAuthGuard = {
@@ -53,20 +58,21 @@ describe('CombinedAuthGuard', () => {
   it('[MIDDLEWARE/GUARD] should assign user to sentry after a successful authentication', async () => {
     jest.spyOn(basicAuthGuard, 'canActivate').mockResolvedValue(true);
     const user = new UserInfo('user-id', 'testUser', []);
-    const setUserSpy = jest.spyOn(Sentry, 'setUser');
+    const setUserMock = jest.mocked(setUser);
+    setUserMock.mockClear();
 
     await guard.use({ user } as any, undefined, () => undefined);
 
-    expect(setUserSpy).toHaveBeenCalledWith({ username: 'testUser' });
+    expect(setUserMock).toHaveBeenCalledWith({ username: 'testUser' });
 
-    setUserSpy.mockReset();
+    setUserMock.mockClear();
     jest
       .spyOn(mockContext, 'switchToHttp')
       .mockReturnValue({ getRequest: () => ({ user }) } as any);
 
     await guard.canActivate(mockContext);
 
-    expect(setUserSpy).toHaveBeenCalledWith({ username: 'testUser' });
+    expect(setUserMock).toHaveBeenCalledWith({ username: 'testUser' });
   });
 
   it('[MIDDLEWARE] should call next if authentication passes', async () => {
