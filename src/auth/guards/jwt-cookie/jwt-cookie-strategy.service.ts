@@ -34,14 +34,11 @@ export class JwtCookieStrategy extends PassportStrategy(
       this.couchdbService.get('app', data.name),
     ).catch(() => {});
     const projects = Array.isArray(user?.projects)
-      ? user.projects.filter((project): project is string => typeof project === 'string')
+      ? user.projects.filter(
+          (project): project is string => typeof project === 'string',
+        )
       : [];
 
-    return new UserInfo(
-      data.sub,
-      data.name,
-      data.roles,
-      projects,
-    );
+    return new UserInfo(data.sub, data.name, data.roles, projects);
   }
 }

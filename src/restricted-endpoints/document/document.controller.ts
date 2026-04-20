@@ -244,11 +244,7 @@ export class DocumentController {
     }
   }
 
-  private forwardHeader(
-    res: AxiosResponse,
-    req: Req,
-    headers: string[],
-  ): void {
+  private forwardHeader(res: AxiosResponse, req: Req, headers: string[]): void {
     const response = req.res;
     if (!response) {
       return;

@@ -107,7 +107,11 @@ export class CouchdbService {
       .pipe(map((res) => res.data));
   }
 
-  delete(db: string, id: string, params?: Record<string, unknown>): Observable<DocSuccess> {
+  delete(
+    db: string,
+    id: string,
+    params?: Record<string, unknown>,
+  ): Observable<DocSuccess> {
     return this.httpService
       .delete(this.buildDocUrl(db, id), { params })
       .pipe(map((res) => res.data));

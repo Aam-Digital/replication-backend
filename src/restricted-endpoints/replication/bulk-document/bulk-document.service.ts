@@ -119,7 +119,8 @@ export class BulkDocumentService {
       warning: request.warning,
       docs: request.docs.filter(
         (doc) =>
-          this.documentFilter.isReplicable(doc._id!) && ability.can('read', doc),
+          this.documentFilter.isReplicable(doc._id!) &&
+          ability.can('read', doc),
       ),
     };
   }

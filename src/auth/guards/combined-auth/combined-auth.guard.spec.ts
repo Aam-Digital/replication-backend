@@ -80,7 +80,11 @@ describe('CombinedAuthGuard', () => {
     let funCalled = false;
     const user = new UserInfo('user-id', 'testUser', []);
 
-    await guard.use({ user } as any, undefined as any, () => (funCalled = true));
+    await guard.use(
+      { user } as any,
+      undefined as any,
+      () => (funCalled = true),
+    );
 
     expect(funCalled).toBe(true);
   });

@@ -32,7 +32,9 @@ describe('ChangesController', () => {
     roles: [],
     projects: [],
   };
-  const mockCouchdbService = { get: () => undefined } as unknown as CouchdbService;
+  const mockCouchdbService = {
+    get: () => undefined,
+  } as unknown as CouchdbService;
   const getSpy = jest.spyOn(mockCouchdbService, 'get');
   const mockRulesService = {
     getRulesForUser: () => undefined,

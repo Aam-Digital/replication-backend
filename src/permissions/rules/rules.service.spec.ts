@@ -177,7 +177,9 @@ describe('RulesService', () => {
   });
 
   it('should replace undefined user.name with null without errors', () => {
-    const userWithoutName = new UserInfo('user-id', undefined as any, ['user_app']);
+    const userWithoutName = new UserInfo('user-id', undefined as any, [
+      'user_app',
+    ]);
     testPermission.data[userWithoutName.roles[0]] = [
       {
         subject: 'User',

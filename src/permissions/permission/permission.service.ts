@@ -60,7 +60,8 @@ export class PermissionService {
   ): Promise<boolean> {
     const userAbility = this.getAbilityFor(user);
 
-    let documentForPermissionCheck: DatabaseDocument | undefined = documentToAccess;
+    let documentForPermissionCheck: DatabaseDocument | undefined =
+      documentToAccess;
 
     if (db === 'app-attachments') {
       // check permissions on the actual, full entity so that special condition rules can be applied
@@ -80,6 +81,9 @@ export class PermissionService {
       }
     }
 
-    return !!documentForPermissionCheck && userAbility.can(action, documentForPermissionCheck);
+    return (
+      !!documentForPermissionCheck &&
+      userAbility.can(action, documentForPermissionCheck)
+    );
   }
 }

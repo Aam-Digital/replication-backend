@@ -31,7 +31,9 @@ export class JwtBearerStrategy extends PassportStrategy(
       this.couchdbService.get('app', data.username),
     ).catch(() => {});
     const projects = Array.isArray(user?.projects)
-      ? user.projects.filter((project): project is string => typeof project === 'string')
+      ? user.projects.filter(
+          (project): project is string => typeof project === 'string',
+        )
       : [];
 
     return new UserInfo(

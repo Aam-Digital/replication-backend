@@ -49,7 +49,9 @@ export class UserIdentityService {
       return undefined;
     });
     const projects = Array.isArray(userEntity?.projects)
-      ? userEntity.projects.filter((project): project is string => typeof project === 'string')
+      ? userEntity.projects.filter(
+          (project): project is string => typeof project === 'string',
+        )
       : [];
 
     const resolved = new UserInfo(
