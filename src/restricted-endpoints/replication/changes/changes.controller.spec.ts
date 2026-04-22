@@ -70,6 +70,12 @@ describe('ChangesController', () => {
     expect(mockRulesService.getRulesForUser).toHaveBeenCalledWith(user);
   });
 
+  it('should not throw when user is undefined', async () => {
+    await expect(
+      controller.changes('some-db', undefined as unknown as UserInfo),
+    ).resolves.toBeDefined();
+  });
+
   it('should forward params', () => {
     const params = { since: 'now', feed: 'continuous', limit: 500 };
     controller.changes('some-db', user, params);

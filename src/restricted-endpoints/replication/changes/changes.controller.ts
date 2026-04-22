@@ -72,6 +72,7 @@ export class ChangesController {
     @Query() params?: ChangesParams,
   ): Promise<ChangesResponse> {
     const startTime = Date.now();
+    const userName = user?.name ?? 'anonymous';
     const ability = this.permissionService.getAbilityFor(user);
     const change = { results: [], lostPermissions: [] } as ChangesResponse;
     let since = params?.since;
@@ -112,14 +113,14 @@ export class ChangesController {
     const duration = Date.now() - startTime;
     if (duration > 2000 || iterations > 2) {
       this.logger.warn(
-        `_changes for "${db}" user="${user.name}" took ${duration}ms ` +
+        `_changes for "${db}" user="${userName}" took ${duration}ms ` +
           `(${iterations} iterations, ${totalFetched} fetched from CouchDB, ` +
           `${change.results.length} permitted, ${change.lostPermissions?.length ?? 0} lost, ` +
           `since=${params?.since ?? 'undefined'}, limit=${params?.limit ?? 'none'}, pending=${change.pending})`,
       );
     } else {
       this.logger.debug(
-        `_changes for "${db}" user="${user.name}": ${duration}ms, ` +
+        `_changes for "${db}" user="${userName}": ${duration}ms, ` +
           `${iterations} iterations, ${change.results.length} results`,
       );
     }
