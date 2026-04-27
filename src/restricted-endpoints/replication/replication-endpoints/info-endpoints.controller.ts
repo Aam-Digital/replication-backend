@@ -67,6 +67,7 @@ export class InfoEndpointsController {
     @Param('docId') docId: string,
     @Body() body: DatabaseDocument,
   ) {
+    body._id = `_local/${docId}`;
     return this.couchdbService.put(db, body);
   }
 

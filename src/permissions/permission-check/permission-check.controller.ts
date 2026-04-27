@@ -214,7 +214,7 @@ export class PermissionCheckController {
 
       this.logger.error(
         `Failed to load canonical entity document ${entityId}`,
-        error instanceof Error ? error.stack : String(error),
+        error instanceof Error ? error.stack || error.message : String(error),
       );
       throw new BadGatewayException('Failed to load target entity document');
     }

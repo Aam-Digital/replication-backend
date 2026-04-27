@@ -212,7 +212,7 @@ export class ChangesController {
       } else if (doc) {
         // doc exists but user has no read permission - client should purge any local copy
         // TODO: could be limited to only include docs that may have been accessible before (e.g. only if entity type has a `conditions` rule in permissions)
-        lostPermissions.push(doc._id!);
+        lostPermissions.push(change.id);
       }
 
       lastProcessedSeq = change.seq;

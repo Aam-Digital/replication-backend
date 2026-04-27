@@ -323,7 +323,7 @@ describe('BulkDocumentService', () => {
       rows: documents.map((doc) => ({
         id: doc._id!,
         key: 'key-' + doc._id,
-        value: { rev: schoolDoc._rev! },
+        value: { rev: doc._rev! },
         doc: doc,
       })),
     };
