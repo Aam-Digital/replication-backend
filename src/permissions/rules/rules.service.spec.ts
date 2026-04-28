@@ -395,6 +395,47 @@ describe('RulesService', () => {
 
       jest.useRealTimers();
     });
+
+    it('aborts startup when transient errors persist past the retry budget', async () => {
+      jest.useFakeTimers();
+      // Shrink the retry budget so the test completes quickly.
+      jest.replaceProperty(
+        RulesService,
+        'INIT_MAX_TOTAL_MS' as keyof typeof RulesService,
+        50 as never,
+      );
+
+      const get = jest.fn().mockReturnValue(
+        throwError(
+          () =>
+            new HttpException(
+              { error: 'service_unavailable' },
+              HttpStatus.SERVICE_UNAVAILABLE,
+            ),
+        ),
+      );
+
+      const { freshService } = await buildFreshService({ get });
+      jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
+      jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation(() => {});
+
+      const initPromise = freshService.onModuleInit();
+      // Catch eagerly so unhandled-rejection warnings do not leak between tests.
+      const initResult = initPromise.catch((e) => e);
+
+      await jest.advanceTimersByTimeAsync(2_000);
+      const error = await initResult;
+
+      expect(error).toBeInstanceOf(HttpException);
+      // No permission config was ever loaded — getRulesForUser must deny all.
+      expect(freshService.getRulesForUser(normalUser)).toEqual([]);
+
+      jest.useRealTimers();
+    });
   });
 
   describe.each([
