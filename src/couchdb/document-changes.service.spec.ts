@@ -144,20 +144,18 @@ describe('DocumentChangesService', () => {
   it('should back off and not retry at 1Hz on persistent CouchDB auth errors', () => {
     jest.useFakeTimers();
 
-    const getSpy = jest
-      .spyOn(mockCouchdbService, 'get')
-      .mockReturnValue(
-        throwError(
-          () =>
-            new HttpException(
-              {
-                error: 'unauthorized',
-                reason: 'Name or password is incorrect.',
-              },
-              HttpStatus.UNAUTHORIZED,
-            ),
-        ) as any,
-      );
+    const getSpy = jest.spyOn(mockCouchdbService, 'get').mockReturnValue(
+      throwError(
+        () =>
+          new HttpException(
+            {
+              error: 'unauthorized',
+              reason: 'Name or password is incorrect.',
+            },
+            HttpStatus.UNAUTHORIZED,
+          ),
+      ) as any,
+    );
 
     service.getChanges('app').subscribe({ error: () => undefined });
 
