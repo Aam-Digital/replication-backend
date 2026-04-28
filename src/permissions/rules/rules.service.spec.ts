@@ -321,6 +321,40 @@ describe('RulesService', () => {
 
       warnSpy.mockRestore();
     });
+
+    it('swaps to the real config and triggers clearLocal when the permission doc is created via the live feed', async () => {
+      jest.useFakeTimers();
+      const { freshService, freshChangesSubject } =
+        await buildFreshService(notFoundCouchdb());
+      jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
+
+      await freshService.onModuleInit();
+
+      // Bootstrap mode active.
+      expect(freshService.getRulesForUser(normalUser)).toEqual([]);
+
+      // The frontend writes the real Config:Permissions document; the change
+      // feed delivers it.
+      freshChangesSubject.next({
+        doc: testPermission,
+        seq: '1',
+        changes: [{ rev: '1-a' }],
+        id: testPermission._id!,
+      });
+
+      // Real rules now apply.
+      expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
+
+      // The transition (bootstrap → real) must invalidate cached sessions and
+      // local replicas so previously denied users see the new config.
+      jest.advanceTimersByTime(1500);
+      expect(mockUserIdentityService.clearCache).toHaveBeenCalled();
+      expect(mockAdminService.clearLocal).toHaveBeenCalled();
+
+      jest.useRealTimers();
+    });
   });
 
   describe.each([
