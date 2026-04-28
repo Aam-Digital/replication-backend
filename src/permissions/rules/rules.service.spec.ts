@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { of, Subject, throwError } from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
 import { CouchdbService } from '../../couchdb/couchdb.service';
@@ -280,5 +281,45 @@ describe('RulesService', () => {
 
     // Now rules should be available
     expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
+  });
+
+  it('should fail startup when CouchDB rejects credentials with 401', async () => {
+    const unauthorizedCouchdbService = {
+      get: jest.fn().mockReturnValue(
+        throwError(
+          () =>
+            new HttpException(
+              { error: 'unauthorized', reason: 'Name or password is incorrect.' },
+              HttpStatus.UNAUTHORIZED,
+            ),
+        ),
+      ),
+    } as any;
+    const freshModule = await Test.createTestingModule({
+      providers: [
+        RulesService,
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({
+            [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
+          }),
+        },
+        { provide: AdminService, useValue: mockAdminService },
+        { provide: UserIdentityService, useValue: mockUserIdentityService },
+        { provide: CouchdbService, useValue: unauthorizedCouchdbService },
+        {
+          provide: DocumentChangesService,
+          useValue: {
+            getChanges: jest.fn().mockReturnValue(new Subject<ChangeResult>()),
+          },
+        },
+      ],
+    }).compile();
+
+    const freshService = freshModule.get(RulesService);
+
+    await expect(freshService.onModuleInit()).rejects.toBeInstanceOf(
+      HttpException,
+    );
   });
 });

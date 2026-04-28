@@ -1,3 +1,4 @@
+import { HttpException, HttpStatus } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NEVER, Subject, throwError } from 'rxjs';
 import { CouchdbService } from './couchdb.service';
@@ -136,6 +137,38 @@ describe('DocumentChangesService', () => {
     expect(emitted).toEqual([
       { id: 'User:alice', seq: '2', changes: [{ rev: '2-a' }] },
     ]);
+
+    jest.useRealTimers();
+  });
+
+  it('should back off and not retry at 1Hz on persistent CouchDB auth errors', () => {
+    jest.useFakeTimers();
+
+    const getSpy = jest
+      .spyOn(mockCouchdbService, 'get')
+      .mockReturnValue(
+        throwError(
+          () =>
+            new HttpException(
+              {
+                error: 'unauthorized',
+                reason: 'Name or password is incorrect.',
+              },
+              HttpStatus.UNAUTHORIZED,
+            ),
+        ) as any,
+      );
+
+    service.getChanges('app').subscribe({ error: () => undefined });
+
+    // Initial attempt happens synchronously upon subscription.
+    expect(getSpy).toHaveBeenCalledTimes(1);
+
+    // Without backoff, retry({ delay: 1000 }) would have caused 30 retries in 30s.
+    // With exponential backoff (2s, 4s, 8s, 16s, 32s, 60s cap) we expect well under that.
+    jest.advanceTimersByTime(30_000);
+
+    expect(getSpy.mock.calls.length).toBeLessThan(10);
 
     jest.useRealTimers();
   });

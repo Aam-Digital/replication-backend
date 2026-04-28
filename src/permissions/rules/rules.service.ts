@@ -1,5 +1,5 @@
 import { RawRuleOf } from '@casl/ability';
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { HttpException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { get, has } from 'lodash';
 import { firstValueFrom } from 'rxjs';
@@ -52,6 +52,17 @@ export class RulesService implements OnModuleInit {
         this.permission = permissionDoc?.data;
       }
     } catch (error) {
+      if (
+        error instanceof HttpException &&
+        (error.getStatus() === 401 || error.getStatus() === 403)
+      ) {
+        this.logger.error(
+          `CRITICAL: CouchDB rejected the configured credentials when loading initial permissions from "${db}". ` +
+            `Verify DATABASE_USER, DATABASE_PASSWORD and DATABASE_URL match the CouchDB the service is connecting to. ` +
+            `Aborting startup.`,
+        );
+        throw error;
+      }
       this.logger.warn(
         `Failed to load initial permissions from ${db}: ${error instanceof Error ? error.message : String(error)}`,
         error?.stack,
