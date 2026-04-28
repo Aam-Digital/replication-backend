@@ -357,6 +357,46 @@ describe('RulesService', () => {
     });
   });
 
+  describe('hardening: retry on transient errors during initial load', () => {
+    it('retries with backoff and succeeds once CouchDB recovers', async () => {
+      jest.useFakeTimers();
+
+      const get = jest
+        .fn()
+        // First two attempts: transient 503 from CouchDB.
+        .mockReturnValueOnce(
+          throwError(
+            () =>
+              new HttpException(
+                { error: 'service_unavailable' },
+                HttpStatus.SERVICE_UNAVAILABLE,
+              ),
+          ),
+        )
+        .mockReturnValueOnce(
+          throwError(() => new Error('ECONNREFUSED')),
+        )
+        // Third attempt succeeds.
+        .mockReturnValueOnce(of(testPermission));
+
+      const { freshService } = await buildFreshService({ get });
+      jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
+
+      const initPromise = freshService.onModuleInit();
+
+      // Drive the backoff timers far enough to cover the 1s + 2s delays.
+      await jest.advanceTimersByTimeAsync(5_000);
+      await initPromise;
+
+      expect(get).toHaveBeenCalledTimes(3);
+      expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
+
+      jest.useRealTimers();
+    });
+  });
+
   describe.each([
     ['401 Unauthorized', HttpStatus.UNAUTHORIZED, 'unauthorized'],
     ['403 Forbidden', HttpStatus.FORBIDDEN, 'forbidden'],

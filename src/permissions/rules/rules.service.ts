@@ -28,6 +28,16 @@ export class RulesService implements OnModuleInit {
   static readonly USER_PROPERTY_UNDEFINED = '__USER_PROPERTY_UNDEFINED__';
 
   /**
+   * Maximum total time (ms) to keep retrying a transient initial load failure
+   * before giving up and aborting startup.
+   */
+  static readonly INIT_MAX_TOTAL_MS = 60_000;
+  /** Initial backoff delay (ms) between retries. */
+  static readonly INIT_INITIAL_DELAY_MS = 1_000;
+  /** Cap (ms) for the exponentially-growing backoff delay. */
+  static readonly INIT_MAX_DELAY_MS = 10_000;
+
+  /**
    * Synthesised permission config used when the permission document does not
    * exist yet (e.g. fresh install). Only `admin_app` users get full access so
    * an administrator can sign in and seed the real config; all other users
@@ -57,47 +67,77 @@ export class RulesService implements OnModuleInit {
   }
 
   private async loadInitialPermissions(db = 'app'): Promise<void> {
-    try {
-      const permissionDoc = await firstValueFrom(
-        this.couchdbService.get<Permission>(db, Permission.DOC_ID),
-      );
+    const startedAt = Date.now();
+    let delay = RulesService.INIT_INITIAL_DELAY_MS;
+    let lastError: unknown;
 
-      // Do not overwrite permissions that may have arrived from the live feed already.
-      if (this.permission === undefined) {
-        this.permission = permissionDoc?.data;
-      }
-    } catch (error) {
-      if (
-        error instanceof HttpException &&
-        (error.getStatus() === 401 || error.getStatus() === 403)
-      ) {
-        this.logger.error(
-          `CRITICAL: CouchDB rejected the configured credentials when loading initial permissions from "${db}". ` +
-            `Verify DATABASE_USER, DATABASE_PASSWORD and DATABASE_URL match the CouchDB the service is connecting to. ` +
-            `Aborting startup.`,
+    // Retry loop: keep trying until either we succeed, hit a fatal error
+    // (auth failure / 404 -> bootstrap), the live changes feed populates the
+    // config for us, or the retry budget is exhausted.
+    while (Date.now() - startedAt < RulesService.INIT_MAX_TOTAL_MS) {
+      try {
+        const permissionDoc = await firstValueFrom(
+          this.couchdbService.get<Permission>(db, Permission.DOC_ID),
         );
-        throw error;
-      }
-      if (error instanceof HttpException && error.getStatus() === 404) {
-        // Permission doc does not exist yet — typical on a fresh install before
-        // the frontend seeds the initial config. Enter bootstrap mode so an
-        // administrator can sign in and create the config; the live changes
-        // feed will swap in the real config once it appears.
+
+        // Do not overwrite permissions that may have arrived from the live feed already.
         if (this.permission === undefined) {
-          this.permission = RulesService.bootstrapPermissions();
+          this.permission = permissionDoc?.data;
         }
+        return;
+      } catch (error) {
+        if (
+          error instanceof HttpException &&
+          (error.getStatus() === 401 || error.getStatus() === 403)
+        ) {
+          this.logger.error(
+            `CRITICAL: CouchDB rejected the configured credentials when loading initial permissions from "${db}". ` +
+              `Verify DATABASE_USER, DATABASE_PASSWORD and DATABASE_URL match the CouchDB the service is connecting to. ` +
+              `Aborting startup.`,
+          );
+          throw error;
+        }
+        if (error instanceof HttpException && error.getStatus() === 404) {
+          // Permission doc does not exist yet — typical on a fresh install
+          // before the frontend seeds the initial config. Enter bootstrap mode
+          // so an administrator can sign in and create the config; the live
+          // changes feed will swap in the real config once it appears.
+          if (this.permission === undefined) {
+            this.permission = RulesService.bootstrapPermissions();
+          }
+          this.logger.warn(
+            `BOOTSTRAP MODE: no permission document "${Permission.DOC_ID}" found in "${db}". ` +
+              `Granting full access to admin_app users only until the real permission config is created. ` +
+              `All other users are denied.`,
+          );
+          return;
+        }
+        lastError = error;
         this.logger.warn(
-          `BOOTSTRAP MODE: no permission document "${Permission.DOC_ID}" found in "${db}". ` +
-            `Granting full access to admin_app users only until the real permission config is created. ` +
-            `All other users are denied.`,
+          `Failed to load initial permissions from ${db} (will retry in ${delay}ms): ${error instanceof Error ? error.message : String(error)}`,
         );
+      }
+
+      // The change feed may have populated `this.permission` while we were
+      // waiting for the HTTP response — exit early if so.
+      if (this.permission !== undefined) {
         return;
       }
-      this.logger.warn(
-        `Failed to load initial permissions from ${db}: ${error instanceof Error ? error.message : String(error)}`,
-        error instanceof Error ? error.stack : undefined,
-      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      if (this.permission !== undefined) {
+        return;
+      }
+      delay = Math.min(delay * 2, RulesService.INIT_MAX_DELAY_MS);
     }
+
+    this.logger.error(
+      `CRITICAL: gave up loading initial permissions from "${db}" after ${RulesService.INIT_MAX_TOTAL_MS}ms. Aborting startup.`,
+    );
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(
+          `Failed to load initial permissions from "${db}" within ${RulesService.INIT_MAX_TOTAL_MS}ms`,
+        );
   }
 
   private watchPermissionChanges(db = 'app') {
