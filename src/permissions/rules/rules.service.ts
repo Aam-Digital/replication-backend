@@ -102,10 +102,7 @@ export class RulesService implements OnModuleInit {
         }
         return;
       } catch (error) {
-        if (
-          error instanceof HttpException &&
-          (error.getStatus() === 401 || error.getStatus() === 403)
-        ) {
+        if (RulesService.isAuthFailure(error)) {
           this.logger.error(
             `CRITICAL: CouchDB rejected the configured credentials when loading initial permissions from "${db}". ` +
               `Verify DATABASE_USER, DATABASE_PASSWORD and DATABASE_URL match the CouchDB the service is connecting to. ` +
@@ -114,18 +111,7 @@ export class RulesService implements OnModuleInit {
           throw error;
         }
         if (error instanceof HttpException && error.getStatus() === 404) {
-          // Permission doc does not exist yet — typical on a fresh install
-          // before the frontend seeds the initial config. Enter bootstrap mode
-          // so an administrator can sign in and create the config; the live
-          // changes feed will swap in the real config once it appears.
-          if (this.permission === undefined) {
-            this.permission = RulesService.bootstrapPermissions();
-          }
-          this.logger.warn(
-            `BOOTSTRAP MODE: no permission document "${Permission.DOC_ID}" found in "${db}". ` +
-              `Granting full access to admin_app users only until the real permission config is created. ` +
-              `All other users are denied.`,
-          );
+          this.enterBootstrapMode(db);
           return;
         }
         lastError = error;
@@ -156,6 +142,30 @@ export class RulesService implements OnModuleInit {
         );
   }
 
+  /**
+   * Permission doc does not exist yet — typical on a fresh install before the
+   * frontend seeds the initial config. Synthesize a config that grants admin
+   * rights only to admin_app users so an administrator can sign in and create
+   * the real config; the live changes feed will swap it in once it appears.
+   */
+  private enterBootstrapMode(db: string): void {
+    if (this.permission === undefined) {
+      this.permission = RulesService.bootstrapPermissions();
+    }
+    this.logger.warn(
+      `BOOTSTRAP MODE: no permission document "${Permission.DOC_ID}" found in "${db}". ` +
+        `Granting full access to admin_app users only until the real permission config is created. ` +
+        `All other users are denied.`,
+    );
+  }
+
+  private static isAuthFailure(error: unknown): boolean {
+    return (
+      error instanceof HttpException &&
+      (error.getStatus() === 401 || error.getStatus() === 403)
+    );
+  }
+
   private watchPermissionChanges(db = 'app') {
     this.documentChangesService.getChanges(db).subscribe((change) => {
       if (change.id !== Permission.DOC_ID) {
@@ -165,14 +175,14 @@ export class RulesService implements OnModuleInit {
       const prevPermissions = this.permission;
       const newPermissions = change.doc?.data;
 
-      if (!newPermissions || typeof newPermissions !== 'object') {
+      if (!RulesService.isValidPermissionConfig(newPermissions)) {
         this.logger.warn(
           `Permissions change for ${db} did not contain valid data; keeping previous in-memory permissions.`,
         );
         return;
       }
 
-      this.permission = newPermissions as RulesConfig;
+      this.permission = newPermissions;
 
       if (
         prevPermissions !== undefined && // do not clear upon restart of the API
