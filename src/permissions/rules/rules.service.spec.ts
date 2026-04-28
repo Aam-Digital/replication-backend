@@ -398,12 +398,6 @@ describe('RulesService', () => {
 
     it('aborts startup when transient errors persist past the retry budget', async () => {
       jest.useFakeTimers();
-      // Shrink the retry budget so the test completes quickly.
-      jest.replaceProperty(
-        RulesService,
-        'INIT_MAX_TOTAL_MS' as keyof typeof RulesService,
-        50 as never,
-      );
 
       const get = jest.fn().mockReturnValue(
         throwError(
@@ -427,12 +421,45 @@ describe('RulesService', () => {
       // Catch eagerly so unhandled-rejection warnings do not leak between tests.
       const initResult = initPromise.catch((e) => e);
 
-      await jest.advanceTimersByTimeAsync(2_000);
+      // Advance past the full INIT_MAX_TOTAL_MS budget.
+      await jest.advanceTimersByTimeAsync(
+        RulesService.INIT_MAX_TOTAL_MS + 5_000,
+      );
       const error = await initResult;
 
       expect(error).toBeInstanceOf(HttpException);
       // No permission config was ever loaded — getRulesForUser must deny all.
       expect(freshService.getRulesForUser(normalUser)).toEqual([]);
+
+      jest.useRealTimers();
+    });
+
+    it('treats a malformed permission payload (non-object data) as a transient error and retries', async () => {
+      jest.useFakeTimers();
+
+      const get = jest
+        .fn()
+        // Garbage payloads that pass the HTTP layer but are not a valid config.
+        .mockReturnValueOnce(of({ _id: Permission.DOC_ID, data: null } as any))
+        .mockReturnValueOnce(
+          of({ _id: Permission.DOC_ID, data: 'oops' } as any),
+        )
+        .mockReturnValueOnce(of(testPermission));
+
+      const { freshService } = await buildFreshService({ get });
+      jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
+
+      const initPromise = freshService.onModuleInit();
+      // eslint-disable-next-line @typescript-eslint/no-empty-function
+      initPromise.catch(() => {});
+
+      await jest.advanceTimersByTimeAsync(10_000);
+      await initPromise;
+
+      expect(get).toHaveBeenCalledTimes(3);
+      expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
 
       jest.useRealTimers();
     });

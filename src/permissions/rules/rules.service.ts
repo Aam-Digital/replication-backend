@@ -47,6 +47,15 @@ export class RulesService implements OnModuleInit {
     return { admin_app: [{ action: 'manage', subject: 'all' }] };
   }
 
+  /**
+   * A valid permission config is a non-null, non-array object. Any other shape
+   * (null, primitive, array) is treated as a transient error so that we retry
+   * rather than serve traffic with corrupt rules.
+   */
+  private static isValidPermissionConfig(data: unknown): data is RulesConfig {
+    return typeof data === 'object' && data !== null && !Array.isArray(data);
+  }
+
   private readonly logger = new Logger(RulesService.name);
   private permission!: RulesConfig;
 
@@ -80,9 +89,16 @@ export class RulesService implements OnModuleInit {
           this.couchdbService.get<Permission>(db, Permission.DOC_ID),
         );
 
+        const data = permissionDoc?.data;
+        if (!RulesService.isValidPermissionConfig(data)) {
+          throw new Error(
+            `Permission document "${Permission.DOC_ID}" did not contain a valid configuration object`,
+          );
+        }
+
         // Do not overwrite permissions that may have arrived from the live feed already.
         if (this.permission === undefined) {
-          this.permission = permissionDoc?.data;
+          this.permission = data;
         }
         return;
       } catch (error) {
