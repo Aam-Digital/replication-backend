@@ -119,8 +119,15 @@ export class RulesService implements OnModuleInit {
     });
   }
   /**
-   * Get all rules that are related to the roles of the user
-   * If no permissions are found, returns rule that allows everything
+   * Get all rules that are related to the roles of the user.
+   *
+   * Fail-closed: if no permission config has been loaded yet (which should be
+   * unreachable because {@link onModuleInit} blocks startup until a config is
+   * available — see issue #238), this returns an empty rule set so that CASL
+   * denies every action. This is defense in depth against the historic
+   * fail-open fallback that briefly granted full access to every authenticated
+   * user when the permission doc was missing.
+   *
    * @param user for which the rules should be retrieved
    * @returns DocumentRule[] rules that are related to the user
    */
@@ -139,7 +146,11 @@ export class RulesService implements OnModuleInit {
       }
       return this.injectUserVariablesIntoRules(userRules, user);
     } else {
-      return [{ subject: 'all', action: 'manage' }];
+      this.logger.error(
+        'getRulesForUser called before any permission config was loaded — denying all access. ' +
+          'This indicates a bug: onModuleInit should block startup until permissions are available.',
+      );
+      return [];
     }
   }
 

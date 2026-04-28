@@ -236,53 +236,55 @@ describe('RulesService', () => {
     jest.useRealTimers();
   });
 
-  it('should start without permissions when initial load fails and recover via changes feed', async () => {
-    // Create a fresh service whose initial load will fail
-    const failingCouchdbService = {
-      get: jest
-        .fn()
-        .mockReturnValue(throwError(() => new Error('connection refused'))),
-    } as any;
-    const freshChangesSubject = new Subject<ChangeResult>();
-    const freshModule = await Test.createTestingModule({
-      providers: [
-        RulesService,
-        {
-          provide: ConfigService,
-          useValue: new ConfigService({
-            [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
-          }),
-        },
-        { provide: AdminService, useValue: mockAdminService },
-        { provide: UserIdentityService, useValue: mockUserIdentityService },
-        { provide: CouchdbService, useValue: failingCouchdbService },
-        {
-          provide: DocumentChangesService,
-          useValue: {
-            getChanges: jest.fn().mockReturnValue(freshChangesSubject),
+  describe('hardening: fail-closed when no valid permission config is loaded', () => {
+    /**
+     * Build a fresh RulesService instance with a configurable CouchdbService mock,
+     * WITHOUT calling onModuleInit. Returns the service plus the change feed subject
+     * so tests can drive the live change feed.
+     */
+    async function buildFreshService(couchdbServiceOverride: {
+      get: jest.Mock;
+    }): Promise<{
+      freshService: RulesService;
+      freshChangesSubject: Subject<ChangeResult>;
+    }> {
+      const freshChangesSubject = new Subject<ChangeResult>();
+      const freshModule = await Test.createTestingModule({
+        providers: [
+          RulesService,
+          {
+            provide: ConfigService,
+            useValue: new ConfigService({
+              [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
+            }),
           },
-        },
-      ],
-    }).compile();
+          { provide: AdminService, useValue: mockAdminService },
+          { provide: UserIdentityService, useValue: mockUserIdentityService },
+          { provide: CouchdbService, useValue: couchdbServiceOverride },
+          {
+            provide: DocumentChangesService,
+            useValue: {
+              getChanges: jest.fn().mockReturnValue(freshChangesSubject),
+            },
+          },
+        ],
+      }).compile();
+      return {
+        freshService: freshModule.get(RulesService),
+        freshChangesSubject,
+      };
+    }
 
-    const freshService = freshModule.get(RulesService);
-    await freshService.onModuleInit();
+    it('returns deny-all (empty rules) when getRulesForUser is called before any permission config is loaded', async () => {
+      const { freshService } = await buildFreshService({
+        get: jest.fn().mockReturnValue(throwError(() => new Error('boom'))),
+      });
+      // Intentionally do NOT call onModuleInit — exercise the raw fallback.
 
-    // No permissions loaded — falls back to "allow everything"
-    expect(freshService.getRulesForUser(normalUser)).toEqual([
-      { subject: 'all', action: 'manage' },
-    ]);
-
-    // Permissions arrive via changes feed
-    freshChangesSubject.next({
-      doc: testPermission,
-      seq: '1',
-      changes: [{ rev: '1-a' }],
-      id: testPermission._id!,
+      expect(freshService.getRulesForUser(normalUser)).toEqual([]);
+      expect(freshService.getRulesForUser(adminUser)).toEqual([]);
+      expect(freshService.getRulesForUser(undefined as any)).toEqual([]);
     });
-
-    // Now rules should be available
-    expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
   });
 
   it('should fail startup when CouchDB rejects credentials with 401', async () => {
