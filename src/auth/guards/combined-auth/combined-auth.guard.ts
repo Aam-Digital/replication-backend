@@ -52,7 +52,7 @@ export class CombinedAuthGuard implements CanActivate, NestMiddleware {
     const req = context.switchToHttp().getRequest();
     return this.authenticateViaGuards(context)
       .then((res) => {
-        setUser({ username: req.user.name });
+        setUser({ username: req.user?.name });
         return res;
       })
       .catch((err) => {
