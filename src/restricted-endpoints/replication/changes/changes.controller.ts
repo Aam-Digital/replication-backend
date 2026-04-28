@@ -77,6 +77,7 @@ export class ChangesController {
     @Query() params?: ChangesParams,
   ): Promise<ChangesResponse> {
     const startTime = Date.now();
+    const userName = user?.name ?? 'anonymous';
     const ability = this.permissionService.getAbilityFor(user);
     const change: ChangesResponse = {
       results: [],
