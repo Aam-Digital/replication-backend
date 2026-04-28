@@ -1,10 +1,11 @@
+import { HttpService } from '@nestjs/axios';
 import {
   HttpException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
-import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { AxiosResponse } from 'axios';
 import { catchError, map, Observable } from 'rxjs';
 import {
   DatabaseDocument,
@@ -14,7 +15,6 @@ import {
   SessionResponse,
   UserInfo,
 } from '../restricted-endpoints/session/user-auth.dto';
-import { AxiosResponse } from 'axios';
 
 @Injectable()
 export class CouchdbService {
@@ -31,22 +31,24 @@ export class CouchdbService {
     private httpService: HttpService,
     private configService: ConfigService,
   ) {
-    this.databaseUrl = this.configService.get<string>(
-      CouchdbService.DATABASE_URL_ENV,
-    );
+    this.databaseUrl = this.requireEnv(CouchdbService.DATABASE_URL_ENV);
 
     this.initAddBasicAuthHeaderByDefault();
     this.initMapAxiosErrorsToNestjsExceptions();
   }
 
+  private requireEnv(key: string): string {
+    const value = this.configService.get<string>(key);
+    if (!value) {
+      throw new Error(`Required environment variable ${key} is not set`);
+    }
+    return value;
+  }
+
   private initAddBasicAuthHeaderByDefault() {
     this.httpService.axiosRef.defaults.auth = {
-      username: this.configService.get<string>(
-        CouchdbService.DATABASE_USER_ENV,
-      ),
-      password: this.configService.get<string>(
-        CouchdbService.DATABASE_PASSWORD_ENV,
-      ),
+      username: this.requireEnv(CouchdbService.DATABASE_USER_ENV),
+      password: this.requireEnv(CouchdbService.DATABASE_PASSWORD_ENV),
     };
   }
 
@@ -62,17 +64,17 @@ export class CouchdbService {
   head(
     databaseName?: string,
     documentId?: string,
-    params?: any,
+    params?: Record<string, unknown>,
   ): Observable<AxiosResponse> {
     return this.httpService.head(this.buildDocUrl(databaseName, documentId), {
       params,
     });
   }
 
-  get<T extends DatabaseDocument = DatabaseDocument>(
+  get<T = DatabaseDocument>(
     databaseName?: string,
     documentId?: string,
-    params?: any,
+    params?: Record<string, unknown>,
   ): Observable<T> {
     return this.httpService
       .get<T>(this.buildDocUrl(databaseName, documentId), { params })
@@ -99,15 +101,19 @@ export class CouchdbService {
   post<T>(
     dbName: string,
     documentID: string,
-    body: any,
-    params?: any,
+    body: unknown,
+    params?: Record<string, unknown>,
   ): Observable<T> {
     return this.httpService
       .post<T>(this.buildDocUrl(dbName, documentID), body, { params })
       .pipe(map((res) => res.data));
   }
 
-  delete(db: string, id: string, params?: any): Observable<any> {
+  delete(
+    db: string,
+    id: string,
+    params?: Record<string, unknown>,
+  ): Observable<DocSuccess> {
     return this.httpService
       .delete(this.buildDocUrl(db, id), { params })
       .pipe(map((res) => res.data));

@@ -37,8 +37,8 @@ describe('RulesService', () => {
       ],
       admin_app: [{ action: 'manage', subject: 'all' }],
     });
-    userRules = testPermission.data[normalUser.roles[0]];
-    adminRules = testPermission.data[adminUser.roles[1]];
+    userRules = testPermission.data[normalUser.roles[0]]!;
+    adminRules = testPermission.data[adminUser.roles[1]]!;
 
     changesSubject = new Subject<ChangeResult>();
 
@@ -178,7 +178,9 @@ describe('RulesService', () => {
   });
 
   it('should replace undefined user.name with null without errors', () => {
-    const userWithoutName = new UserInfo('user-id', undefined, ['user_app']);
+    const userWithoutName = new UserInfo('user-id', undefined as any, [
+      'user_app',
+    ]);
     testPermission.data[userWithoutName.roles[0]] = [
       {
         subject: 'User',
@@ -203,7 +205,7 @@ describe('RulesService', () => {
     const publicRule: DocumentRule = { subject: 'User', action: 'create' };
     testPermission.data.public = [publicRule];
 
-    const result = service.getRulesForUser(undefined);
+    const result = service.getRulesForUser(undefined as any);
 
     expect(result).toEqual([publicRule]);
     expect(result).not.toContain(testPermission.data.default);
@@ -220,7 +222,7 @@ describe('RulesService', () => {
       doc: updatedPermission,
       seq: '1',
       changes: [],
-      id: updatedPermission._id,
+      id: updatedPermission._id!,
     });
 
     jest.advanceTimersByTime(1500);
@@ -276,7 +278,7 @@ describe('RulesService', () => {
       doc: testPermission,
       seq: '1',
       changes: [{ rev: '1-a' }],
-      id: testPermission._id,
+      id: testPermission._id!,
     });
 
     // Now rules should be available

@@ -166,8 +166,8 @@ describe('DocumentChangesService', () => {
     // With exponential backoff (2s, 4s, 8s, 16s, 32s, 60s cap) we expect well under that.
     jest.advanceTimersByTime(30_000);
 
+    expect(getSpy.mock.calls.length).toBeGreaterThan(1);
     expect(getSpy.mock.calls.length).toBeLessThan(10);
-
     jest.useRealTimers();
   });
 });

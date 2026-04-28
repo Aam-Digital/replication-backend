@@ -1,36 +1,36 @@
+import { UnauthorizedException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { DocumentController } from './document.controller';
-import { DocSuccess } from '../replication/bulk-document/couchdb-dtos/bulk-docs.dto';
-import { COUCHDB_USER_DOC, UserInfo } from '../session/user-auth.dto';
+import { AxiosResponse } from 'axios';
+import { Request as Req } from 'express';
+import { of, throwError } from 'rxjs';
 import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
+import { CouchdbService } from '../../couchdb/couchdb.service';
 import {
   detectDocumentType,
   DocumentAbility,
   PermissionService,
 } from '../../permissions/permission/permission.service';
-import { CouchdbService } from '../../couchdb/couchdb.service';
-import { of, throwError } from 'rxjs';
 import { DocumentRule } from '../../permissions/rules/rules.service';
-import { UnauthorizedException } from '@nestjs/common';
-import { Request as Req } from 'express';
-import { AxiosResponse } from 'axios';
+import { DocSuccess } from '../replication/bulk-document/couchdb-dtos/bulk-docs.dto';
+import { COUCHDB_USER_DOC, UserInfo } from '../session/user-auth.dto';
+import { DocumentController } from './document.controller';
 
 describe('DocumentController', () => {
   let controller: DocumentController;
   let mockPermissionService: PermissionService;
   let mockCouchDBService: CouchdbService;
 
-  let headers = {};
+  let headers: Record<string, string> = {};
   const mockReq = {
     header: jest.fn((key: string, value: string) => (headers[key] = value)),
   } as unknown as Req;
 
   const databaseName = '_users';
-  const userDoc = {
+  const userDoc: Record<string, any> = {
     _id: `${COUCHDB_USER_DOC}:testUser`,
     _rev: '1-e0ebfb84005b920488fc7a8cc5470cc0',
     name: 'testUser',
-    roles: [],
+    roles: [] as string[],
     type: 'user',
   };
   const requestingUser: UserInfo = new UserInfo('user-id', 'testUser', []);

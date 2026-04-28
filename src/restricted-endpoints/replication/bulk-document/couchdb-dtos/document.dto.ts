@@ -1,3 +1,4 @@
 export class QueryParams {
-  rev: string;
+  [key: string]: unknown;
+  rev?: string;
 }

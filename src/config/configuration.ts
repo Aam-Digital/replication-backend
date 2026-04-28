@@ -21,17 +21,18 @@ export function AppConfiguration(): Record<string, string> {
  * Recursively create a flat key-value object where keys contain nested keys as prefixes
  */
 function flatten(
-  obj: any,
+  obj: Record<string, unknown>,
   prefix = '',
   delimiter = '_',
 ): Record<string, string> {
-  return Object.keys(obj).reduce((acc: any, k: string) => {
+  return Object.keys(obj).reduce<Record<string, string>>((acc, k) => {
     const pre = prefix.length ? prefix + delimiter : '';
+    const value = obj[k];
 
-    if (typeof obj[k] === 'object')
-      Object.assign(acc, flatten(obj[k], pre + k));
-    else {
-      acc[pre + k] = obj[k];
+    if (value !== null && !Array.isArray(value) && typeof value === 'object') {
+      Object.assign(acc, flatten(value as Record<string, unknown>, pre + k));
+    } else if (value != null) {
+      acc[pre + k] = String(value);
     }
     return acc;
   }, {});

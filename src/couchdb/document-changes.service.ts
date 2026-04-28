@@ -73,7 +73,7 @@ export class DocumentChangesService implements OnModuleDestroy {
       this.feeds.set(db, subject);
       this.startFeed(db, subject);
     }
-    return this.feeds.get(db).asObservable();
+    return this.feeds.get(db)!.asObservable();
   }
 
   private startFeed(db: string, subject: Subject<ChangeResult>): void {

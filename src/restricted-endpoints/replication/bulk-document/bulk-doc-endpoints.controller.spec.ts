@@ -2,8 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { BulkDocEndpointsController } from './bulk-doc-endpoints.controller';
 import { firstValueFrom, of } from 'rxjs';
 import { BulkDocumentService } from './bulk-document.service';
-import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
-import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
+import { BulkGetResponse, BulkGetRequest } from './couchdb-dtos/bulk-get.dto';
+import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import { BulkDocsRequest, FindResponse } from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
@@ -62,7 +62,7 @@ describe('BulkDocEndpointsController', () => {
     const user = new UserInfo('user-id', 'username', ['user']);
 
     const result = await firstValueFrom(
-      controller.bulkGetPost(null, null, null, user),
+      controller.bulkGetPost('db', {}, {} as BulkGetRequest, user),
     );
 
     expect(documentFilter.filterBulkGetResponse).toHaveBeenCalledWith(
@@ -81,13 +81,13 @@ describe('BulkDocEndpointsController', () => {
           id: 'someID',
           key: 'someKey',
           value: { rev: 'someRev' },
-          doc: null,
+          doc: undefined,
         },
         {
           id: 'otherID',
           key: 'otherKey',
           value: { rev: 'otherRev' },
-          doc: null,
+          doc: undefined,
         },
       ],
     };
@@ -100,7 +100,7 @@ describe('BulkDocEndpointsController', () => {
           id: 'someID',
           key: 'someKey',
           value: { rev: 'someRev' },
-          doc: null,
+          doc: undefined,
         },
       ],
     };
@@ -110,7 +110,7 @@ describe('BulkDocEndpointsController', () => {
     const user = new UserInfo('user-id', 'username', ['user']);
 
     const result = await firstValueFrom(
-      controller.allDocs('db', null, user, null),
+      controller.allDocs('db', {}, user, {} as AllDocsRequest),
     );
 
     expect(documentFilter.filterAllDocsResponse).toHaveBeenCalledWith(

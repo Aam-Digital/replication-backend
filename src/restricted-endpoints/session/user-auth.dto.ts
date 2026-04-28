@@ -2,8 +2,8 @@
  * Credentials sent as payload for login
  */
 export class UserCredentials {
-  name: string;
-  password: string;
+  name!: string;
+  password!: string;
 }
 
 /**
@@ -46,8 +46,8 @@ export class UserInfo {
  * Response payload sent by CouchDB at /_session
  */
 export class SessionResponse {
-  ok: boolean;
-  userCtx: UserInfo;
+  ok!: boolean;
+  userCtx!: UserInfo;
 }
 
 export const COUCHDB_USER_DOC = 'org.couchdb.user';

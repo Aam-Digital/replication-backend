@@ -308,7 +308,7 @@ describe('BulkDocumentService', () => {
   ): BulkGetResponse {
     return {
       results: documents.map((doc) => ({
-        id: doc._id,
+        id: doc._id!,
         docs: [{ ok: doc }],
       })),
     };
@@ -321,9 +321,9 @@ describe('BulkDocumentService', () => {
       total_rows: 10,
       offset: 0,
       rows: documents.map((doc) => ({
-        id: doc._id,
+        id: doc._id!,
         key: 'key-' + doc._id,
-        value: { rev: schoolDoc._rev },
+        value: { rev: doc._rev! },
         doc: doc,
       })),
     };

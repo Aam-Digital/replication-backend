@@ -8,7 +8,7 @@ import { ConfigService } from '@nestjs/config';
 describe('CouchdbService', () => {
   let service: CouchdbService;
   let mockHttpService: HttpService;
-  let responseInterceptor: (err) => any;
+  let responseInterceptor: (err: any) => any;
 
   const DATABASE_URL = 'some.url';
   const username = 'demo';
@@ -24,14 +24,14 @@ describe('CouchdbService', () => {
         defaults: {},
         interceptors: {
           response: {
-            use: (onFulfilled, onRejected) =>
+            use: (onFulfilled: any, onRejected: any) =>
               (responseInterceptor = onRejected),
           },
         },
       },
     } as any;
 
-    const config = {};
+    const config: Record<string, string> = {};
     config[CouchdbService.DATABASE_URL_ENV] = DATABASE_URL;
     config[CouchdbService.DATABASE_USER_ENV] = username;
     config[CouchdbService.DATABASE_PASSWORD_ENV] = password;
@@ -69,11 +69,11 @@ describe('CouchdbService', () => {
       },
     };
 
-    let result: HttpException;
+    let result!: HttpException;
     try {
       await responseInterceptor(axiosError);
     } catch (err) {
-      result = err;
+      result = err as HttpException;
     }
     expect(result).toBeInstanceOf(HttpException);
     expect(result.getStatus()).toBe(404);

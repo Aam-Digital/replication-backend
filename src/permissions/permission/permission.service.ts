@@ -20,7 +20,10 @@ export type DocumentAbility = Ability<[Action, Subject]>;
 export const DocumentAbility = Ability as AbilityClass<DocumentAbility>;
 
 export function detectDocumentType(subject: DatabaseDocument): string {
-  return subject._id.split(':')[0] as any;
+  if (!subject._id) {
+    throw new Error('Cannot detect document type: missing _id');
+  }
+  return subject._id.split(':')[0];
 }
 
 /**
@@ -57,12 +60,13 @@ export class PermissionService {
   ): Promise<boolean> {
     const userAbility = this.getAbilityFor(user);
 
-    let documentForPermissionCheck: DatabaseDocument = documentToAccess;
+    let documentForPermissionCheck: DatabaseDocument | undefined =
+      documentToAccess;
 
     if (db === 'app-attachments') {
       // check permissions on the actual, full entity so that special condition rules can be applied
       documentForPermissionCheck = await firstValueFrom(
-        this.couchdbService.get('app', documentToAccess._id),
+        this.couchdbService.get('app', documentToAccess._id!),
       ).catch(() => undefined);
 
       // For attachment operations, allow if user has either create OR update permission
@@ -70,12 +74,16 @@ export class PermissionService {
       // create/update/delete the attachment doc can happen during create/update/delete of the entity - and therefore we do have to allow any of these edit actions if the user has any one of those permissions. `read` is more sensitive than these and needs to be handled strictly
       if (action !== 'read') {
         return (
-          userAbility.can('create', documentForPermissionCheck) ||
-          userAbility.can('update', documentForPermissionCheck)
+          !!documentForPermissionCheck &&
+          (userAbility.can('create', documentForPermissionCheck) ||
+            userAbility.can('update', documentForPermissionCheck))
         );
       }
     }
 
-    return userAbility.can(action, documentForPermissionCheck);
+    return (
+      !!documentForPermissionCheck &&
+      userAbility.can(action, documentForPermissionCheck)
+    );
   }
 }

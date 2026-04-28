@@ -48,12 +48,17 @@ export class UserIdentityService {
       );
       return undefined;
     });
+    const projects = Array.isArray(userEntity?.projects)
+      ? userEntity.projects.filter(
+          (project): project is string => typeof project === 'string',
+        )
+      : [];
 
     const resolved = new UserInfo(
       account.id,
       account.name,
       account.roles,
-      userEntity?.projects ?? [],
+      projects,
     );
 
     this.cache.set(userId, {

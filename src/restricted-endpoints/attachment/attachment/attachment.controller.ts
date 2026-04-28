@@ -11,20 +11,20 @@ import {
   UnauthorizedException,
   UseGuards,
 } from '@nestjs/common';
-import { User } from '../../../auth/user.decorator';
-import { UserInfo } from '../../session/user-auth.dto';
+import { ConfigService } from '@nestjs/config';
 import { ApiQuery } from '@nestjs/swagger';
+import { Request, Response } from 'express';
+import { createProxyMiddleware } from 'http-proxy-middleware';
+import { firstValueFrom } from 'rxjs';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
+import { User } from '../../../auth/user.decorator';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import {
   Action,
   PermissionService,
 } from '../../../permissions/permission/permission.service';
-import { firstValueFrom } from 'rxjs';
-import { Request, Response } from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
-import { ConfigService } from '@nestjs/config';
 import { QueryParams } from '../../replication/bulk-document/couchdb-dtos/document.dto';
+import { UserInfo } from '../../session/user-auth.dto';
 
 /**
  * This controller handles uploading and downloading of attachments.
@@ -86,7 +86,7 @@ export class AttachmentController {
     @Param('db') db: string,
     @Param('docId') docId: string,
     @Param('property') property: string,
-    @Query() params: any,
+    @Query() params: Record<string, string>,
     @User() user: UserInfo,
     @Req() request: Request,
     @Res() response: Response,

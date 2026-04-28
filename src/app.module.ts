@@ -1,11 +1,12 @@
 import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
-import { AuthModule } from './auth/auth.module';
-import { CouchdbModule } from './couchdb/couchdb.module';
-import { AdminModule } from './admin/admin.module';
 import { setUser } from '@sentry/node';
+import { NextFunction, Request, Response } from 'express';
+import { AdminModule } from './admin/admin.module';
+import { AuthModule } from './auth/auth.module';
 import { AppConfiguration } from './config/configuration';
+import { CouchdbModule } from './couchdb/couchdb.module';
+import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
 
 @Module({
   imports: [
@@ -23,7 +24,7 @@ import { AppConfiguration } from './config/configuration';
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
-      .apply((req, res, next) => {
+      .apply((req: Request, res: Response, next: NextFunction) => {
         // reset user before processing a request
         setUser({ username: 'unknown' });
         next();

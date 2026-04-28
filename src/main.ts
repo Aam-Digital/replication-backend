@@ -27,9 +27,9 @@ async function bootstrap() {
 
   // SwaggerUI setup see https://docs.nestjs.com/openapi/introduction#bootstrap
   const config = new DocumentBuilder()
-    .setTitle(process.env.npm_package_name)
-    .setDescription(process.env.npm_package_description)
-    .setVersion(process.env.npm_package_version)
+    .setTitle(process.env.npm_package_name ?? '')
+    .setDescription(process.env.npm_package_description ?? '')
+    .setVersion(process.env.npm_package_version ?? '')
     .addServer('/', 'local')
     .addServer('/db', 'deployed') // used when this runs as part of the [ndb-setup](https://github.com/Aam-Digital/ndb-setup) docker-compose
     .addBasicAuth(undefined, 'BasicAuth')

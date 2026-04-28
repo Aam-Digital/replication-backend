@@ -1,33 +1,33 @@
-import { DatabaseDocument, DocError } from './bulk-docs.dto';
 import { ApiExtraModels, ApiProperty, getSchemaPath } from '@nestjs/swagger';
+import { DatabaseDocument, DocError } from './bulk-docs.dto';
 
 class BulkGetRequestDoc {
-  id: string;
+  id!: string;
   rev?: string;
 }
 
 export class BulkGetRequest {
-  docs: BulkGetRequestDoc[];
+  docs!: BulkGetRequestDoc[];
 }
 
 export class OkDoc {
-  ok: DatabaseDocument;
+  ok!: DatabaseDocument;
 }
 
 export class ErrorDoc {
-  error: DocError;
+  error!: DocError;
 }
 
 @ApiExtraModels(OkDoc, ErrorDoc)
 export class BulkGetResult {
-  id: string;
+  id!: string;
   @ApiProperty({
     type: 'array',
     oneOf: [{ $ref: getSchemaPath(OkDoc) }, { $ref: getSchemaPath(ErrorDoc) }],
   })
-  docs: (OkDoc | ErrorDoc)[];
+  docs!: (OkDoc | ErrorDoc)[];
 }
 
 export class BulkGetResponse {
-  results: BulkGetResult[];
+  results!: BulkGetResult[];
 }

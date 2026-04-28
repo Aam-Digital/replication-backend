@@ -32,7 +32,9 @@ describe('ChangesController', () => {
     roles: [],
     projects: [],
   };
-  const mockCouchdbService = { get: () => undefined } as CouchdbService;
+  const mockCouchdbService = {
+    get: () => undefined,
+  } as unknown as CouchdbService;
   const getSpy = jest.spyOn(mockCouchdbService, 'get');
   const mockRulesService = {
     getRulesForUser: () => undefined,
@@ -364,7 +366,7 @@ describe('ChangesController', () => {
   function docToChange(doc: DatabaseDocument): ChangeResult {
     return {
       doc: { ...doc, _rev: `1-rev-${doc._id}` },
-      id: doc._id,
+      id: doc._id!,
       changes: [{ rev: `rev-${doc._id}` }],
       seq: `seq-${doc._id}`,
     };

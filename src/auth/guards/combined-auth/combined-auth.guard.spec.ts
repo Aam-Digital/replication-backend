@@ -61,7 +61,7 @@ describe('CombinedAuthGuard', () => {
     const setUserMock = jest.mocked(setUser);
     setUserMock.mockClear();
 
-    await guard.use({ user } as any, undefined, () => undefined);
+    await guard.use({ user } as any, undefined as any, () => undefined);
 
     expect(setUserMock).toHaveBeenCalledWith({ username: 'testUser' });
 
@@ -80,7 +80,11 @@ describe('CombinedAuthGuard', () => {
     let funCalled = false;
     const user = new UserInfo('user-id', 'testUser', []);
 
-    await guard.use({ user } as any, undefined, () => (funCalled = true));
+    await guard.use(
+      { user } as any,
+      undefined as any,
+      () => (funCalled = true),
+    );
 
     expect(funCalled).toBe(true);
   });
