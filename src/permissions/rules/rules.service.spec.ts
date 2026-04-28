@@ -236,45 +236,45 @@ describe('RulesService', () => {
     jest.useRealTimers();
   });
 
-  describe('hardening: fail-closed when no valid permission config is loaded', () => {
-    /**
-     * Build a fresh RulesService instance with a configurable CouchdbService mock,
-     * WITHOUT calling onModuleInit. Returns the service plus the change feed subject
-     * so tests can drive the live change feed.
-     */
-    async function buildFreshService(couchdbServiceOverride: {
-      get: jest.Mock;
-    }): Promise<{
-      freshService: RulesService;
-      freshChangesSubject: Subject<ChangeResult>;
-    }> {
-      const freshChangesSubject = new Subject<ChangeResult>();
-      const freshModule = await Test.createTestingModule({
-        providers: [
-          RulesService,
-          {
-            provide: ConfigService,
-            useValue: new ConfigService({
-              [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
-            }),
+  /**
+   * Build a fresh RulesService instance with a configurable CouchdbService mock,
+   * WITHOUT calling onModuleInit. Returns the service plus the change feed subject
+   * so tests can drive the live change feed.
+   */
+  async function buildFreshService(couchdbServiceOverride: {
+    get: jest.Mock;
+  }): Promise<{
+    freshService: RulesService;
+    freshChangesSubject: Subject<ChangeResult>;
+  }> {
+    const freshChangesSubject = new Subject<ChangeResult>();
+    const freshModule = await Test.createTestingModule({
+      providers: [
+        RulesService,
+        {
+          provide: ConfigService,
+          useValue: new ConfigService({
+            [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
+          }),
+        },
+        { provide: AdminService, useValue: mockAdminService },
+        { provide: UserIdentityService, useValue: mockUserIdentityService },
+        { provide: CouchdbService, useValue: couchdbServiceOverride },
+        {
+          provide: DocumentChangesService,
+          useValue: {
+            getChanges: jest.fn().mockReturnValue(freshChangesSubject),
           },
-          { provide: AdminService, useValue: mockAdminService },
-          { provide: UserIdentityService, useValue: mockUserIdentityService },
-          { provide: CouchdbService, useValue: couchdbServiceOverride },
-          {
-            provide: DocumentChangesService,
-            useValue: {
-              getChanges: jest.fn().mockReturnValue(freshChangesSubject),
-            },
-          },
-        ],
-      }).compile();
-      return {
-        freshService: freshModule.get(RulesService),
-        freshChangesSubject,
-      };
-    }
+        },
+      ],
+    }).compile();
+    return {
+      freshService: freshModule.get(RulesService),
+      freshChangesSubject,
+    };
+  }
 
+  describe('hardening: fail-closed when no valid permission config is loaded', () => {
     it('returns deny-all (empty rules) when getRulesForUser is called before any permission config is loaded', async () => {
       const { freshService } = await buildFreshService({
         get: jest.fn().mockReturnValue(throwError(() => new Error('boom'))),
@@ -287,48 +287,29 @@ describe('RulesService', () => {
     });
   });
 
-  it('should fail startup when CouchDB rejects credentials with 401', async () => {
-    const unauthorizedCouchdbService = {
-      get: jest
-        .fn()
-        .mockReturnValue(
-          throwError(
-            () =>
-              new HttpException(
-                {
-                  error: 'unauthorized',
-                  reason: 'Name or password is incorrect.',
-                },
-                HttpStatus.UNAUTHORIZED,
-              ),
+  describe.each([
+    ['401 Unauthorized', HttpStatus.UNAUTHORIZED, 'unauthorized'],
+    ['403 Forbidden', HttpStatus.FORBIDDEN, 'forbidden'],
+  ])(
+    'should fail startup when CouchDB rejects credentials with %s',
+    (_label, status, errorBody) => {
+      it('throws from onModuleInit', async () => {
+        const { freshService } = await buildFreshService({
+          get: jest.fn().mockReturnValue(
+            throwError(
+              () =>
+                new HttpException(
+                  { error: errorBody, reason: 'rejected by CouchDB' },
+                  status,
+                ),
+            ),
           ),
-        ),
-    } as any;
-    const freshModule = await Test.createTestingModule({
-      providers: [
-        RulesService,
-        {
-          provide: ConfigService,
-          useValue: new ConfigService({
-            [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
-          }),
-        },
-        { provide: AdminService, useValue: mockAdminService },
-        { provide: UserIdentityService, useValue: mockUserIdentityService },
-        { provide: CouchdbService, useValue: unauthorizedCouchdbService },
-        {
-          provide: DocumentChangesService,
-          useValue: {
-            getChanges: jest.fn().mockReturnValue(new Subject<ChangeResult>()),
-          },
-        },
-      ],
-    }).compile();
+        });
 
-    const freshService = freshModule.get(RulesService);
-
-    await expect(freshService.onModuleInit()).rejects.toBeInstanceOf(
-      HttpException,
-    );
-  });
+        await expect(freshService.onModuleInit()).rejects.toBeInstanceOf(
+          HttpException,
+        );
+      });
+    },
+  );
 });
