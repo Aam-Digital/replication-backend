@@ -27,6 +27,16 @@ export class RulesService implements OnModuleInit {
   static readonly ENV_PERMISSION_DB = 'PERMISSION_DB';
   static readonly USER_PROPERTY_UNDEFINED = '__USER_PROPERTY_UNDEFINED__';
 
+  /**
+   * Synthesised permission config used when the permission document does not
+   * exist yet (e.g. fresh install). Only `admin_app` users get full access so
+   * an administrator can sign in and seed the real config; all other users
+   * (and anonymous traffic) are denied by default.
+   */
+  private static bootstrapPermissions(): RulesConfig {
+    return { admin_app: [{ action: 'manage', subject: 'all' }] };
+  }
+
   private readonly logger = new Logger(RulesService.name);
   private permission!: RulesConfig;
 
@@ -67,6 +77,21 @@ export class RulesService implements OnModuleInit {
             `Aborting startup.`,
         );
         throw error;
+      }
+      if (error instanceof HttpException && error.getStatus() === 404) {
+        // Permission doc does not exist yet — typical on a fresh install before
+        // the frontend seeds the initial config. Enter bootstrap mode so an
+        // administrator can sign in and create the config; the live changes
+        // feed will swap in the real config once it appears.
+        if (this.permission === undefined) {
+          this.permission = RulesService.bootstrapPermissions();
+        }
+        this.logger.warn(
+          `BOOTSTRAP MODE: no permission document "${Permission.DOC_ID}" found in "${db}". ` +
+            `Granting full access to admin_app users only until the real permission config is created. ` +
+            `All other users are denied.`,
+        );
+        return;
       }
       this.logger.warn(
         `Failed to load initial permissions from ${db}: ${error instanceof Error ? error.message : String(error)}`,

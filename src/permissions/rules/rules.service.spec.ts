@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { HttpException, HttpStatus } from '@nestjs/common';
+import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { of, Subject, throwError } from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
 import { CouchdbService } from '../../couchdb/couchdb.service';
@@ -284,6 +284,42 @@ describe('RulesService', () => {
       expect(freshService.getRulesForUser(normalUser)).toEqual([]);
       expect(freshService.getRulesForUser(adminUser)).toEqual([]);
       expect(freshService.getRulesForUser(undefined as any)).toEqual([]);
+    });
+  });
+
+  describe('hardening: bootstrap mode when permission doc does not exist (404)', () => {
+    function notFoundCouchdb() {
+      return {
+        get: jest.fn().mockReturnValue(
+          throwError(
+            () =>
+              new HttpException(
+                { error: 'not_found', reason: 'missing' },
+                HttpStatus.NOT_FOUND,
+              ),
+          ),
+        ),
+      };
+    }
+
+    it('grants only admin_app users full access during bootstrap (and denies everyone else)', async () => {
+      const { freshService } = await buildFreshService(notFoundCouchdb());
+      const warnSpy = jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
+
+      await freshService.onModuleInit();
+
+      expect(freshService.getRulesForUser(adminUser)).toEqual([
+        { action: 'manage', subject: 'all' },
+      ]);
+      expect(freshService.getRulesForUser(normalUser)).toEqual([]);
+      expect(freshService.getRulesForUser(undefined as any)).toEqual([]);
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('BOOTSTRAP MODE'),
+      );
+
+      warnSpy.mockRestore();
     });
   });
 
