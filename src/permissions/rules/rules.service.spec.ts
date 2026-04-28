@@ -463,6 +463,47 @@ describe('RulesService', () => {
 
       jest.useRealTimers();
     });
+
+    it('exits the retry loop early when the live changes feed delivers a config during backoff', async () => {
+      jest.useFakeTimers();
+
+      const get = jest.fn().mockReturnValue(
+        throwError(
+          () =>
+            new HttpException(
+              { error: 'service_unavailable' },
+              HttpStatus.SERVICE_UNAVAILABLE,
+            ),
+        ),
+      );
+
+      const { freshService, freshChangesSubject } = await buildFreshService({
+        get,
+      });
+      jest
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
+
+      const initPromise = freshService.onModuleInit();
+
+      // After the first failed attempt we are inside the 1s backoff. Push the
+      // config in via the change feed; the loop should pick it up and exit
+      // without ever hitting CouchDB again.
+      await jest.advanceTimersByTimeAsync(100);
+      freshChangesSubject.next({
+        doc: testPermission,
+        seq: '1',
+        changes: [{ rev: '1-a' }],
+        id: testPermission._id!,
+      });
+      await jest.advanceTimersByTimeAsync(2_000);
+      await initPromise;
+
+      expect(get).toHaveBeenCalledTimes(1);
+      expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
+
+      jest.useRealTimers();
+    });
   });
 
   describe.each([
