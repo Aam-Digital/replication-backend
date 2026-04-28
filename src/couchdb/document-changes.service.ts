@@ -1,4 +1,9 @@
-import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  Logger,
+  OnModuleDestroy,
+} from '@nestjs/common';
 import {
   catchError,
   concatMap,
@@ -27,6 +32,16 @@ export class DocumentChangesService implements OnModuleDestroy {
   private readonly subscriptions = new Map<string, Subscription>();
 
   constructor(private readonly couchdbService: CouchdbService) {}
+
+  private formatError(err: unknown): string {
+    if (err instanceof HttpException) {
+      const response = err.getResponse();
+      const detail =
+        typeof response === 'string' ? response : JSON.stringify(response);
+      return `HttpException ${err.getStatus()}: ${detail}`;
+    }
+    return (err as Error)?.stack || String(err);
+  }
 
   onModuleDestroy(): void {
     for (const [db, subscription] of this.subscriptions) {
@@ -72,8 +87,7 @@ export class DocumentChangesService implements OnModuleDestroy {
         ),
         catchError((err) => {
           this.logger.error(
-            `Changes feed error for "${db}":`,
-            err?.stack || String(err),
+            `Changes feed error for "${db}": ${this.formatError(err)}`,
           );
           throw err;
         }),
@@ -89,8 +103,7 @@ export class DocumentChangesService implements OnModuleDestroy {
         },
         error: (err) => {
           this.logger.error(
-            `Changes feed for "${db}" terminated unexpectedly:`,
-            err?.stack || String(err),
+            `Changes feed for "${db}" terminated unexpectedly: ${this.formatError(err)}`,
           );
         },
       });
