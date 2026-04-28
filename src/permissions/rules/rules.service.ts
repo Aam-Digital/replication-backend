@@ -1,5 +1,10 @@
 import { RawRuleOf } from '@casl/ability';
-import { HttpException, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  HttpException,
+  Injectable,
+  Logger,
+  OnModuleInit,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { get, has } from 'lodash';
 import { firstValueFrom } from 'rxjs';

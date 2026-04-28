@@ -126,7 +126,10 @@ export class DocumentChangesService implements OnModuleDestroy {
               concatMap(() => {
                 const isAuth = this.isAuthError(err);
                 const delayMs = isAuth
-                  ? Math.min(60_000, 1000 * 2 ** Math.min(consecutiveAuthFailures, 6))
+                  ? Math.min(
+                      60_000,
+                      1000 * 2 ** Math.min(consecutiveAuthFailures, 6),
+                    )
                   : 1000;
                 return timer(delayMs);
               }),

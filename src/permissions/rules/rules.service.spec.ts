@@ -285,15 +285,20 @@ describe('RulesService', () => {
 
   it('should fail startup when CouchDB rejects credentials with 401', async () => {
     const unauthorizedCouchdbService = {
-      get: jest.fn().mockReturnValue(
-        throwError(
-          () =>
-            new HttpException(
-              { error: 'unauthorized', reason: 'Name or password is incorrect.' },
-              HttpStatus.UNAUTHORIZED,
-            ),
+      get: jest
+        .fn()
+        .mockReturnValue(
+          throwError(
+            () =>
+              new HttpException(
+                {
+                  error: 'unauthorized',
+                  reason: 'Name or password is incorrect.',
+                },
+                HttpStatus.UNAUTHORIZED,
+              ),
+          ),
         ),
-      ),
     } as any;
     const freshModule = await Test.createTestingModule({
       providers: [
