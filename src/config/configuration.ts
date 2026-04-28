@@ -27,11 +27,12 @@ function flatten(
 ): Record<string, string> {
   return Object.keys(obj).reduce<Record<string, string>>((acc, k) => {
     const pre = prefix.length ? prefix + delimiter : '';
+    const value = obj[k];
 
-    if (typeof obj[k] === 'object')
-      Object.assign(acc, flatten(obj[k] as Record<string, unknown>, pre + k));
-    else {
-      acc[pre + k] = String(obj[k]);
+    if (value !== null && !Array.isArray(value) && typeof value === 'object') {
+      Object.assign(acc, flatten(value as Record<string, unknown>, pre + k));
+    } else if (value != null) {
+      acc[pre + k] = String(value);
     }
     return acc;
   }, {});

@@ -31,22 +31,24 @@ export class CouchdbService {
     private httpService: HttpService,
     private configService: ConfigService,
   ) {
-    this.databaseUrl = this.configService.get<string>(
-      CouchdbService.DATABASE_URL_ENV,
-    )!;
+    this.databaseUrl = this.requireEnv(CouchdbService.DATABASE_URL_ENV);
 
     this.initAddBasicAuthHeaderByDefault();
     this.initMapAxiosErrorsToNestjsExceptions();
   }
 
+  private requireEnv(key: string): string {
+    const value = this.configService.get<string>(key);
+    if (!value) {
+      throw new Error(`Required environment variable ${key} is not set`);
+    }
+    return value;
+  }
+
   private initAddBasicAuthHeaderByDefault() {
     this.httpService.axiosRef.defaults.auth = {
-      username: this.configService.get<string>(
-        CouchdbService.DATABASE_USER_ENV,
-      )!,
-      password: this.configService.get<string>(
-        CouchdbService.DATABASE_PASSWORD_ENV,
-      )!,
+      username: this.requireEnv(CouchdbService.DATABASE_USER_ENV),
+      password: this.requireEnv(CouchdbService.DATABASE_PASSWORD_ENV),
     };
   }
 
