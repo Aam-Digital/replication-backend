@@ -46,6 +46,31 @@ In case the backend is run through npm, the `.env` file can be adjusted.
 
 See our [Developer Documentation](https://aam-digital.github.io/ndb-core/documentation/additional-documentation/concepts/user-roles-and-permissions.html)
 
+### Startup behavior of the permission service
+
+`RulesService` loads the `Config:Permissions` document from the database
+configured via `PERMISSION_DB` during startup. Its behavior is fail-closed:
+
+- **Success:** the loaded rules are applied to all subsequent requests.
+- **CouchDB returns 401 / 403:** the configured `DATABASE_USER` /
+  `DATABASE_PASSWORD` are wrong. Startup is **aborted** with a `CRITICAL` log
+  message — the service refuses to start without a way to evaluate
+  permissions.
+- **CouchDB returns 404 (permission document missing):** the service enters
+  **bootstrap mode**. A synthesized config grants `manage all` to users with
+  the `admin_app` role only; every other user (including anonymous traffic)
+  is denied. This lets an administrator sign in and seed the real
+  `Config:Permissions` document, after which the live changes feed swaps in
+  the real rules and triggers a `clearLocal` so all clients re-sync.
+- **Network error / 5xx / malformed response:** the load is retried with
+  exponential backoff (1s → 2s → 4s → 8s → 10s, capped) for up to 60s. If
+  the live changes feed delivers a config during a backoff, the loop exits
+  early. If the budget is exhausted, startup is aborted with a `CRITICAL`
+  log.
+- **Defense in depth:** if `getRulesForUser` is ever called with no config
+  loaded (which should be unreachable given the above), it returns an empty
+  rule set and CASL denies every action.
+
 ## Operation
 
 Besides the CouchDB endpoints, the backend also provides some additional endpoints that are necessary to be used at times.
