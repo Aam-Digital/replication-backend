@@ -123,7 +123,6 @@ export class ChangesController {
     }
 
     const duration = Date.now() - startTime;
-    const userName = user?.name ?? 'anonymous';
     if (duration > 2000 || iterations > 2) {
       this.logger.warn(
         `_changes for "${db}" user="${userName}" took ${duration}ms ` +
