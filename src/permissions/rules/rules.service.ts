@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { get, has } from 'lodash';
 import { firstValueFrom } from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
+import { ExponentialBackoff } from '../../common/exponential-backoff';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { DocumentChangesService } from '../../couchdb/document-changes.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
@@ -33,9 +34,7 @@ export class RulesService implements OnModuleInit {
    * before giving up and aborting startup.
    */
   static readonly INIT_MAX_TOTAL_MS = 60_000;
-  /** Initial backoff delay (ms) between retries. */
-  static readonly INIT_INITIAL_DELAY_MS = 1_000;
-  /** Cap (ms) for the exponentially-growing backoff delay. */
+  /** Cap (ms) for the exponentially-growing backoff delay between retries. */
   static readonly INIT_MAX_DELAY_MS = 10_000;
 
   /**
@@ -69,7 +68,9 @@ export class RulesService implements OnModuleInit {
 
   private async loadInitialPermissions(db = 'app'): Promise<void> {
     const startedAt = Date.now();
-    let delay = RulesService.INIT_INITIAL_DELAY_MS;
+    const backoff = new ExponentialBackoff({
+      maxMs: RulesService.INIT_MAX_DELAY_MS,
+    });
     let lastError: unknown;
 
     // Retry loop: keep trying until either we succeed, hit a fatal error
@@ -107,6 +108,7 @@ export class RulesService implements OnModuleInit {
           return;
         }
         lastError = error;
+        const delay = backoff.recordFailure();
         this.logger.warn(
           `Failed to load initial permissions from ${db} (will retry in ${delay}ms): ${error instanceof Error ? error.message : String(error)}`,
         );
@@ -114,10 +116,9 @@ export class RulesService implements OnModuleInit {
 
       // The change feed may have populated `this.permission` while we were
       // waiting for the HTTP response — exit early if so.
-      if (await this.waitForNextRetry(delay)) {
+      if (await this.waitForNextRetry(backoff.currentDelay)) {
         return;
       }
-      delay = Math.min(delay * 2, RulesService.INIT_MAX_DELAY_MS);
     }
 
     this.logger.error(
