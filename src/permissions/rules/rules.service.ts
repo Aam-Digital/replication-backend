@@ -15,6 +15,7 @@ import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { DocumentAbility } from '../permission/permission.service';
 import { UserIdentityService } from '../user-identity/user-identity.service';
 import { Permission, RulesConfig } from './permission';
+import { PermissionConfigValidator } from './permission-config.validator';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
 
@@ -45,15 +46,6 @@ export class RulesService implements OnModuleInit {
    */
   private static bootstrapPermissions(): RulesConfig {
     return { admin_app: [{ action: 'manage', subject: 'all' }] };
-  }
-
-  /**
-   * A valid permission config is a non-null, non-array object. Any other shape
-   * (null, primitive, array) is treated as a transient error so that we retry
-   * rather than serve traffic with corrupt rules.
-   */
-  private static isValidPermissionConfig(data: unknown): data is RulesConfig {
-    return typeof data === 'object' && data !== null && !Array.isArray(data);
   }
 
   private readonly logger = new Logger(RulesService.name);
@@ -90,7 +82,7 @@ export class RulesService implements OnModuleInit {
         );
 
         const data = permissionDoc?.data;
-        if (!RulesService.isValidPermissionConfig(data)) {
+        if (!PermissionConfigValidator.isValidRulesConfig(data)) {
           throw new Error(
             `Permission document "${Permission.DOC_ID}" did not contain a valid configuration object`,
           );
@@ -122,11 +114,7 @@ export class RulesService implements OnModuleInit {
 
       // The change feed may have populated `this.permission` while we were
       // waiting for the HTTP response — exit early if so.
-      if (this.permission !== undefined) {
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, delay));
-      if (this.permission !== undefined) {
+      if (await this.waitForNextRetry(delay)) {
         return;
       }
       delay = Math.min(delay * 2, RulesService.INIT_MAX_DELAY_MS);
@@ -153,10 +141,21 @@ export class RulesService implements OnModuleInit {
       this.permission = RulesService.bootstrapPermissions();
     }
     this.logger.warn(
-      `BOOTSTRAP MODE: no permission document "${Permission.DOC_ID}" found in "${db}". ` +
+      `[PERMISSIONS_BOOTSTRAP_MODE] BOOTSTRAP MODE: no permission document "${Permission.DOC_ID}" found in "${db}". ` +
         `Granting full access to admin_app users only until the real permission config is created. ` +
-        `All other users are denied.`,
+        `All other users are denied. ` +
+        `Startup continued with bootstrap permissions. ` +
+        `If this instance is not in first-time setup, treat this as a possible misconfiguration ` +
+        `(check PERMISSION_DB, DATABASE_URL, and reverse proxy routing).`,
     );
+  }
+
+  private async waitForNextRetry(delay: number): Promise<boolean> {
+    if (this.permission !== undefined) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    return this.permission !== undefined;
   }
 
   private static isAuthFailure(error: unknown): boolean {
@@ -175,7 +174,7 @@ export class RulesService implements OnModuleInit {
       const prevPermissions = this.permission;
       const newPermissions = change.doc?.data;
 
-      if (!RulesService.isValidPermissionConfig(newPermissions)) {
+      if (!PermissionConfigValidator.isValidRulesConfig(newPermissions)) {
         this.logger.warn(
           `Permissions change for ${db} did not contain valid data; keeping previous in-memory permissions.`,
         );
@@ -228,7 +227,9 @@ export class RulesService implements OnModuleInit {
     }
     if (this.permission) {
       const userRules = user.roles
-        .filter((role) => this.permission.hasOwnProperty(role))
+        .filter((role) =>
+          PermissionConfigValidator.hasRole(this.permission, role),
+        )
         .map((role) => this.permission[role])
         .filter((rules): rules is DocumentRule[] => rules !== undefined)
         .flat();
