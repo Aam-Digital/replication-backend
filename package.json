@@ -6,7 +6,7 @@
   "private": true,
   "license": "GPL-3.0",
   "scripts": {
-    "prebuild": "rimraf dist",
+    "prebuild": "rimraf dist *.tsbuildinfo",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
