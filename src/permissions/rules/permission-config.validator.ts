@@ -10,6 +10,6 @@ export class PermissionConfigValidator {
   }
 
   static hasRole(config: RulesConfig, role: string): boolean {
-    return Object.prototype.hasOwnProperty.call(config, role);
+    return Object.hasOwn(config, role);
   }
 }
