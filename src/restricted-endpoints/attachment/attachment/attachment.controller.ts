@@ -34,41 +34,48 @@ import { UserInfo } from '../../session/user-auth.dto';
 @UseGuards(CombinedAuthGuard)
 @Controller(':db/:docId/:property')
 export class AttachmentController {
-  private databaseUrl = this.configService.get<string>(
-    CouchdbService.DATABASE_URL_ENV,
-  );
-  private databaseUser = this.configService.get<string>(
-    CouchdbService.DATABASE_USER_ENV,
-  );
-  private databasePassword = this.configService.get<string>(
-    CouchdbService.DATABASE_PASSWORD_ENV,
-  );
+  private databaseUrl: string | undefined;
+  private databaseUser: string | undefined;
+  private databasePassword: string | undefined;
   /**
    * This proxy allows to send authenticated requests to the real database
    */
-  proxy = createProxyMiddleware({
-    target: this.databaseUrl,
-    secure: true,
-    changeOrigin: true,
-    followRedirects: false,
-    xfwd: true,
-    autoRewrite: true,
-    on: {
-      proxyReq: (proxyReq) => {
-        // Removing existing cookie and overwriting header with authorized credentials
-        const authHeader = Buffer.from(
-          `${this.databaseUser}:${this.databasePassword}`,
-        ).toString('base64');
-        proxyReq.setHeader('authorization', `Basic ${authHeader}`);
-        proxyReq.removeHeader('cookie');
-      },
-    },
-  });
+  proxy: ReturnType<typeof createProxyMiddleware>;
+
   constructor(
     private couchDB: CouchdbService,
     private permissions: PermissionService,
     private configService: ConfigService,
-  ) {}
+  ) {
+    this.databaseUrl = this.configService.get<string>(
+      CouchdbService.DATABASE_URL_ENV,
+    );
+    this.databaseUser = this.configService.get<string>(
+      CouchdbService.DATABASE_USER_ENV,
+    );
+    this.databasePassword = this.configService.get<string>(
+      CouchdbService.DATABASE_PASSWORD_ENV,
+    );
+
+    this.proxy = createProxyMiddleware({
+      target: this.databaseUrl,
+      secure: true,
+      changeOrigin: true,
+      followRedirects: false,
+      xfwd: true,
+      autoRewrite: true,
+      on: {
+        proxyReq: (proxyReq) => {
+          // Removing existing cookie and overwriting header with authorized credentials
+          const authHeader = Buffer.from(
+            `${this.databaseUser}:${this.databasePassword}`,
+          ).toString('base64');
+          proxyReq.setHeader('authorization', `Basic ${authHeader}`);
+          proxyReq.removeHeader('cookie');
+        },
+      },
+    });
+  }
 
   /**
    * Upload an attachment using binary data if the user has `update` permissions.
