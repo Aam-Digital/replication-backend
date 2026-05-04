@@ -1,3 +1,6 @@
+[![Maintainability](https://qlty.sh/gh/Aam-Digital/projects/replication-backend/maintainability.svg)](https://qlty.sh/gh/Aam-Digital/projects/replication-backend)
+[![Code Coverage](https://qlty.sh/gh/Aam-Digital/projects/replication-backend/coverage.svg)](https://qlty.sh/gh/Aam-Digital/projects/replication-backend)
+
 # Replication Backend
 
 This backend service can be used to filter the replication between a [PouchDB](https://pouchdb.com/) and a [CouchDB](https://docs.couchdb.org/en/stable/index.html) instance based on permission rules.
