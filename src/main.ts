@@ -4,11 +4,20 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { AppModule } from './app.module';
+import { SentryLogger } from './common/sentry-logger.service';
 import { AppConfiguration } from './config/configuration';
-import { configureSentry } from './sentry.configuration';
+import { configureSentry, initSentry } from './sentry.configuration';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { bodyParser: false });
+  // Load configuration and initialize Sentry as early as possible so that
+  // logs emitted during Nest bootstrap can already be forwarded.
+  const configService = new ConfigService(AppConfiguration());
+  const sentryEnabled = initSentry(configService);
+
+  const app = await NestFactory.create(AppModule, {
+    bodyParser: false,
+    logger: sentryEnabled ? new SentryLogger() : undefined,
+  });
   // Proxy for CouchDB admin view, CouchDB can be directly accessed through this path
   app.use(
     '/couchdb',
@@ -45,10 +54,7 @@ async function bootstrap() {
   // Required for JWT cookie auth
   app.use(cookieParser());
 
-  // load ConfigService instance to access .env and app.yaml values
-  const configService = new ConfigService(AppConfiguration());
-
-  configureSentry(app, configService);
+  configureSentry(app);
 
   await app.listen(process.env.PORT || 3000);
 }

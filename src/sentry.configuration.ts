@@ -1,50 +1,84 @@
-import * as Sentry from '@sentry/node';
-import { ConfigService } from '@nestjs/config';
 import { ArgumentsHost, INestApplication } from '@nestjs/common';
-import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
 import { HttpException } from '@nestjs/common/exceptions/http.exception';
+import { ConfigService } from '@nestjs/config';
+import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
+import * as Sentry from '@sentry/node';
 
-export class SentryConfiguration {
-  ENABLED: boolean = false;
-  DSN = '';
-  INSTANCE_NAME = '';
-  ENVIRONMENT = '';
+interface SentryConfiguration {
+  ENABLED: boolean;
+  DSN: string;
+  INSTANCE_NAME: string;
+  ENVIRONMENT: string;
 }
 
 function loadSentryConfiguration(
   configService: ConfigService,
 ): SentryConfiguration {
   return {
-    ENABLED: configService.getOrThrow('SENTRY_ENABLED'),
-    DSN: configService.getOrThrow('SENTRY_DSN'),
-    INSTANCE_NAME: configService.getOrThrow('SENTRY_INSTANCE_NAME'),
-    ENVIRONMENT: configService.getOrThrow('SENTRY_ENVIRONMENT'),
+    ENABLED: parseBoolean(configService.get('SENTRY_ENABLED')),
+    DSN: configService.get('SENTRY_DSN', ''),
+    INSTANCE_NAME: configService.get('SENTRY_INSTANCE_NAME', ''),
+    ENVIRONMENT: configService.get('SENTRY_ENVIRONMENT', ''),
   };
 }
 
-export function configureSentry(
-  app: INestApplication,
-  configService: ConfigService,
-): void {
-  const sentryConfiguration = loadSentryConfiguration(configService);
-  if (sentryConfiguration.ENABLED) {
-    configureLoggingSentry(app, sentryConfiguration);
+function parseBoolean(value: unknown): boolean {
+  if (typeof value === 'boolean') {
+    return value;
   }
+  if (typeof value === 'string') {
+    return value.toLowerCase() === 'true';
+  }
+  return false;
 }
 
-export class SentryFilter extends BaseExceptionFilter {
+/**
+ * Initialize the Sentry SDK. Safe to call before the Nest application
+ * is created so that early bootstrap logs can already be captured.
+ *
+ * Returns `true` if Sentry was initialized, `false` if it is disabled.
+ */
+export function initSentry(configService: ConfigService): boolean {
+  const sentryConfiguration = loadSentryConfiguration(configService);
+  if (!sentryConfiguration.ENABLED) {
+    return false;
+  }
+  if (!sentryConfiguration.DSN) {
+    // Avoid initializing Sentry without a DSN — it would only log
+    // "No DSN provided, client will not send events." on every startup.
+    // eslint-disable-next-line no-console
+    console.warn(
+      'Sentry is enabled (SENTRY_ENABLED=true) but SENTRY_DSN is empty — skipping Sentry initialization.',
+    );
+    return false;
+  }
+  initSentrySdk(sentryConfiguration);
+  return true;
+}
+
+/**
+ * Bind Sentry into the Nest application's HTTP error pipeline.
+ * Must be called after {@link initSentry} and after the Nest app exists.
+ */
+export function configureSentry(app: INestApplication): void {
+  if (!Sentry.isInitialized()) {
+    return;
+  }
+  app.use(Sentry.expressErrorHandler());
+
+  const { httpAdapter } = app.get(HttpAdapterHost);
+  app.useGlobalFilters(new SentryFilter(httpAdapter));
+}
+
+class SentryFilter extends BaseExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     Sentry.captureException(exception);
     super.catch(exception, host);
   }
 }
 
-function configureLoggingSentry(
-  app: INestApplication,
-  sentryConfiguration: SentryConfiguration,
-): void {
+function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
   Sentry.init({
-    debug: true,
     serverName: sentryConfiguration.INSTANCE_NAME,
     environment: sentryConfiguration.ENVIRONMENT,
     dsn: sentryConfiguration.DSN,
@@ -71,9 +105,4 @@ function configureLoggingSentry(
       return event;
     },
   });
-
-  app.use(Sentry.expressErrorHandler());
-
-  const { httpAdapter } = app.get(HttpAdapterHost);
-  app.useGlobalFilters(new SentryFilter(httpAdapter));
 }

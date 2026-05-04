@@ -5,16 +5,30 @@ import { join } from 'path';
 const CONFIG_FILENAME = 'app.yaml';
 
 /**
- * loads local CONFIG_FILENAME file and provides them in NestJs Config Service
+ * Loads local CONFIG_FILENAME file and merges values from `process.env`
+ * on top, so that environment variables (e.g. from docker-compose / .env)
+ * always take precedence over YAML defaults.
+ *
+ * Result is provided to the NestJS ConfigService.
  * See: /src/config/app.yaml
  */
 export function AppConfiguration(): Record<string, string> {
-  return flatten(
+  const fromYaml = flatten(
     yaml.load(readFileSync(join(__dirname, CONFIG_FILENAME), 'utf8')) as Record<
       string,
       string
     >,
   );
+
+  const fromEnv: Record<string, string> = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      fromEnv[key] = value;
+    }
+  }
+
+  // Env wins over YAML defaults.
+  return { ...fromYaml, ...fromEnv };
 }
 
 /**
