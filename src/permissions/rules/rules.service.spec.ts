@@ -487,30 +487,4 @@ describe('RulesService', () => {
 
     jest.useRealTimers();
   });
-
-  it.each([
-    ['401 Unauthorized', HttpStatus.UNAUTHORIZED, 'unauthorized'],
-    ['403 Forbidden', HttpStatus.FORBIDDEN, 'forbidden'],
-  ])(
-    'hardening: fails startup when CouchDB rejects credentials with %s',
-    async (_label, status, errorBody) => {
-      const { freshService } = await buildFreshService({
-        get: jest
-          .fn()
-          .mockReturnValue(
-            throwError(
-              () =>
-                new HttpException(
-                  { error: errorBody, reason: 'rejected by CouchDB' },
-                  status,
-                ),
-            ),
-          ),
-      });
-
-      await expect(freshService.onModuleInit()).rejects.toBeInstanceOf(
-        HttpException,
-      );
-    },
-  );
 });

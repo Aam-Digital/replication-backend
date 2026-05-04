@@ -73,8 +73,8 @@ export class RulesService implements OnModuleInit {
     });
     let lastError: unknown;
 
-    // Retry loop: keep trying until either we succeed, hit a fatal error
-    // (auth failure / 404 -> bootstrap), the live changes feed populates the
+    // Retry loop: keep trying until either we succeed, the permission doc is
+    // confirmed missing (-> bootstrap), the live changes feed populates the
     // config for us, or the retry budget is exhausted.
     while (Date.now() - startedAt < RulesService.INIT_MAX_TOTAL_MS) {
       try {
@@ -95,14 +95,6 @@ export class RulesService implements OnModuleInit {
         }
         return;
       } catch (error) {
-        if (RulesService.isAuthFailure(error)) {
-          this.logger.error(
-            `CRITICAL: CouchDB rejected the configured credentials when loading initial permissions from "${db}". ` +
-              `Verify DATABASE_USER, DATABASE_PASSWORD and DATABASE_URL match the CouchDB the service is connecting to. ` +
-              `Aborting startup.`,
-          );
-          throw error;
-        }
         if (error instanceof HttpException && error.getStatus() === 404) {
           this.enterBootstrapMode(db);
           return;
@@ -157,13 +149,6 @@ export class RulesService implements OnModuleInit {
     }
     await new Promise((resolve) => setTimeout(resolve, delay));
     return this.permission !== undefined;
-  }
-
-  private static isAuthFailure(error: unknown): boolean {
-    return (
-      error instanceof HttpException &&
-      (error.getStatus() === 401 || error.getStatus() === 403)
-    );
   }
 
   private watchPermissionChanges(db = 'app') {
