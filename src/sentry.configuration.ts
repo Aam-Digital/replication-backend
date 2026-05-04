@@ -1,8 +1,10 @@
-import { ArgumentsHost, INestApplication } from '@nestjs/common';
+import { ArgumentsHost, INestApplication, Logger } from '@nestjs/common';
 import { HttpException } from '@nestjs/common/exceptions/http.exception';
 import { ConfigService } from '@nestjs/config';
 import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
 import * as Sentry from '@sentry/node';
+
+const logger = new Logger('Sentry');
 
 interface SentryConfiguration {
   ENABLED: boolean;
@@ -41,18 +43,37 @@ function parseBoolean(value: unknown): boolean {
 export function initSentry(configService: ConfigService): boolean {
   const sentryConfiguration = loadSentryConfiguration(configService);
   if (!sentryConfiguration.ENABLED) {
+    logger.log('Sentry is disabled (SENTRY_ENABLED is not "true").');
     return false;
   }
   if (!sentryConfiguration.DSN) {
-    // Avoid initializing Sentry without a DSN — it would only log
-    // "No DSN provided, client will not send events." on every startup.
-    // eslint-disable-next-line no-console
-    console.warn(
-      'Sentry is enabled (SENTRY_ENABLED=true) but SENTRY_DSN is empty — skipping Sentry initialization.',
+    logger.warn(
+      'Sentry is enabled but SENTRY_DSN is empty — skipping Sentry initialization.',
     );
     return false;
   }
-  initSentrySdk(sentryConfiguration);
+  try {
+    initSentrySdk(sentryConfiguration);
+  } catch (err) {
+    logger.error(
+      `Failed to initialize Sentry: ${err instanceof Error ? err.message : String(err)}`,
+      err instanceof Error ? err.stack : undefined,
+    );
+    return false;
+  }
+
+  // `Sentry.init` does not throw on an invalid DSN — it logs internally
+  // and ends up with a no-op client. Verify the DSN was actually parsed.
+  if (!Sentry.getClient()?.getDsn()) {
+    logger.error(
+      `Sentry initialization failed: SENTRY_DSN was rejected as invalid.`,
+    );
+    return false;
+  }
+
+  logger.log(
+    `Sentry initialized (environment="${sentryConfiguration.ENVIRONMENT}", instance="${sentryConfiguration.INSTANCE_NAME}").`,
+  );
   return true;
 }
 

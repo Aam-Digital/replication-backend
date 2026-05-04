@@ -2,6 +2,7 @@ import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import * as dotenv from 'dotenv';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import { AppModule } from './app.module';
 import { SentryLogger } from './common/sentry-logger.service';
@@ -9,6 +10,12 @@ import { AppConfiguration } from './config/configuration';
 import { configureSentry, initSentry } from './sentry.configuration';
 
 async function bootstrap() {
+  // Load .env into process.env before reading configuration, so that early
+  // bootstrap code (AppConfiguration / initSentry) sees the same values
+  // that Nest's ConfigModule will load later on. In docker-compose this is
+  // a no-op because env vars are already set; locally it picks up `.env`.
+  dotenv.config();
+
   // Load configuration and initialize Sentry as early as possible so that
   // logs emitted during Nest bootstrap can already be forwarded.
   const configService = new ConfigService(AppConfiguration());
