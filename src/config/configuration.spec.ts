@@ -1,0 +1,68 @@
+import { flatten, parseScalar } from './configuration';
+
+describe('configuration', () => {
+  describe('parseScalar', () => {
+    it('should parse "true"/"false" as booleans', () => {
+      expect(parseScalar('true')).toBe(true);
+      expect(parseScalar('TRUE')).toBe(true);
+      expect(parseScalar('True')).toBe(true);
+      expect(parseScalar('false')).toBe(false);
+      expect(parseScalar('FALSE')).toBe(false);
+      expect(parseScalar('False')).toBe(false);
+
+      expect(parseScalar('falsy')).toBe('falsy');
+      expect(parseScalar('truthy')).toBe('truthy');
+    });
+
+    it('should keep numeric strings as strings', () => {
+      expect(parseScalar('8080')).toBe('8080');
+      expect(parseScalar('0')).toBe('0');
+      expect(parseScalar('3.14')).toBe('3.14');
+      expect(parseScalar('007')).toBe('007');
+    });
+
+    it('should keep regular strings as strings', () => {
+      expect(parseScalar('hello')).toBe('hello');
+      expect(parseScalar('http://localhost:5984')).toBe('http://localhost:5984');
+      expect(parseScalar('')).toBe('');
+    });
+  });
+
+  describe('flatten', () => {
+    it('should flatten nested objects with underscore delimiter', () => {
+      const input = { SENTRY: { ENABLED: true, DSN: 'https://example.com' } };
+      expect(flatten(input)).toEqual({
+        SENTRY_ENABLED: true,
+        SENTRY_DSN: 'https://example.com',
+      });
+    });
+
+    it('should preserve scalar types (booleans, numbers, strings)', () => {
+      const input = { flag: false, count: 42, name: 'test' };
+      expect(flatten(input)).toEqual({
+        flag: false,
+        count: 42,
+        name: 'test',
+      });
+    });
+
+    it('should handle deeply nested objects', () => {
+      const input = { a: { b: { c: 'deep' } } };
+      expect(flatten(input)).toEqual({ a_b_c: 'deep' });
+    });
+
+    it('should skip null values', () => {
+      const input = { a: null, b: 'kept' };
+      expect(flatten(input)).toEqual({ b: 'kept' });
+    });
+
+    it('should stringify arrays as values', () => {
+      const input = { list: ['a', 'b'] };
+      expect(flatten(input)).toEqual({ list: ['a', 'b'] });
+    });
+
+    it('should handle empty objects', () => {
+      expect(flatten({})).toEqual({});
+    });
+  });
+});

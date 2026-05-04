@@ -18,21 +18,11 @@ function loadSentryConfiguration(
   configService: ConfigService,
 ): SentryConfiguration {
   return {
-    ENABLED: parseBoolean(configService.get('SENTRY_ENABLED')),
+    ENABLED: configService.get<boolean>('SENTRY_ENABLED', false),
     DSN: configService.get('SENTRY_DSN', ''),
     INSTANCE_NAME: configService.get('SENTRY_INSTANCE_NAME', ''),
     ENVIRONMENT: configService.get('SENTRY_ENVIRONMENT', ''),
   };
-}
-
-function parseBoolean(value: unknown): boolean {
-  if (typeof value === 'boolean') {
-    return value;
-  }
-  if (typeof value === 'string') {
-    return value.toLowerCase() === 'true';
-  }
-  return false;
 }
 
 /**
