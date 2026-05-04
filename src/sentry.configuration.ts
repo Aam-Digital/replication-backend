@@ -3,6 +3,7 @@ import { HttpException } from '@nestjs/common/exceptions/http.exception';
 import { ConfigService } from '@nestjs/config';
 import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
 import * as Sentry from '@sentry/node';
+import { version } from '../package.json';
 
 const logger = new Logger('Sentry');
 
@@ -100,6 +101,7 @@ class SentryFilter extends BaseExceptionFilter {
 
 function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
   Sentry.init({
+    release: version,
     serverName: sentryConfiguration.INSTANCE_NAME,
     environment: sentryConfiguration.ENVIRONMENT,
     dsn: sentryConfiguration.DSN,
