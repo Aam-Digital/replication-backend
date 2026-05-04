@@ -1,6 +1,6 @@
+import { HttpException, HttpStatus, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { HttpException, HttpStatus } from '@nestjs/common';
 import { of, Subject, throwError } from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
 import { CouchdbService } from '../../couchdb/couchdb.service';
@@ -236,13 +236,17 @@ describe('RulesService', () => {
     jest.useRealTimers();
   });
 
-  it('should start without permissions when initial load fails and recover via changes feed', async () => {
-    // Create a fresh service whose initial load will fail
-    const failingCouchdbService = {
-      get: jest
-        .fn()
-        .mockReturnValue(throwError(() => new Error('connection refused'))),
-    } as any;
+  /**
+   * Build a fresh RulesService instance with a configurable CouchdbService mock,
+   * WITHOUT calling onModuleInit. Returns the service plus the change feed subject
+   * so tests can drive the live change feed.
+   */
+  async function buildFreshService(couchdbServiceOverride: {
+    get: jest.Mock;
+  }): Promise<{
+    freshService: RulesService;
+    freshChangesSubject: Subject<ChangeResult>;
+  }> {
     const freshChangesSubject = new Subject<ChangeResult>();
     const freshModule = await Test.createTestingModule({
       providers: [
@@ -255,7 +259,7 @@ describe('RulesService', () => {
         },
         { provide: AdminService, useValue: mockAdminService },
         { provide: UserIdentityService, useValue: mockUserIdentityService },
-        { provide: CouchdbService, useValue: failingCouchdbService },
+        { provide: CouchdbService, useValue: couchdbServiceOverride },
         {
           provide: DocumentChangesService,
           useValue: {
@@ -264,16 +268,72 @@ describe('RulesService', () => {
         },
       ],
     }).compile();
+    return {
+      freshService: freshModule.get(RulesService),
+      freshChangesSubject,
+    };
+  }
 
-    const freshService = freshModule.get(RulesService);
+  function notFoundCouchdb() {
+    return {
+      get: jest
+        .fn()
+        .mockReturnValue(
+          throwError(
+            () =>
+              new HttpException(
+                { error: 'not_found', reason: 'missing' },
+                HttpStatus.NOT_FOUND,
+              ),
+          ),
+        ),
+    };
+  }
+
+  it('hardening: returns deny-all (empty rules) when getRulesForUser is called before any permission config is loaded', async () => {
+    const { freshService } = await buildFreshService({
+      get: jest.fn().mockReturnValue(throwError(() => new Error('boom'))),
+    });
+    // Intentionally do NOT call onModuleInit — exercise the raw fallback.
+
+    expect(freshService.getRulesForUser(normalUser)).toEqual([]);
+    expect(freshService.getRulesForUser(adminUser)).toEqual([]);
+    expect(freshService.getRulesForUser(undefined as any)).toEqual([]);
+  });
+
+  it('hardening: bootstrap mode grants only admin_app users full access and denies everyone else', async () => {
+    const { freshService } = await buildFreshService(notFoundCouchdb());
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => {});
+
     await freshService.onModuleInit();
 
-    // No permissions loaded — falls back to "allow everything"
-    expect(freshService.getRulesForUser(normalUser)).toEqual([
-      { subject: 'all', action: 'manage' },
+    expect(freshService.getRulesForUser(adminUser)).toEqual([
+      { action: 'manage', subject: 'all' },
     ]);
+    expect(freshService.getRulesForUser(normalUser)).toEqual([]);
+    expect(freshService.getRulesForUser(undefined as any)).toEqual([]);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[PERMISSIONS_BOOTSTRAP_MODE] BOOTSTRAP MODE'),
+    );
 
-    // Permissions arrive via changes feed
+    warnSpy.mockRestore();
+  });
+
+  it('hardening: bootstrap mode swaps to real config and triggers clearLocal when permission doc appears on live feed', async () => {
+    jest.useFakeTimers();
+    const { freshService, freshChangesSubject } =
+      await buildFreshService(notFoundCouchdb());
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+    await freshService.onModuleInit();
+
+    // Bootstrap mode active.
+    expect(freshService.getRulesForUser(normalUser)).toEqual([]);
+
+    // The frontend writes the real Config:Permissions document; the change
+    // feed delivers it.
     freshChangesSubject.next({
       doc: testPermission,
       seq: '1',
@@ -281,52 +341,150 @@ describe('RulesService', () => {
       id: testPermission._id!,
     });
 
-    // Now rules should be available
+    // Real rules now apply.
     expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
+
+    // The transition (bootstrap → real) must invalidate cached sessions and
+    // local replicas so previously denied users see the new config.
+    jest.advanceTimersByTime(1500);
+    expect(mockUserIdentityService.clearCache).toHaveBeenCalled();
+    expect(mockAdminService.clearLocal).toHaveBeenCalled();
+
+    jest.useRealTimers();
   });
 
-  it('should fail startup when CouchDB rejects credentials with 401', async () => {
-    const unauthorizedCouchdbService = {
-      get: jest
-        .fn()
-        .mockReturnValue(
-          throwError(
-            () =>
-              new HttpException(
-                {
-                  error: 'unauthorized',
-                  reason: 'Name or password is incorrect.',
-                },
-                HttpStatus.UNAUTHORIZED,
-              ),
-          ),
+  it('hardening: retries with backoff and succeeds once CouchDB recovers', async () => {
+    jest.useFakeTimers();
+
+    const get = jest
+      .fn()
+      // First two attempts: transient 503 from CouchDB.
+      .mockReturnValueOnce(
+        throwError(
+          () =>
+            new HttpException(
+              { error: 'service_unavailable' },
+              HttpStatus.SERVICE_UNAVAILABLE,
+            ),
         ),
-    } as any;
-    const freshModule = await Test.createTestingModule({
-      providers: [
-        RulesService,
-        {
-          provide: ConfigService,
-          useValue: new ConfigService({
-            [RulesService.ENV_PERMISSION_DB]: DATABASE_NAME,
-          }),
-        },
-        { provide: AdminService, useValue: mockAdminService },
-        { provide: UserIdentityService, useValue: mockUserIdentityService },
-        { provide: CouchdbService, useValue: unauthorizedCouchdbService },
-        {
-          provide: DocumentChangesService,
-          useValue: {
-            getChanges: jest.fn().mockReturnValue(new Subject<ChangeResult>()),
-          },
-        },
-      ],
-    }).compile();
+      )
+      .mockReturnValueOnce(throwError(() => new Error('ECONNREFUSED')))
+      // Third attempt succeeds.
+      .mockReturnValueOnce(of(testPermission));
 
-    const freshService = freshModule.get(RulesService);
+    const { freshService } = await buildFreshService({ get });
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
 
-    await expect(freshService.onModuleInit()).rejects.toBeInstanceOf(
-      HttpException,
-    );
+    const initPromise = freshService.onModuleInit();
+
+    // Drive the backoff timers far enough to cover the 1s + 2s delays.
+    await jest.advanceTimersByTimeAsync(5_000);
+    await initPromise;
+
+    expect(get).toHaveBeenCalledTimes(3);
+    expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
+
+    jest.useRealTimers();
+  });
+
+  it('hardening: aborts startup when transient errors persist past the retry budget', async () => {
+    jest.useFakeTimers();
+
+    const get = jest
+      .fn()
+      .mockReturnValue(
+        throwError(
+          () =>
+            new HttpException(
+              { error: 'service_unavailable' },
+              HttpStatus.SERVICE_UNAVAILABLE,
+            ),
+        ),
+      );
+
+    const { freshService } = await buildFreshService({ get });
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+
+    const initPromise = freshService.onModuleInit();
+    // Catch eagerly so unhandled-rejection warnings do not leak between tests.
+    const initResult = initPromise.catch((e) => e);
+
+    // Advance past the full INIT_MAX_TOTAL_MS budget.
+    await jest.advanceTimersByTimeAsync(RulesService.INIT_MAX_TOTAL_MS + 5_000);
+    const error = await initResult;
+
+    expect(error).toBeInstanceOf(HttpException);
+    // No permission config was ever loaded — getRulesForUser must deny all.
+    expect(freshService.getRulesForUser(normalUser)).toEqual([]);
+
+    jest.useRealTimers();
+  });
+
+  it('hardening: treats malformed permission payload (non-object data) as transient and retries', async () => {
+    jest.useFakeTimers();
+
+    const get = jest
+      .fn()
+      // Garbage payloads that pass the HTTP layer but are not a valid config.
+      .mockReturnValueOnce(of({ _id: Permission.DOC_ID, data: null } as any))
+      .mockReturnValueOnce(of({ _id: Permission.DOC_ID, data: 'oops' } as any))
+      .mockReturnValueOnce(of(testPermission));
+
+    const { freshService } = await buildFreshService({ get });
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+    const initPromise = freshService.onModuleInit();
+    // eslint-disable-next-line @typescript-eslint/no-empty-function
+    initPromise.catch(() => {});
+
+    await jest.advanceTimersByTimeAsync(10_000);
+    await initPromise;
+
+    expect(get).toHaveBeenCalledTimes(3);
+    expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
+
+    jest.useRealTimers();
+  });
+
+  it('hardening: exits retry loop early when live changes feed delivers config during backoff', async () => {
+    jest.useFakeTimers();
+
+    const get = jest
+      .fn()
+      .mockReturnValue(
+        throwError(
+          () =>
+            new HttpException(
+              { error: 'service_unavailable' },
+              HttpStatus.SERVICE_UNAVAILABLE,
+            ),
+        ),
+      );
+
+    const { freshService, freshChangesSubject } = await buildFreshService({
+      get,
+    });
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+
+    const initPromise = freshService.onModuleInit();
+
+    // After the first failed attempt we are inside the 1s backoff. Push the
+    // config in via the change feed; the loop should pick it up and exit
+    // without ever hitting CouchDB again.
+    await jest.advanceTimersByTimeAsync(100);
+    freshChangesSubject.next({
+      doc: testPermission,
+      seq: '1',
+      changes: [{ rev: '1-a' }],
+      id: testPermission._id!,
+    });
+    await jest.advanceTimersByTimeAsync(2_000);
+    await initPromise;
+
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
+
+    jest.useRealTimers();
   });
 });

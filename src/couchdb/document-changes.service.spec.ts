@@ -170,4 +170,37 @@ describe('DocumentChangesService', () => {
     expect(getSpy.mock.calls.length).toBeLessThan(10);
     jest.useRealTimers();
   });
+
+  it('logs feed errors as warnings during backoff and escalates to error once saturated', () => {
+    jest.useFakeTimers();
+
+    jest
+      .spyOn(mockCouchdbService, 'get')
+      .mockReturnValue(
+        throwError(() => new HttpException('Bad Gateway', 502)) as any,
+      );
+
+    const warnSpy = jest
+      .spyOn((service as any).logger, 'warn')
+      .mockImplementation(() => undefined);
+    const errorSpy = jest
+      .spyOn((service as any).logger, 'error')
+      .mockImplementation(() => undefined);
+
+    service.getChanges('app').subscribe({ error: () => undefined });
+
+    // Backoff sequence with initial=1s, max=60s: 1s, 2s, 4s, 8s, 16s, 32s, 60s, 60s, ...
+    // Cumulative wait to reach the first saturated retry (#7): 1+2+4+8+16+32 = 63s.
+    jest.advanceTimersByTime(70_000);
+
+    // Pre-saturation failures (#1..#6) should be warnings, not errors.
+    expect(warnSpy.mock.calls.length).toBeGreaterThanOrEqual(6);
+    // The first saturated failure (#7) should be logged as an error.
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('SUSTAINED OUTAGE'),
+    );
+    expect(errorSpy.mock.calls.length).toBe(1);
+
+    jest.useRealTimers();
+  });
 });

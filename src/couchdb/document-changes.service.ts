@@ -16,6 +16,7 @@ import {
   Subscription,
   timer,
 } from 'rxjs';
+import { ExponentialBackoff } from '../common/exponential-backoff';
 import {
   ChangeResult,
   ChangesResponse,
@@ -78,8 +79,9 @@ export class DocumentChangesService implements OnModuleDestroy {
 
   private startFeed(db: string, subject: Subject<ChangeResult>): void {
     let lastSeq: string = 'now';
-    // Tracks consecutive auth failures so we can back off log spam and request rate.
-    let consecutiveAuthFailures = 0;
+    // Tracks consecutive failures so we can back off the request rate and
+    // throttle log output until the feed recovers.
+    const backoff = new ExponentialBackoff();
 
     const getParams = defer(() =>
       of({
@@ -96,50 +98,20 @@ export class DocumentChangesService implements OnModuleDestroy {
           this.couchdbService.get<ChangesResponse>(db, '_changes', params),
         ),
         catchError((err) => {
-          if (this.isAuthError(err)) {
-            consecutiveAuthFailures += 1;
-            // Log the actionable message loudly once, then once per ~minute, to avoid log flooding.
-            if (
-              consecutiveAuthFailures === 1 ||
-              consecutiveAuthFailures % 60 === 0
-            ) {
-              this.logger.error(
-                `CRITICAL: CouchDB rejected the configured credentials on the changes feed for "${db}" ` +
-                  `(failure #${consecutiveAuthFailures}). Verify DATABASE_USER, DATABASE_PASSWORD and ` +
-                  `DATABASE_URL — the service may be talking to the wrong CouchDB instance. ` +
-                  `Last error: ${this.formatError(err)}`,
-              );
-            }
-          } else {
-            consecutiveAuthFailures = 0;
-            this.logger.error(
-              `Changes feed error for "${db}": ${this.formatError(err)}`,
-            );
-          }
+          backoff.recordFailure();
+          this.logFeedError(db, err, backoff);
           throw err;
         }),
         retry({
-          // Back off aggressively when we keep hitting auth errors so we don't hammer
-          // CouchDB or flood logs at 1Hz; recover immediately on transient errors.
-          delay: (err) =>
-            of(err).pipe(
-              concatMap(() => {
-                const isAuth = this.isAuthError(err);
-                const delayMs = isAuth
-                  ? Math.min(
-                      60_000,
-                      1000 * 2 ** Math.min(consecutiveAuthFailures, 6),
-                    )
-                  : 1000;
-                return timer(delayMs);
-              }),
-            ),
+          // Back off exponentially so we do not hammer CouchDB or flood logs
+          // at 1Hz when the feed is failing persistently.
+          delay: () => timer(backoff.currentDelay),
         }),
         repeat(),
       )
       .subscribe({
         next: (changes) => {
-          consecutiveAuthFailures = 0;
+          backoff.reset();
           lastSeq = changes.last_seq;
           for (const result of changes.results ?? []) {
             subject.next(result);
@@ -154,4 +126,45 @@ export class DocumentChangesService implements OnModuleDestroy {
 
     this.subscriptions.set(db, subscription);
   }
+
+  /**
+   * Log feed errors with severity that escalates with the failure streak:
+   * during the exponential ramp-up they are logged as warnings to avoid
+   * spamming the error stream; once the backoff has saturated at its cap the
+   * situation is treated as a sustained outage and logged as an error
+   * (throttled to once per {@link DocumentChangesService.SATURATED_LOG_EVERY_N}
+   * retries to keep the log volume manageable).
+   */
+  private logFeedError(
+    db: string,
+    err: unknown,
+    backoff: ExponentialBackoff,
+  ): void {
+    const failureCount = backoff.failureCount;
+    const isAuth = this.isAuthError(err);
+    const baseMessage = isAuth
+      ? `CouchDB rejected the configured credentials on the changes feed for "${db}" ` +
+        `(failure #${failureCount}). Verify DATABASE_USER, DATABASE_PASSWORD and DATABASE_URL — ` +
+        `the service may be talking to the wrong CouchDB instance. ` +
+        `Last error: ${this.formatError(err)}`
+      : `Changes feed error for "${db}" (failure #${failureCount}): ${this.formatError(err)}`;
+
+    if (!backoff.isSaturated) {
+      this.logger.warn(baseMessage);
+      return;
+    }
+
+    if (
+      backoff.justSaturated ||
+      failureCount % DocumentChangesService.SATURATED_LOG_EVERY_N === 0
+    ) {
+      this.logger.error(`SUSTAINED OUTAGE: ${baseMessage}`);
+    }
+  }
+
+  /**
+   * Once the backoff has saturated, only log every Nth failure as an error to
+   * avoid flooding the log stream during long-running outages.
+   */
+  static readonly SATURATED_LOG_EVERY_N = 30;
 }
