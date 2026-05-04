@@ -2,52 +2,29 @@ import { flatten, parseScalar } from './configuration';
 
 describe('configuration', () => {
   describe('parseScalar', () => {
-    it('should parse "true" as boolean true', () => {
+    it('should parse "true"/"false" as booleans', () => {
       expect(parseScalar('true')).toBe(true);
-    });
-
-    it('should parse "TRUE" as boolean true (case-insensitive)', () => {
       expect(parseScalar('TRUE')).toBe(true);
-    });
-
-    it('should parse "True" as boolean true (case-insensitive)', () => {
       expect(parseScalar('True')).toBe(true);
-    });
-
-    it('should parse "false" as boolean false', () => {
       expect(parseScalar('false')).toBe(false);
-    });
-
-    it('should parse "FALSE" as boolean false (case-insensitive)', () => {
       expect(parseScalar('FALSE')).toBe(false);
-    });
-
-    it('should parse "False" as boolean false (case-insensitive)', () => {
       expect(parseScalar('False')).toBe(false);
+
+      expect(parseScalar('falsy')).toBe('falsy');
+      expect(parseScalar('truthy')).toBe('truthy');
     });
 
     it('should keep numeric strings as strings', () => {
       expect(parseScalar('8080')).toBe('8080');
       expect(parseScalar('0')).toBe('0');
       expect(parseScalar('3.14')).toBe('3.14');
-    });
-
-    it('should keep strings with leading zeros as strings', () => {
       expect(parseScalar('007')).toBe('007');
     });
 
     it('should keep regular strings as strings', () => {
       expect(parseScalar('hello')).toBe('hello');
       expect(parseScalar('http://localhost:5984')).toBe('http://localhost:5984');
-    });
-
-    it('should keep empty string as string', () => {
       expect(parseScalar('')).toBe('');
-    });
-
-    it('should not treat "falsy" or "truthy" as booleans', () => {
-      expect(parseScalar('falsy')).toBe('falsy');
-      expect(parseScalar('truthy')).toBe('truthy');
     });
   });
 
