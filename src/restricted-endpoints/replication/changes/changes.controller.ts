@@ -123,15 +123,22 @@ export class ChangesController {
     }
 
     const duration = Date.now() - startTime;
-    const details =
-      `db="${db}" user="${userName}" duration=${duration}ms ` +
-      `iterations=${iterations} fetched=${totalFetched} ` +
-      `permitted=${change.results.length} lost=${change.lostPermissions?.length ?? 0} ` +
-      `since=${params?.since ?? 'undefined'} limit=${params?.limit ?? 'none'} pending=${change.pending}`;
+    const details = {
+      db,
+      user: userName,
+      duration,
+      iterations,
+      fetched: totalFetched,
+      permitted: change.results.length,
+      lost: change.lostPermissions?.length ?? 0,
+      since: params?.since ?? 'undefined',
+      limit: params?.limit ?? 'none',
+      pending: change.pending,
+    };
     if (duration > 2000 || iterations > 2) {
-      this.logger.warn(`_changes request slow: ${details}`);
+      this.logger.warn('_changes request slow', details);
     } else {
-      this.logger.debug(`_changes request completed: ${details}`);
+      this.logger.debug('_changes request completed', details);
     }
 
     return change;

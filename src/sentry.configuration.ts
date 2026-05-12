@@ -115,9 +115,9 @@ function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
         return null;
       }
 
-      // Group console-captured log messages by their static prefix
-      // (before the first colon) so dynamic details don't fragment issues.
-      if (event.logger === 'console' && event.message) {
+      // Group log messages by their static prefix (before the first colon)
+      // so dynamic details don't fragment issues.
+      if (event.message) {
         const prefixEnd = event.message.indexOf(':');
         if (prefixEnd > 0) {
           event.fingerprint = [event.message.substring(0, prefixEnd)];
