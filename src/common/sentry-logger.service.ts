@@ -45,7 +45,10 @@ export class SentryLogger extends ConsoleLogger {
     );
     const captureContext =
       extras.length > 0
-        ? { level, extra: { details: extras.length === 1 ? extras[0] : extras } }
+        ? {
+            level,
+            extra: { details: extras.length === 1 ? extras[0] : extras },
+          }
         : { level };
 
     if (error) {

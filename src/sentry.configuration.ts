@@ -116,7 +116,7 @@ function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
       }
 
       // Group log messages by their static prefix (before the first colon)
-+     // so dynamic details don't fragment issues.
+      // so dynamic details don't fragment issues.
       if (event.message) {
         const prefixEnd = event.message.indexOf(':');
         if (prefixEnd > 0) {
