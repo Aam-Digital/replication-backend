@@ -34,10 +34,24 @@ export class SentryLogger extends ConsoleLogger {
     // it as an exception so Sentry shows the proper stack trace.
     // Otherwise just send the message text.
     const error = [message, ...optionalParams].find((p) => p instanceof Error);
+
+    // Collect any object params (including additional Errors) as structured
+    // metadata so callers can pass a constant message (for stable Sentry
+    // grouping) and still attach per-event details as `extra` data.
+    // Exclude only the Error we hand to `captureException` to avoid
+    // duplicating it.
+    const extras = optionalParams.filter(
+      (p) => p && typeof p === 'object' && p !== error,
+    );
+    const captureContext =
+      extras.length > 0
+        ? { level, extra: { details: extras.length === 1 ? extras[0] : extras } }
+        : { level };
+
     if (error) {
-      Sentry.captureException(error, { level });
+      Sentry.captureException(error, captureContext);
     } else {
-      Sentry.captureMessage(String(message), level);
+      Sentry.captureMessage(String(message), captureContext);
     }
   }
 }

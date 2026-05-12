@@ -136,13 +136,9 @@ export class ChangesController {
       pending: change.pending,
     };
     if (duration > 2000 || iterations > 2) {
-      this.logger.warn(
-        `_changes request slow: ${JSON.stringify(details)}`,
-      );
+      this.logger.warn('_changes request slow', details);
     } else {
-      this.logger.debug(
-        `_changes request completed: ${JSON.stringify(details)}`,
-      );
+      this.logger.debug('_changes request completed', details);
     }
 
     return change;
