@@ -12,16 +12,48 @@ interface SentryConfiguration {
   DSN: string;
   INSTANCE_NAME: string;
   ENVIRONMENT: string;
+  TRACES_SAMPLE_RATE: number;
+}
+
+const DEFAULT_TRACES_SAMPLE_RATE = 0.02;
+
+function parseSampleRate(
+  value: unknown,
+  envName: string,
+  fallback: number,
+): number {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string'
+        ? Number(value)
+        : Number.NaN;
+
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    logger.warn(
+      `Invalid ${envName} value "${String(value)}". Falling back to ${fallback}. Expected a number between 0.0 and 1.0.`,
+    );
+    return fallback;
+  }
+
+  return parsed;
 }
 
 function loadSentryConfiguration(
   configService: ConfigService,
 ): SentryConfiguration {
+  const tracesSampleRate = parseSampleRate(
+    configService.get('SENTRY_TRACES_SAMPLE_RATE', DEFAULT_TRACES_SAMPLE_RATE),
+    'SENTRY_TRACES_SAMPLE_RATE',
+    DEFAULT_TRACES_SAMPLE_RATE,
+  );
+
   return {
     ENABLED: configService.get<boolean>('SENTRY_ENABLED', false),
     DSN: configService.get('SENTRY_DSN', ''),
     INSTANCE_NAME: configService.get('SENTRY_INSTANCE_NAME', ''),
     ENVIRONMENT: configService.get('SENTRY_ENVIRONMENT', ''),
+    TRACES_SAMPLE_RATE: tracesSampleRate,
   };
 }
 
@@ -63,7 +95,7 @@ export function initSentry(configService: ConfigService): boolean {
   }
 
   logger.log(
-    `Sentry initialized (environment="${sentryConfiguration.ENVIRONMENT}", instance="${sentryConfiguration.INSTANCE_NAME}").`,
+    `Sentry initialized (environment="${sentryConfiguration.ENVIRONMENT}", instance="${sentryConfiguration.INSTANCE_NAME}", tracesSampleRate=${sentryConfiguration.TRACES_SAMPLE_RATE}).`,
   );
   return true;
 }
@@ -101,7 +133,7 @@ function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
       Sentry.httpIntegration(),
     ],
     // Performance Monitoring
-    tracesSampleRate: 1.0, //  Capture 100% of the transactions
+    tracesSampleRate: sentryConfiguration.TRACES_SAMPLE_RATE,
     // Set sampling rate for profiling - this is relative to tracesSampleRate
     profilesSampleRate: 1.0,
 
