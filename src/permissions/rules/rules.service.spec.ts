@@ -373,7 +373,12 @@ describe('RulesService', () => {
       .mockReturnValueOnce(of(testPermission));
 
     const { freshService } = await buildFreshService({ get });
-    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+    const warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => {});
+    const logSpy = jest
+      .spyOn(Logger.prototype, 'log')
+      .mockImplementation(() => {});
 
     const initPromise = freshService.onModuleInit();
 
@@ -383,6 +388,17 @@ describe('RulesService', () => {
 
     expect(get).toHaveBeenCalledTimes(3);
     expect(freshService.getRulesForUser(normalUser)).toEqual(userRules);
+    expect(logSpy).toHaveBeenCalledWith(
+      'Failed to load initial permissions; retrying.',
+      expect.objectContaining({
+        db: DATABASE_NAME,
+        isTransient: true,
+      }),
+    );
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      'Failed to load initial permissions; retrying.',
+      expect.anything(),
+    );
 
     jest.useRealTimers();
   });
@@ -404,7 +420,9 @@ describe('RulesService', () => {
 
     const { freshService } = await buildFreshService({ get });
     jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
-    jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => {});
 
     const initPromise = freshService.onModuleInit();
     // Catch eagerly so unhandled-rejection warnings do not leak between tests.
@@ -415,6 +433,9 @@ describe('RulesService', () => {
     const error = await initResult;
 
     expect(error).toBeInstanceOf(HttpException);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('CRITICAL: gave up loading initial permissions'),
+    );
     // No permission config was ever loaded — getRulesForUser must deny all.
     expect(freshService.getRulesForUser(normalUser)).toEqual([]);
 

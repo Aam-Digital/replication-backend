@@ -10,6 +10,7 @@ import { get, has } from 'lodash';
 import { firstValueFrom } from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
 import { ExponentialBackoff } from '../../common/exponential-backoff';
+import { isLikelyTransientError } from '../../common/http-error-classification';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { DocumentChangesService } from '../../couchdb/document-changes.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
@@ -101,9 +102,19 @@ export class RulesService implements OnModuleInit {
         }
         lastError = error;
         const delay = backoff.recordFailure();
-        this.logger.warn(
-          `Failed to load initial permissions from ${db} (will retry in ${delay}ms): ${error instanceof Error ? error.message : String(error)}`,
-        );
+        const isTransient = isLikelyTransientError(error);
+        const message = 'Failed to load initial permissions; retrying.';
+        const logContext = {
+          db,
+          retryDelayMs: delay,
+          isTransient,
+          lastError: error instanceof Error ? error.message : String(error),
+        };
+        if (isTransient) {
+          this.logger.log(message, logContext);
+        } else {
+          this.logger.warn(message, logContext);
+        }
       }
 
       // The change feed may have populated `this.permission` while we were

@@ -18,6 +18,10 @@ import {
 } from 'rxjs';
 import { ExponentialBackoff } from '../common/exponential-backoff';
 import {
+  isAuthHttpError,
+  isLikelyTransientError,
+} from '../common/http-error-classification';
+import {
   ChangeResult,
   ChangesResponse,
 } from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
@@ -43,13 +47,6 @@ export class DocumentChangesService implements OnModuleDestroy {
       return `HttpException ${err.getStatus()}: ${detail}`;
     }
     return (err as Error)?.stack || String(err);
-  }
-
-  private isAuthError(err: unknown): boolean {
-    return (
-      err instanceof HttpException &&
-      (err.getStatus() === 401 || err.getStatus() === 403)
-    );
   }
 
   onModuleDestroy(): void {
@@ -141,16 +138,25 @@ export class DocumentChangesService implements OnModuleDestroy {
     backoff: ExponentialBackoff,
   ): void {
     const failureCount = backoff.failureCount;
-    const isAuth = this.isAuthError(err);
-    const baseMessage = isAuth
-      ? `CouchDB rejected the configured credentials on the changes feed for "${db}" ` +
-        `(failure #${failureCount}). Verify DATABASE_USER, DATABASE_PASSWORD and DATABASE_URL — ` +
-        `the service may be talking to the wrong CouchDB instance. ` +
-        `Last error: ${this.formatError(err)}`
-      : `Changes feed error for "${db}" (failure #${failureCount}): ${this.formatError(err)}`;
+    const isAuth = isAuthHttpError(err);
+    const isTransient = isLikelyTransientError(err);
+    const message = isAuth
+      ? 'Changes feed authentication failed. Verify DATABASE_USER, DATABASE_PASSWORD, and DATABASE_URL.'
+      : 'Changes feed request failed.';
+    const logContext = {
+      db,
+      failureCount,
+      isAuth,
+      isTransient,
+      lastError: this.formatError(err),
+    };
 
     if (!backoff.isSaturated) {
-      this.logger.warn(baseMessage);
+      if (isTransient && !isAuth) {
+        this.logger.log(message, logContext);
+      } else {
+        this.logger.warn(message, logContext);
+      }
       return;
     }
 
@@ -158,7 +164,7 @@ export class DocumentChangesService implements OnModuleDestroy {
       backoff.justSaturated ||
       failureCount % DocumentChangesService.SATURATED_LOG_EVERY_N === 0
     ) {
-      this.logger.error(`SUSTAINED OUTAGE: ${baseMessage}`);
+      this.logger.error(`SUSTAINED OUTAGE: ${message}`, logContext);
     }
   }
 
