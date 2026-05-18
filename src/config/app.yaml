@@ -6,3 +6,4 @@ SENTRY:
   INSTANCE_NAME: local-development # can be personalised in .env -> local-development-<your-name>
   ENVIRONMENT: local # local | development | production
   DSN: ''
+  TRACES_SAMPLE_RATE: 0.02 # 2% transaction sampling to control Sentry ingestion costs
