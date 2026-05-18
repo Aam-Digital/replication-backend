@@ -171,13 +171,13 @@ describe('DocumentChangesService', () => {
     jest.useRealTimers();
   });
 
-  it('logs feed errors as warnings during backoff and escalates to error once saturated', () => {
+  it('logs non-transient feed errors as warnings during backoff and escalates to error once saturated', () => {
     jest.useFakeTimers();
 
     jest
       .spyOn(mockCouchdbService, 'get')
       .mockReturnValue(
-        throwError(() => new HttpException('Bad Gateway', 502)) as any,
+        throwError(() => new HttpException('Bad Request', 400)) as any,
       );
 
     const warnSpy = jest
@@ -198,6 +198,52 @@ describe('DocumentChangesService', () => {
     // The first saturated failure (#7) should be logged as an error.
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining('SUSTAINED OUTAGE'),
+      expect.objectContaining({
+        db: 'app',
+        failureCount: 7,
+        isAuth: false,
+      }),
+    );
+    expect(errorSpy.mock.calls.length).toBe(1);
+
+    jest.useRealTimers();
+  });
+
+  it('logs transient feed errors at info level during backoff and escalates to error once saturated', () => {
+    jest.useFakeTimers();
+
+    jest
+      .spyOn(mockCouchdbService, 'get')
+      .mockReturnValue(
+        throwError(() => new HttpException('Bad Gateway', 502)) as any,
+      );
+
+    const logSpy = jest
+      .spyOn((service as any).logger, 'log')
+      .mockImplementation(() => undefined);
+    const warnSpy = jest
+      .spyOn((service as any).logger, 'warn')
+      .mockImplementation(() => undefined);
+    const errorSpy = jest
+      .spyOn((service as any).logger, 'error')
+      .mockImplementation(() => undefined);
+
+    service.getChanges('app').subscribe({ error: () => undefined });
+
+    // Backoff sequence with initial=1s, max=60s: 1s, 2s, 4s, 8s, 16s, 32s, 60s, 60s, ...
+    // Cumulative wait to reach the first saturated retry (#7): 1+2+4+8+16+32 = 63s.
+    jest.advanceTimersByTime(70_000);
+
+    expect(logSpy.mock.calls.length).toBeGreaterThanOrEqual(6);
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('SUSTAINED OUTAGE'),
+      expect.objectContaining({
+        db: 'app',
+        failureCount: 7,
+        isAuth: false,
+        isTransient: true,
+      }),
     );
     expect(errorSpy.mock.calls.length).toBe(1);
 
