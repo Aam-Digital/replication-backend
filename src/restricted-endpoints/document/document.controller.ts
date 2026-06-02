@@ -36,9 +36,9 @@ import { DocumentWriteService } from './document-write.service';
 @Controller('/:db/:docId')
 export class DocumentController {
   constructor(
-    private couchdbService: CouchdbService,
-    private permissionService: PermissionService,
-    private documentWriteService: DocumentWriteService,
+    private readonly couchdbService: CouchdbService,
+    private readonly permissionService: PermissionService,
+    private readonly documentWriteService: DocumentWriteService,
   ) {}
 
   /**

@@ -26,9 +26,9 @@ import { QueryParams } from '../replication/bulk-document/couchdb-dtos/document.
 @Injectable()
 export class DocumentWriteService {
   constructor(
-    private couchdbService: CouchdbService,
-    private permissionService: PermissionService,
-    private auditService: AuditService,
+    private readonly couchdbService: CouchdbService,
+    private readonly permissionService: PermissionService,
+    private readonly auditService: AuditService,
   ) {}
 
   async putDocument(

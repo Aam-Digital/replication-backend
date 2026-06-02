@@ -54,8 +54,8 @@ export class AuditService {
   private readonly ensuredDbs = new Set<string>();
 
   constructor(
-    private couchdbService: CouchdbService,
-    private configService: ConfigService,
+    private readonly couchdbService: CouchdbService,
+    private readonly configService: ConfigService,
   ) {}
 
   get enabled(): boolean {
@@ -104,9 +104,15 @@ export class AuditService {
       const records: AuditRecord[] = [];
 
       for (const entry of relevant) {
-        // entityId is guaranteed by the isReplicableId filter above
-        const entityId = entry.newDoc._id as string;
-        if (entry.existingDoc && (await this.needsBaseline(auditDb, entry))) {
+        const entityId = entry.newDoc._id;
+        if (!entityId) {
+          // guaranteed by the isReplicableId filter above; narrows the type
+          continue;
+        }
+        if (
+          entry.existingDoc &&
+          (await this.needsBaseline(auditDb, entityId, entry))
+        ) {
           records.push(
             this.buildBaseline(
               db,
@@ -139,12 +145,13 @@ export class AuditService {
    */
   private async needsBaseline(
     auditDb: string,
+    entityId: string,
     entry: AuditEntry,
   ): Promise<boolean> {
     if (!entry.existingDoc || entry.operation === 'create') {
       return false;
     }
-    return this.isFirstAuditFor(auditDb, entry.newDoc._id as string);
+    return this.isFirstAuditFor(auditDb, entityId);
   }
 
   /**
@@ -223,12 +230,7 @@ export class AuditService {
    */
   private parentRevOf(doc: DatabaseDocument): string | undefined {
     const revisions = doc?._revisions;
-    if (
-      !revisions ||
-      !revisions.ids ||
-      revisions.ids.length < 2 ||
-      revisions.start < 1
-    ) {
+    if (!revisions?.ids || revisions.ids.length < 2 || revisions.start < 1) {
       return undefined;
     }
     return `${revisions.start - 1}-${revisions.ids[1]}`;

@@ -33,10 +33,10 @@ import { AuditEntry } from '../../../audit/audit-record.dto';
 @Injectable()
 export class BulkDocumentService {
   constructor(
-    private permissionService: PermissionService,
-    private couchdbService: CouchdbService,
-    private documentFilter: DocumentFilterService,
-    private auditService: AuditService,
+    private readonly permissionService: PermissionService,
+    private readonly couchdbService: CouchdbService,
+    private readonly documentFilter: DocumentFilterService,
+    private readonly auditService: AuditService,
   ) {}
 
   filterBulkGetResponse(
@@ -158,10 +158,11 @@ export class BulkDocumentService {
       new_edits: request.new_edits,
       docs: request.docs.filter(
         (doc) =>
-          this.documentFilter.isReplicable(doc._id!) &&
+          !!doc._id &&
+          this.documentFilter.isReplicable(doc._id) &&
           this.hasPermissionsForDoc(
             doc,
-            doc._id ? existingDocs.get(doc._id) : undefined,
+            existingDocs.get(doc._id),
             ability,
           ),
       ),
@@ -221,11 +222,19 @@ export class BulkDocumentService {
       return null;
     }
     const existingDoc = existingDocs.get(id);
+    let operation: AuditEntry['operation'];
+    if (doc._deleted) {
+      operation = 'delete';
+    } else if (existingDoc) {
+      operation = 'update';
+    } else {
+      operation = 'create';
+    }
     return {
       existingDoc,
       newDoc: doc,
       newRev: newEditsFalse ? doc._rev : revById.get(id),
-      operation: doc._deleted ? 'delete' : existingDoc ? 'update' : 'create',
+      operation,
     };
   }
 
@@ -236,7 +245,8 @@ export class BulkDocumentService {
       warning: request.warning,
       docs: request.docs.filter(
         (doc) =>
-          this.documentFilter.isReplicable(doc._id!) &&
+          !!doc._id &&
+          this.documentFilter.isReplicable(doc._id) &&
           ability.can('read', doc),
       ),
     };

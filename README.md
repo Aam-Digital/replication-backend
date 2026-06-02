@@ -97,7 +97,7 @@ sees every revision a client pushes, it is the right place to record this: the
 "who" and the server-set timestamp are trustworthy, and conflicting branches
 from concurrent/multi-device edits are captured.
 
-**How it works**
+### How it works
 
 - Enabled via the `AUDIT_ENABLED` environment variable (default `false`). When
   disabled the feature is a complete no-op — no behavior change on any write path.
@@ -119,7 +119,7 @@ from concurrent/multi-device edits are captured.
 - **Protection:** a global guard rejects any client request whose database
   ends in `-audit`, so audit data cannot be read or modified through the proxy.
 
-**Known limitation**
+### Known limitation
 
 Only revisions _pushed_ by clients are captured. PouchDB sends only **leaf**
 revisions with their ancestry, so intermediate same-device/offline edits never
