@@ -20,15 +20,11 @@ import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth
 import { User } from '../../auth/user.decorator';
 import { QueryParams } from '../replication/bulk-document/couchdb-dtos/document.dto';
 import { CouchdbService } from '../../couchdb/couchdb.service';
-import {
-  DocumentAbility,
-  PermissionService,
-} from '../../permissions/permission/permission.service';
+import { PermissionService } from '../../permissions/permission/permission.service';
 import { firstValueFrom, map, Observable, tap, throwError } from 'rxjs';
-import { permittedFieldsOf } from '@casl/ability/extra';
-import { pick } from 'lodash';
 import { Request as Req } from 'express';
 import { AxiosResponse } from 'axios';
+import { DocumentWriteService } from './document-write.service';
 
 /**
  * This controller implements endpoints to interact with single documents of a database.
@@ -42,6 +38,7 @@ export class DocumentController {
   constructor(
     private couchdbService: CouchdbService,
     private permissionService: PermissionService,
+    private documentWriteService: DocumentWriteService,
   ) {}
 
   /**
@@ -129,62 +126,20 @@ export class DocumentController {
    * @param user logged in user
    */
   @Put()
-  async putDocument(
+  putDocument(
     @Request() req: Req,
     @Param('db') db: string,
     @Param('docId') docId: string,
     @Body() document: DatabaseDocument,
     @User() user: UserInfo,
   ): Promise<DocSuccess> {
-    document._id = docId;
-
-    const existingDoc = await firstValueFrom(
-      this.couchdbService.get(db, docId),
-    ).catch(() => undefined); // Doc does not exist
-
-    if (!existingDoc) {
-      // Creating
-      if (
-        !(await this.permissionService.isAllowedTo(
-          'create',
-          document,
-          user,
-          db,
-        ))
-      ) {
-        throw new UnauthorizedException(
-          'unauthorized',
-          'User is not permitted',
-        );
-      }
-
-      return firstValueFrom(this.couchdbService.put(db, document));
-    } else {
-      // Updating
-      if (
-        !(await this.permissionService.isAllowedTo(
-          'update',
-          existingDoc,
-          user,
-          db,
-        ))
-      ) {
-        throw new UnauthorizedException(
-          'unauthorized',
-          'User is not permitted',
-        );
-      }
-
-      const finalDoc = this.applyPermissions(
-        this.permissionService.getAbilityFor(user),
-        existingDoc,
-        document,
-      );
-      if (req.header('if-match')) {
-        document._rev = req.header('if-match');
-      }
-      return firstValueFrom(this.couchdbService.put(db, finalDoc));
-    }
+    return this.documentWriteService.putDocument(
+      db,
+      docId,
+      document,
+      user,
+      req.header('if-match'),
+    );
   }
 
   /**
@@ -196,52 +151,18 @@ export class DocumentController {
    * @param queryParams additional params that will be forwarded
    */
   @Delete()
-  async deleteDocument(
+  deleteDocument(
     @Param('db') db: string,
     @Param('docId') docId: string,
     @User() user: UserInfo,
     @Query() queryParams?: QueryParams,
   ) {
-    const document = await firstValueFrom(
-      this.couchdbService.get(db, docId, queryParams),
+    return this.documentWriteService.deleteDocument(
+      db,
+      docId,
+      user,
+      queryParams,
     );
-
-    if (
-      await this.permissionService.isAllowedTo('delete', document, user, db)
-    ) {
-      return firstValueFrom(this.couchdbService.delete(db, docId, queryParams));
-    } else {
-      throw new UnauthorizedException('unauthorized', 'User is not permitted');
-    }
-  }
-
-  /**
-   * Selectively apply changed properties only if the user has permissions for that specific property.
-   *
-   * Properties that the given user is not allowed to change are simply omitted, no error is thrown if trying to change them.
-   *
-   * @param userAbility
-   * @param oldDoc
-   * @param newDoc
-   * @private
-   */
-  private applyPermissions(
-    // TODO: (property-based write) what about bulkPost writes in replication-endpoint - they should also use these rules?
-    userAbility: DocumentAbility,
-    oldDoc: DatabaseDocument,
-    newDoc: DatabaseDocument,
-  ): DatabaseDocument {
-    const permittedFields = permittedFieldsOf(userAbility, 'update', oldDoc, {
-      fieldsFrom: (rule) => rule.fields || [],
-    });
-    if (permittedFields.length > 0) {
-      // Updating some properties
-      const updatedFields = pick(newDoc, permittedFields);
-      return Object.assign(oldDoc, updatedFields);
-    } else {
-      // Updating whole document
-      return newDoc;
-    }
   }
 
   private forwardHeader(res: AxiosResponse, req: Req, headers: string[]): void {

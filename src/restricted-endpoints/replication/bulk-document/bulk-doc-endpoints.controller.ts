@@ -55,15 +55,7 @@ export class BulkDocEndpointsController {
     @Body() body: BulkDocsRequest,
     @User() user: UserInfo,
   ): Observable<BulkDocsResponse> {
-    return from(this.documentFilter.filterBulkDocsRequest(body, user, db)).pipe(
-      switchMap((filteredBody) =>
-        this.couchdbService.post<BulkDocsResponse>(
-          db,
-          '_bulk_docs',
-          filteredBody,
-        ),
-      ),
-    );
+    return from(this.documentFilter.handleBulkDocs(body, user, db));
   }
 
   /**

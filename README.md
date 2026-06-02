@@ -86,6 +86,51 @@ A swagger / OpenAPI interface can be visited at `/api/` which shows all endpoint
 Additionally, a separate check on the client side is necessary that cleans up the local database whenever a client looses read permissions for a document.
 A example for how this could look can be found [here](https://github.com/Aam-Digital/ndb-core/blob/master/src/app/core/permissions/permission-enforcer/permission-enforcer.service.ts).
 
+## Audit / Changelog Recording
+
+The backend can record a tamper-resistant change log of every entity write, so
+that "what changed, by whom and when" can be reconstructed for audit/legal
+purposes (see [issue #4026](https://github.com/Aam-Digital/ndb-core/issues/4026)).
+
+Because the proxy holds the authenticated Keycloak identity at write time and
+sees every revision a client pushes, it is the right place to record this: the
+"who" and the server-set timestamp are trustworthy, and conflicting branches
+from concurrent/multi-device edits are captured.
+
+**How it works**
+
+- Enabled via the `AUDIT_ENABLED` environment variable (default `false`). When
+  disabled the feature is a complete no-op — no behavior change on any write path.
+- On each successful write (bulk `_bulk_docs` replication, single `PUT`, and
+  `DELETE`), one record is written to a separate database derived from the
+  source db name: writes to `app` are recorded in `app-audit`. The convention
+  is hard-wired, and each `<db>-audit` database is auto-created on first write.
+- A record contains: the changed `entityId`, source `database`, `operation`
+  (`create` / `update` / `delete` / `baseline`), the new `rev` and its
+  `parentRev`, a **server-set** `timestamp`, the **authenticated** `user`
+  (`{ id, name, roles }`), and a [`jsondiffpatch`](https://www.npmjs.com/package/jsondiffpatch)
+  `diff` of the change. The client's local `_updatedAt`/`_updatedBy` are kept
+  inside the diff; only internal CouchDB noise (`_rev`, `_revisions`,
+  `_conflicts`, `_attachments`) is excluded.
+- **Seamless activation:** the first change to an entity that has no prior audit
+  record additionally emits a full-snapshot `baseline` record, so history is not
+  lost when the feature is switched on for an existing system. No migration is
+  needed.
+- **Protection:** a global guard rejects any client request whose database
+  ends in `-audit`, so audit data cannot be read or modified through the proxy.
+
+**Known limitation**
+
+Only revisions *pushed* by clients are captured. PouchDB sends only **leaf**
+revisions with their ancestry, so intermediate same-device/offline edits never
+reach the backend and cannot be audited by any backend component. The genuine
+guarantee is conflict-branch capture and a trustworthy authenticated author and
+server timestamp — not a complete per-keystroke history.
+
+The CouchDB admin reverse proxy at `/couchdb/` (admin-only) is outside this
+denylist; audit protection relies on CouchDB only being reachable via the proxy
+on the internal network.
+
 # Development
 
 This system is Node.js application built with the [NestJS](https://nestjs.com/) framework.

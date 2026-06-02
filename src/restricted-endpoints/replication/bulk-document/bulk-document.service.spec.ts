@@ -13,6 +13,7 @@ import {
   DatabaseDocument,
 } from './couchdb-dtos/bulk-docs.dto';
 import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
+import { AuditService } from '../../../audit/audit.service';
 
 describe('BulkDocumentService', () => {
   let service: BulkDocumentService;
@@ -21,8 +22,10 @@ describe('BulkDocumentService', () => {
   let childDoc: DatabaseDocument;
   let mockRulesService: RulesService;
   let mockCouchDBService: CouchdbService;
+  let mockAuditService: { record: jest.Mock };
 
   beforeEach(async () => {
+    mockAuditService = { record: jest.fn() };
     mockRulesService = {
       getRulesForUser: () => [
         { action: 'update', subject: 'Child' },
@@ -44,6 +47,7 @@ describe('BulkDocumentService', () => {
         { provide: ConfigService, useValue: { get: () => undefined } },
         { provide: RulesService, useValue: mockRulesService },
         { provide: CouchdbService, useValue: mockCouchDBService },
+        { provide: AuditService, useValue: mockAuditService },
       ],
     }).compile();
 
@@ -274,6 +278,82 @@ describe('BulkDocumentService', () => {
     );
 
     expect(result.docs.map((d) => d._id)).toEqual([schoolDoc._id]);
+  });
+
+  it('writes filtered docs and audits them on handleBulkDocs (new_edits:false)', async () => {
+    const updatedChild = getChildDoc();
+    updatedChild._rev = '2-new';
+    const request: BulkDocsRequest = {
+      new_edits: false,
+      docs: [updatedChild],
+    };
+    jest.spyOn(mockCouchDBService, 'post').mockImplementation((_db, path) => {
+      if (path === '_all_docs') {
+        return of(createAllDocsResponse(getChildDoc()));
+      }
+      // _bulk_docs with new_edits:false returns only failures (none here)
+      return of([]);
+    });
+
+    await service.handleBulkDocs(request, normalUser, 'app');
+
+    expect(mockAuditService.record).toHaveBeenCalledTimes(1);
+    const [db, entries, user] = mockAuditService.record.mock.calls[0];
+    expect(db).toBe('app');
+    expect(user).toBe(normalUser);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].operation).toBe('update');
+    expect(entries[0].newRev).toBe('2-new');
+    expect(entries[0].existingDoc._id).toBe('Child:1');
+  });
+
+  it('audits with rev from the response on the new_edits:true path', async () => {
+    const newChild = getChildDoc();
+    const request: BulkDocsRequest = {
+      new_edits: true,
+      docs: [newChild],
+    };
+    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+      { action: 'create', subject: 'Child' },
+      { action: 'update', subject: 'Child' },
+    ]);
+    jest.spyOn(mockCouchDBService, 'post').mockImplementation((_db, path) => {
+      if (path === '_all_docs') {
+        // no existing doc -> create
+        return of({ total_rows: 0, offset: 0, rows: [] });
+      }
+      // _bulk_docs new_edits:true returns {ok, id, rev} per doc
+      return of([{ ok: true, id: 'Child:1', rev: '5-server' }]);
+    });
+
+    await service.handleBulkDocs(request, normalUser, 'app');
+
+    expect(mockAuditService.record).toHaveBeenCalledTimes(1);
+    const entries = mockAuditService.record.mock.calls[0][1];
+    expect(entries).toHaveLength(1);
+    expect(entries[0].operation).toBe('create');
+    expect(entries[0].newRev).toBe('5-server');
+  });
+
+  it('skips conflicted/errored docs when building audit entries', async () => {
+    const updatedChild = getChildDoc();
+    updatedChild._rev = '2-new';
+    const request: BulkDocsRequest = {
+      new_edits: false,
+      docs: [updatedChild],
+    };
+    jest.spyOn(mockCouchDBService, 'post').mockImplementation((_db, path) => {
+      if (path === '_all_docs') {
+        return of(createAllDocsResponse(getChildDoc()));
+      }
+      // _bulk_docs reports this doc as a conflict
+      return of([{ id: 'Child:1', error: 'conflict', reason: 'x', rev: '' }]);
+    });
+
+    await service.handleBulkDocs(request, normalUser, 'app');
+
+    expect(mockAuditService.record).toHaveBeenCalledTimes(1);
+    expect(mockAuditService.record.mock.calls[0][1]).toHaveLength(0);
   });
 
   function getSchoolDoc(): DatabaseDocument {

@@ -8,7 +8,10 @@ import {
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
+  BulkDocsResponse,
   DatabaseDocument,
+  DocError,
+  DocSuccess,
   FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
@@ -20,6 +23,8 @@ import { firstValueFrom } from 'rxjs';
 import { Ability } from '@casl/ability';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
+import { AuditService } from '../../../audit/audit.service';
+import { AuditEntry } from '../../../audit/audit-record.dto';
 
 /**
  * Handle bulk document requests with the remote CouchDB server
@@ -31,6 +36,7 @@ export class BulkDocumentService {
     private permissionService: PermissionService,
     private couchdbService: CouchdbService,
     private documentFilter: DocumentFilterService,
+    private auditService: AuditService,
   ) {}
 
   filterBulkGetResponse(
@@ -78,14 +84,50 @@ export class BulkDocumentService {
     };
   }
 
+  /**
+   * Filter, write and audit a bulk-docs request as one cohesive unit.
+   *
+   * The previously-fetched `existingDocs` (needed for permission checks) is
+   * reused as the "before" state for the audit diff, so it never leaves the
+   * service and the hot path fetches each existing doc only once.
+   */
+  async handleBulkDocs(
+    request: BulkDocsRequest,
+    user: UserInfo,
+    db: string,
+  ): Promise<BulkDocsResponse> {
+    const existingDocs = await this.fetchExistingDocs(request.docs, db);
+    const filtered = this.filterDocs(request, user, existingDocs);
+    const response = await firstValueFrom(
+      this.couchdbService.post<BulkDocsResponse>(db, '_bulk_docs', filtered),
+    );
+    await this.auditService.record(
+      db,
+      this.buildAuditEntries(filtered, existingDocs, response),
+      user,
+    );
+    return response;
+  }
+
   async filterBulkDocsRequest(
     request: BulkDocsRequest,
     user: UserInfo,
     db: string,
   ): Promise<BulkDocsRequest> {
-    const ability = this.permissionService.getAbilityFor(user);
+    const existingDocs = await this.fetchExistingDocs(request.docs, db);
+    return this.filterDocs(request, user, existingDocs);
+  }
+
+  /**
+   * Fetch the current revision of every doc in the request (for permission
+   * checks and as the audit "before" state), keyed by `_id`.
+   */
+  private async fetchExistingDocs(
+    docs: DatabaseDocument[],
+    db: string,
+  ): Promise<Map<string, DatabaseDocument>> {
     const allDocsRequest: AllDocsRequest = {
-      keys: request.docs.map((doc) => doc._id!),
+      keys: docs.map((doc) => doc._id).filter((id): id is string => !!id),
     };
     const response = await firstValueFrom(
       this.couchdbService.post<AllDocsResponse>(
@@ -97,6 +139,21 @@ export class BulkDocumentService {
         },
       ),
     );
+    const existingDocs = new Map<string, DatabaseDocument>();
+    for (const row of response.rows ?? []) {
+      if (row.doc) {
+        existingDocs.set(row.id, row.doc);
+      }
+    }
+    return existingDocs;
+  }
+
+  private filterDocs(
+    request: BulkDocsRequest,
+    user: UserInfo,
+    existingDocs: Map<string, DatabaseDocument>,
+  ): BulkDocsRequest {
+    const ability = this.permissionService.getAbilityFor(user);
     return {
       new_edits: request.new_edits,
       docs: request.docs.filter(
@@ -104,12 +161,56 @@ export class BulkDocumentService {
           this.documentFilter.isReplicable(doc._id!) &&
           this.hasPermissionsForDoc(
             doc,
-            response.rows.find((responseDoc) => responseDoc.id === doc._id)
-              ?.doc ?? undefined,
+            doc._id ? existingDocs.get(doc._id) : undefined,
             ability,
           ),
       ),
     };
+  }
+
+  /**
+   * Build the audit entries for the successfully written docs.
+   *
+   * `new_edits === false` (PouchDB push): CouchDB returns ONLY failed docs, so
+   * a doc is successful when absent from the error list and its new `_rev`
+   * comes from the submitted body. Otherwise the response carries `{ok, rev}`
+   * per doc and the rev comes from there. Conflicts/errors are skipped in both.
+   */
+  private buildAuditEntries(
+    filtered: BulkDocsRequest,
+    existingDocs: Map<string, DatabaseDocument>,
+    response: BulkDocsResponse,
+  ): AuditEntry[] {
+    const errorIds = new Set<string>();
+    const revById = new Map<string, string>();
+    for (const result of response ?? []) {
+      if ((result as DocError).error) {
+        errorIds.add(result.id);
+      } else {
+        revById.set(result.id, (result as DocSuccess).rev);
+      }
+    }
+
+    const entries: AuditEntry[] = [];
+    for (const doc of filtered.docs) {
+      const id = doc._id;
+      if (!id) {
+        continue;
+      }
+      const succeeded =
+        filtered.new_edits === false ? !errorIds.has(id) : revById.has(id);
+      if (!succeeded) {
+        continue;
+      }
+      const existingDoc = existingDocs.get(id);
+      entries.push({
+        existingDoc,
+        newDoc: doc,
+        newRev: filtered.new_edits === false ? doc._rev : revById.get(id),
+        operation: doc._deleted ? 'delete' : existingDoc ? 'update' : 'create',
+      });
+    }
+    return entries;
   }
 
   filterFindResponse(request: FindResponse, user: UserInfo): FindResponse {
