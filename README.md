@@ -121,7 +121,7 @@ from concurrent/multi-device edits are captured.
 
 **Known limitation**
 
-Only revisions *pushed* by clients are captured. PouchDB sends only **leaf**
+Only revisions _pushed_ by clients are captured. PouchDB sends only **leaf**
 revisions with their ancestry, so intermediate same-device/offline edits never
 reach the backend and cannot be audited by any backend component. The genuine
 guarantee is conflict-branch capture and a trustworthy authenticated author and
