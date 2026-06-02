@@ -8,10 +8,7 @@ import {
 
 const user = new UserInfo('user-id', 'User:1', ['admin']);
 
-function makeService(opts?: {
-  existingDoc?: any;
-  ability?: DocumentAbility;
-}) {
+function makeService(opts?: { existingDoc?: any; ability?: DocumentAbility }) {
   const couchdb = {
     get: jest
       .fn()
@@ -62,7 +59,12 @@ it('records an update with the deep-cloned before-state (pre-mutation)', async (
   const existingDoc = { _id: 'Child:1', _rev: '1-a', name: 'A' };
   const { service, audit } = makeService({ existingDoc, ability });
 
-  await service.putDocument('app', 'Child:1', { _id: 'Child:1', name: 'B' }, user);
+  await service.putDocument(
+    'app',
+    'Child:1',
+    { _id: 'Child:1', name: 'B' },
+    user,
+  );
 
   const entry = audit.record.mock.calls[0][1][0];
   expect(entry.operation).toBe('update');

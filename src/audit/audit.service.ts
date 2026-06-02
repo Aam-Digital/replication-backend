@@ -154,14 +154,20 @@ export class AuditService {
     auditDb: string,
     entityId: string,
   ): Promise<boolean> {
-    const response = await firstValueFrom(
-      this.couchdbService.get<AllDocsResponse>(auditDb, '_all_docs', {
-        startkey: JSON.stringify(`${entityId}:`),
-        endkey: JSON.stringify(`${entityId}:￰`),
-        limit: 1,
-      }),
-    ).catch(() => undefined);
-    return !response?.rows || response.rows.length === 0;
+    try {
+      const response = await firstValueFrom(
+        this.couchdbService.get<AllDocsResponse>(auditDb, '_all_docs', {
+          startkey: JSON.stringify(`${entityId}:`),
+          endkey: JSON.stringify(`${entityId}:￰`),
+          limit: 1,
+        }),
+      );
+      return (response.rows?.length ?? 0) === 0;
+    } catch {
+      // a lookup failure must not synthesize a spurious baseline; assume the
+      // entity is already audited and skip the baseline
+      return false;
+    }
   }
 
   private buildBaseline(

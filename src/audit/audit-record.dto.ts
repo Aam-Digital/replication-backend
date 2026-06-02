@@ -42,7 +42,7 @@ export interface AuditEntry {
  * The persisted audit document, stored in the derived `<db>-audit` database.
  *
  * `_id` encodes the entity id and timestamp for performant per-entity range
- * queries: `<entityId>:<ISO-timestamp>:<short-new-rev>`.
+ * queries: `<entityId>:<ISO-timestamp>:<new-rev>`.
  */
 export interface AuditRecord {
   _id: string;
@@ -74,12 +74,9 @@ export function buildAuditId(
   timestamp: string,
   rev: string | undefined,
 ): string {
-  let shortRev = 'na';
-  if (rev) {
-    const [num, hash] = rev.split('-');
-    shortRev = hash ? `${num}-${hash.slice(0, 4)}` : num;
-  }
-  return `${entityId}:${timestamp}:${shortRev}`;
+  // full rev (not shortened) so records in a single same-timestamp batch
+  // never collide on `_id`
+  return `${entityId}:${timestamp}:${rev ?? 'na'}`;
 }
 
 /**

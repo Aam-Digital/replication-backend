@@ -148,7 +148,7 @@ export class DocumentWriteService {
   /**
    * Selectively apply changed properties only if the user has permissions for
    * that specific property. Properties the user may not change are omitted (no
-   * error). NOTE: for an update this mutates `oldDoc` in place.
+   * error). Caveat: for an update this mutates `oldDoc` in place.
    */
   private applyPermissions(
     userAbility: DocumentAbility,

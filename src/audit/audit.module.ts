@@ -15,10 +15,7 @@ import { AuditDbGuard } from './audit-db.guard';
 @Global()
 @Module({
   imports: [HttpModule],
-  providers: [
-    AuditService,
-    { provide: APP_GUARD, useClass: AuditDbGuard },
-  ],
+  providers: [AuditService, { provide: APP_GUARD, useClass: AuditDbGuard }],
   exports: [AuditService],
 })
 export class AuditModule {}

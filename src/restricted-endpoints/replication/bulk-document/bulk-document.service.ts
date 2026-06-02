@@ -181,6 +181,17 @@ export class BulkDocumentService {
     existingDocs: Map<string, DatabaseDocument>,
     response: BulkDocsResponse,
   ): AuditEntry[] {
+    const { errorIds, revById } = this.indexBulkResponse(response);
+    const newEditsFalse = filtered.new_edits === false;
+    return filtered.docs
+      .map((doc) =>
+        this.toAuditEntry(doc, existingDocs, errorIds, revById, newEditsFalse),
+      )
+      .filter((entry): entry is AuditEntry => entry !== null);
+  }
+
+  /** Index the `_bulk_docs` response into errored ids and successful revs. */
+  private indexBulkResponse(response: BulkDocsResponse) {
     const errorIds = new Set<string>();
     const revById = new Map<string, string>();
     for (const result of response ?? []) {
@@ -190,27 +201,32 @@ export class BulkDocumentService {
         revById.set(result.id, (result as DocSuccess).rev);
       }
     }
+    return { errorIds, revById };
+  }
 
-    const entries: AuditEntry[] = [];
-    for (const doc of filtered.docs) {
-      const id = doc._id;
-      if (!id) {
-        continue;
-      }
-      const succeeded =
-        filtered.new_edits === false ? !errorIds.has(id) : revById.has(id);
-      if (!succeeded) {
-        continue;
-      }
-      const existingDoc = existingDocs.get(id);
-      entries.push({
-        existingDoc,
-        newDoc: doc,
-        newRev: filtered.new_edits === false ? doc._rev : revById.get(id),
-        operation: doc._deleted ? 'delete' : existingDoc ? 'update' : 'create',
-      });
+  /** Build a single audit entry, or null if the doc was not successfully written. */
+  private toAuditEntry(
+    doc: DatabaseDocument,
+    existingDocs: Map<string, DatabaseDocument>,
+    errorIds: Set<string>,
+    revById: Map<string, string>,
+    newEditsFalse: boolean,
+  ): AuditEntry | null {
+    const id = doc._id;
+    if (!id) {
+      return null;
     }
-    return entries;
+    const succeeded = newEditsFalse ? !errorIds.has(id) : revById.has(id);
+    if (!succeeded) {
+      return null;
+    }
+    const existingDoc = existingDocs.get(id);
+    return {
+      existingDoc,
+      newDoc: doc,
+      newRev: newEditsFalse ? doc._rev : revById.get(id),
+      operation: doc._deleted ? 'delete' : existingDoc ? 'update' : 'create',
+    };
   }
 
   filterFindResponse(request: FindResponse, user: UserInfo): FindResponse {
