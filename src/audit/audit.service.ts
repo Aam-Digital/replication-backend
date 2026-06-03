@@ -10,6 +10,7 @@ import { AllDocsResponse } from '../restricted-endpoints/replication/bulk-docume
 import {
   AuditConfig,
   auditDbFor,
+  auditIdPrefix,
   isAuditDb,
   isReplicableId,
 } from './audit.config';
@@ -162,10 +163,11 @@ export class AuditService {
     entityId: string,
   ): Promise<boolean> {
     try {
+      const prefix = auditIdPrefix(entityId);
       const response = await firstValueFrom(
         this.couchdbService.get<AllDocsResponse>(auditDb, '_all_docs', {
-          startkey: JSON.stringify(`${entityId}:`),
-          endkey: JSON.stringify(`${entityId}:￰`),
+          startkey: JSON.stringify(`${prefix}:`),
+          endkey: JSON.stringify(`${prefix}:￰`),
           limit: 1,
         }),
       );

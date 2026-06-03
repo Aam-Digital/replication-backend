@@ -105,6 +105,12 @@ from concurrent/multi-device edits are captured.
   `DELETE`), one record is written to a separate database derived from the
   source db name: writes to `app` are recorded in `app-audit`. The convention
   is hard-wired, and each `<db>-audit` database is auto-created on first write.
+- Each record's `_id` is `ChangeAudit:<entityId>:<ISO-timestamp>:<rev>`. The
+  `ChangeAudit:` prefix is load-bearing: the proxy derives the CASL subject from
+  the `_id` prefix (`detectDocumentType` = `_id.split(':')[0]`), so audit records
+  are classified as the dedicated subject `ChangeAudit` — not as the source
+  entity (`Child`, ...). This is what keeps them un-forgeable and governed by a
+  single rule (see Protection).
 - A record contains: the changed `entityId`, source `database`, `operation`
   (`create` / `update` / `delete` / `baseline`), the new `rev` and its
   `parentRev`, a **server-set** `timestamp`, the **authenticated** `user`
@@ -116,8 +122,37 @@ from concurrent/multi-device edits are captured.
   record additionally emits a full-snapshot `baseline` record, so history is not
   lost when the feature is switched on for an existing system. No migration is
   needed.
-- **Protection:** a global guard rejects any client request whose database
-  ends in `-audit`, so audit data cannot be read or modified through the proxy.
+
+### Protection (read-only via the permission engine)
+
+There is no dedicated guard. The `<db>-audit` database is reachable through the
+normal proxy and governed entirely by CASL on the `ChangeAudit` subject:
+
+- The system's own audit writes use the proxy's admin credentials and are
+  written **directly** to CouchDB via `CouchdbService`, bypassing the
+  permission-checked endpoints — so recording always succeeds.
+- Any **client** write that targets a `ChangeAudit:` document (to the audit DB
+  _or_ a forged one in the main app DB) is dropped, because no rule grants
+  `create`/`update`/`delete` on `ChangeAudit`. Rules are global (keyed on the
+  subject, not the DB name), so this holds across `_bulk_docs` / `_all_docs` /
+  `_changes` / `_bulk_get` / `_find`.
+- A client **read** of audit records is allowed only where a
+  `{ subject: "ChangeAudit", action: "read" }` rule is granted (the proxy filters
+  reads via `ability.can('read', doc)`). This is what lets the history-viewing UI
+  (see [#4027](https://github.com/Aam-Digital/ndb-core/issues/4027)) read the
+  audit DB as an ordinary read-only remote database.
+
+> **Where the read rule lives:** the `ChangeAudit` read rule is part of the
+> application's permission config (the `Config:Permissions` document managed in
+> ndb-core), granted to privileged roles only — not hard-coded here. Without it,
+> the audit DB is invisible and immutable to clients (default-deny), which is the
+> safe default.
+>
+> **Documented trade-off:** whole-document read rules do not strip individual
+> fields, so a user permitted to read an audit record sees the entire diff, and
+> read permission is coarse (the single `ChangeAudit` subject). Mitigation: grant
+> the read rule only to privileged roles who already see full records.
+> Field-level redaction would require a bespoke read endpoint instead.
 
 ### Known limitation
 
@@ -127,9 +162,9 @@ reach the backend and cannot be audited by any backend component. The genuine
 guarantee is conflict-branch capture and a trustworthy authenticated author and
 server timestamp — not a complete per-keystroke history.
 
-The CouchDB admin reverse proxy at `/couchdb/` (admin-only) is outside this
-denylist; audit protection relies on CouchDB only being reachable via the proxy
-on the internal network.
+The CouchDB admin reverse proxy at `/couchdb/` (admin-only) bypasses the
+permission engine; audit protection relies on CouchDB only being reachable via
+the proxy on the internal network.
 
 # Development
 

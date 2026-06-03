@@ -1,9 +1,9 @@
 /**
  * Configuration and naming conventions for the audit / changelog feature.
  *
- * The audit module records every entity write to a separate, client-inaccessible
- * CouchDB database so that "what changed, by whom and when" can be reconstructed
- * for legal/audit purposes (see issue #4026 / #490).
+ * The audit module records every entity write to a separate CouchDB database
+ * so that "what changed, by whom and when" can be reconstructed for legal/audit
+ * purposes (see issue #4026 / #490).
  */
 export class AuditConfig {
   /**
@@ -14,10 +14,29 @@ export class AuditConfig {
 
   /**
    * Fixed suffix appended to a source db name to derive its audit db name.
-   * Hard-wired (not configurable) so the client-access denylist and per-db
-   * routing stay simple: writes to `app` are audited in `app-audit`.
+   * Hard-wired (not configurable) so per-db routing stays simple: writes to
+   * `app` are audited in `app-audit`.
    */
   static readonly AUDIT_DB_SUFFIX = '-audit';
+
+  /**
+   * CASL subject prefix for audit record `_id`s (e.g.
+   * `ChangeAudit:Child:123:<ts>:<rev>`). The proxy derives the permission
+   * subject from the `_id` prefix (`detectDocumentType` = `_id.split(':')[0]`),
+   * so this dedicated subject lets a single rule govern audit records — keeping
+   * them read-only and un-forgeable regardless of the source entity's
+   * permissions, and reachable as an ordinary read-only remote DB by the
+   * history-viewing UI (see #4027).
+   */
+  static readonly AUDIT_SUBJECT = 'ChangeAudit';
+}
+
+/**
+ * Build the audit-record `_id` prefix for a given changed entity id, e.g.
+ * `Child:123` -> `ChangeAudit:Child:123`.
+ */
+export function auditIdPrefix(entityId: string): string {
+  return `${AuditConfig.AUDIT_SUBJECT}:${entityId}`;
 }
 
 /**
@@ -29,8 +48,7 @@ export function auditDbFor(db: string): string {
 
 /**
  * Whether the given db name is an audit db (ends with the audit suffix).
- * Used by the access guard to reject client requests and to avoid
- * auditing the audit db itself.
+ * Used to avoid recursively auditing the audit db itself.
  */
 export function isAuditDb(db: string): boolean {
   return !!db && db.endsWith(AuditConfig.AUDIT_DB_SUFFIX);

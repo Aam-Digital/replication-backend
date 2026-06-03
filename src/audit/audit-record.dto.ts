@@ -1,5 +1,6 @@
 import { UserInfo } from '../restricted-endpoints/session/user-auth.dto';
 import { DatabaseDocument } from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
+import { auditIdPrefix } from './audit.config';
 
 /**
  * The kind of write that produced an audit record.
@@ -42,7 +43,7 @@ export interface AuditEntry {
  * The persisted audit document, stored in the derived `<db>-audit` database.
  *
  * `_id` encodes the entity id and timestamp for performant per-entity range
- * queries: `<entityId>:<ISO-timestamp>:<new-rev>`.
+ * queries: `ChangeAudit:<entityId>:<ISO-timestamp>:<new-rev>`.
  */
 export interface AuditRecord {
   _id: string;
@@ -67,7 +68,9 @@ export interface AuditRecord {
 }
 
 /**
- * Build the deterministic audit record `_id`.
+ * Build the deterministic audit record `_id`, prefixed with the `ChangeAudit`
+ * subject so the proxy classifies it as an audit doc (not as the source
+ * entity): `ChangeAudit:<entityId>:<timestamp>:<rev>`.
  */
 export function buildAuditId(
   entityId: string,
@@ -76,7 +79,7 @@ export function buildAuditId(
 ): string {
   // full rev (not shortened) so records in a single same-timestamp batch
   // never collide on `_id`
-  return `${entityId}:${timestamp}:${rev ?? 'na'}`;
+  return `${auditIdPrefix(entityId)}:${timestamp}:${rev ?? 'na'}`;
 }
 
 /**
