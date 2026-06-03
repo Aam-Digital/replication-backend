@@ -160,11 +160,7 @@ export class BulkDocumentService {
         (doc) =>
           !!doc._id &&
           this.documentFilter.isReplicable(doc._id) &&
-          this.hasPermissionsForDoc(
-            doc,
-            existingDocs.get(doc._id),
-            ability,
-          ),
+          this.hasPermissionsForDoc(doc, existingDocs.get(doc._id), ability),
       ),
     };
   }
