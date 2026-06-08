@@ -138,8 +138,9 @@ export class AuditService {
         this.couchdbService.post(auditDb, '_bulk_docs', { docs: records }),
       );
     } catch (err) {
-      // best-effort: log but never fail the original write
-      const reason = err instanceof Error ? err.message : JSON.stringify(err);
+      // best-effort: log but never fail the original write. Normalization must
+      // itself never throw (JSON.stringify can throw on circular throwables).
+      const reason = this.errorReason(err);
       this.logger.error(
         `Failed to write audit records for db '${db}': ${reason}`,
         err instanceof Error ? err.stack : undefined,
@@ -345,6 +346,18 @@ export class AuditService {
       return undefined;
     }
     return omit(doc, IGNORED_DIFF_FIELDS) as DatabaseDocument;
+  }
+
+  /** Non-throwing error-to-string for best-effort logging. */
+  private errorReason(err: unknown): string {
+    if (err instanceof Error) {
+      return err.message;
+    }
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
   }
 
   private async ensureDb(auditDb: string): Promise<void> {

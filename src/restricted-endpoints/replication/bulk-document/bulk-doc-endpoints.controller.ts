@@ -33,8 +33,8 @@ import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 @Controller()
 export class BulkDocEndpointsController {
   constructor(
-    private couchdbService: CouchdbService,
-    private bulkDocumentService: BulkDocumentService,
+    private readonly couchdbService: CouchdbService,
+    private readonly bulkDocumentService: BulkDocumentService,
   ) {}
 
   /**
