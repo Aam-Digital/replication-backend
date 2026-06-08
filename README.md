@@ -139,8 +139,7 @@ normal proxy and governed entirely by CASL on the `ChangeAudit` subject:
 - A client **read** of audit records is allowed only where a
   `{ subject: "ChangeAudit", action: "read" }` rule is granted (the proxy filters
   reads via `ability.can('read', doc)`). This is what lets the history-viewing UI
-  (see [#4027](https://github.com/Aam-Digital/ndb-core/issues/4027)) read the
-  audit DB as an ordinary read-only remote database.
+  read the audit DB as an ordinary read-only remote database.
 
 > **Where the read rule lives:** the `ChangeAudit` read rule is part of the
 > application's permission config (the `Config:Permissions` document managed in
