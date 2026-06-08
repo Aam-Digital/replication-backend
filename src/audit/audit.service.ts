@@ -38,7 +38,7 @@ const IGNORED_DIFF_FIELDS = [
  * database. Gated behind the {@link AuditConfig.AUDIT_ENABLED_ENV}
  * flag; a complete no-op when disabled.
  *
- * Writes are best-effort-but-logged for v1: a failed audit write never blocks
+ * Writes are best-effort-but-logged: a failed audit write never blocks
  * or fails the original entity write.
  */
 @Injectable()
