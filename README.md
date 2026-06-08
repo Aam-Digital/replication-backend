@@ -115,9 +115,9 @@ from concurrent/multi-device edits are captured.
   (`create` / `update` / `delete` / `baseline`), the new `rev` and its
   `parentRev`, a **server-set** `timestamp`, the **authenticated** `user`
   (`{ id, name, roles }`), and a [`jsondiffpatch`](https://www.npmjs.com/package/jsondiffpatch)
-  `diff` of the change. The client's local `_updatedAt`/`_updatedBy` are kept
-  inside the diff; only internal CouchDB noise (`_rev`, `_revisions`,
-  `_conflicts`, `_attachments`) is excluded.
+  `diff` of the change. The client's local `updated`/`created` metadata
+  (`{ at, by }`) is kept inside the diff; only internal CouchDB noise (`_rev`,
+  `_revisions`, `_conflicts`, `_attachments`) is excluded.
 - **Seamless activation:** the first change to an entity that has no prior audit
   record additionally emits a full-snapshot `baseline` record, so history is not
   lost when the feature is switched on for an existing system. No migration is

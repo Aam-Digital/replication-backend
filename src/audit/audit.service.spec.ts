@@ -66,7 +66,7 @@ it('writes one create record with server timestamp and authenticated user', asyn
   });
 });
 
-it('keeps _updatedAt/_updatedBy and excludes _rev/_revisions in the diff', async () => {
+it('keeps updated/created metadata and excludes _rev/_revisions in the diff', async () => {
   const { service, couchdb } = makeService({
     existingAuditRows: [{ id: 'x' }],
   });
@@ -75,15 +75,15 @@ it('keeps _updatedAt/_updatedBy and excludes _rev/_revisions in the diff', async
       _id: 'Child:1',
       _rev: '1-a',
       name: 'A',
-      _updatedAt: 't1',
-      _updatedBy: 'u1',
+      created: { at: 't0', by: 'u0' },
+      updated: { at: 't1', by: 'u1' },
     },
     newDoc: {
       _id: 'Child:1',
       _rev: '2-b',
       name: 'B',
-      _updatedAt: 't2',
-      _updatedBy: 'u2',
+      created: { at: 't0', by: 'u0' },
+      updated: { at: 't2', by: 'u1' },
       _revisions: { start: 2, ids: ['b', 'a'] },
     },
     operation: 'update',
@@ -94,11 +94,32 @@ it('keeps _updatedAt/_updatedBy and excludes _rev/_revisions in the diff', async
   const record = postedRecords(couchdb)[0];
   expect(record.operation).toBe('update');
   expect(record.diff.name).toBeDefined();
-  expect(record.diff._updatedAt).toBeDefined();
-  expect(record.diff._updatedBy).toBeDefined();
+  // the changed `updated` metadata is kept in the diff (real entity field)
+  expect(record.diff.updated).toBeDefined();
+  // unchanged `created` produces no delta
+  expect(record.diff.created).toBeUndefined();
+  // internal CouchDB noise is excluded
   expect(record.diff._rev).toBeUndefined();
   expect(record.diff._revisions).toBeUndefined();
   expect(record.parentRev).toBe('1-a');
+});
+
+it('records the correct jsondiffpatch delta for an update', async () => {
+  const { service, couchdb } = makeService({
+    existingAuditRows: [{ id: 'x' }],
+  });
+  const entry: AuditEntry = {
+    existingDoc: { _id: 'Child:1', _rev: '1-a', name: 'A', status: 'active' },
+    newDoc: { _id: 'Child:1', _rev: '2-b', name: 'B', status: 'active' },
+    operation: 'update',
+  };
+
+  await service.record('app', [entry], user);
+
+  const record = postedRecords(couchdb)[0];
+  // jsondiffpatch delta: modified field is [oldValue, newValue]; unchanged
+  // fields are omitted entirely
+  expect(record.diff).toEqual({ name: ['A', 'B'] });
 });
 
 it('writes a baseline snapshot on the first change to a previously-unaudited entity', async () => {

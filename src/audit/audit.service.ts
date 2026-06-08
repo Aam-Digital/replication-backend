@@ -22,9 +22,10 @@ import {
 } from './audit-record.dto';
 
 /**
- * Internal CouchDB noise excluded before diffing. `_updatedAt`/`_updatedBy`
- * are deliberately KEPT — they carry the client's local edit time and claimed
- * author, distinct information not recoverable elsewhere.
+ * Internal CouchDB noise excluded before diffing. The frontend-set `updated`
+ * and `created` metadata (`{ at, by }`) are deliberately KEPT — they carry the
+ * client's local edit time and claimed author, distinct information not
+ * recoverable elsewhere.
  */
 const IGNORED_DIFF_FIELDS = [
   '_rev',
