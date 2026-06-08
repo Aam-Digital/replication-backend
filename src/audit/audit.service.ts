@@ -112,11 +112,8 @@ export class AuditService {
       const records: AuditRecordEntity[] = [];
 
       for (const entry of relevant) {
-        const entityId = entry.newDoc._id;
-        if (!entityId) {
-          // guaranteed by the isReplicableId filter above; narrows the type
-          continue;
-        }
+        // non-null: the isReplicableId filter above guarantees a truthy _id
+        const entityId = entry.newDoc._id!;
         if (
           entry.existingDoc &&
           (await this.needsBaseline(auditDb, entityId, entry))
