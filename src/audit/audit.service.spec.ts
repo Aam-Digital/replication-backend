@@ -56,10 +56,10 @@ it('writes one create record with server timestamp and authenticated user', asyn
   });
   expect(records[0].timestamp).toMatch(/^\d{4}-\d{2}-\d{2}T.*Z$/);
   expect(records[0]._id).toBe(
-    `ChangeAudit:Child:1:${records[0].timestamp}:1-abcd`,
+    `AuditRecord:Child:1:${records[0].timestamp}:1-abcd`,
   );
-  // _id prefix makes the proxy classify this as subject `ChangeAudit`
-  expect(records[0]._id.split(':')[0]).toBe('ChangeAudit');
+  // _id prefix makes the proxy classify this as subject `AuditRecord`
+  expect(records[0]._id.split(':')[0]).toBe('AuditRecord');
   expect(records[0].diff).toBeDefined();
   expect(couchdb.post).toHaveBeenCalledWith('app-audit', '_bulk_docs', {
     docs: records,
@@ -120,7 +120,7 @@ it('writes a baseline snapshot on the first change to a previously-unaudited ent
 
 it('does not write a baseline when the entity already has an audit record', async () => {
   const { service, couchdb } = makeService({
-    existingAuditRows: [{ id: 'ChangeAudit:Child:1:...' }],
+    existingAuditRows: [{ id: 'AuditRecord:Child:1:...' }],
   });
   const entry: AuditEntry = {
     existingDoc: { _id: 'Child:1', _rev: '1-a', name: 'A' },

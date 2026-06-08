@@ -10,10 +10,10 @@ import { AuditService } from './audit.service';
  * (also global) CouchdbModule for database access.
  *
  * Audit records are protected by the permission engine, not a dedicated guard:
- * they are keyed with the `ChangeAudit` subject prefix, so a single CASL rule
- * (`{ subject: "ChangeAudit", action: "read" }`, granted to privileged roles
+ * they are keyed with the `AuditRecord` subject prefix, so a single CASL rule
+ * (`{ subject: "AuditRecord", action: "read" }`, granted to privileged roles
  * only) governs them. Reads are filtered by the proxy and any client write is
- * dropped (no rule grants create/update/delete on `ChangeAudit`), while the
+ * dropped (no rule grants create/update/delete on `AuditRecord`), while the
  * system's own audit writes use admin credentials directly against CouchDB and
  * bypass the permission-checked endpoints.
  */

@@ -1,6 +1,5 @@
 import { UserInfo } from '../restricted-endpoints/session/user-auth.dto';
 import { DatabaseDocument } from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
-import { auditIdPrefix } from './audit.config';
 
 /**
  * The kind of write that produced an audit record.
@@ -43,17 +42,26 @@ export interface AuditEntry {
  * The persisted audit document, stored in the derived `<db>-audit` database.
  *
  * `_id` encodes the entity id and timestamp for performant per-entity range
- * queries: `ChangeAudit:<entityId>:<ISO-timestamp>:<new-rev>`.
+ * queries: `AuditRecord:<entityId>:<ISO-timestamp>:<new-rev>`.
+ *
+ * Owns the {@link AuditRecordEntity.TYPE} subject prefix (mirroring how ndb-core
+ * entities expose their type): the proxy derives the CASL subject from the `_id`
+ * prefix (`detectDocumentType` = `_id.split(':')[0]`), so audit docs are
+ * classified as the dedicated subject `AuditRecord`, not as the source entity.
  */
-export interface AuditRecord {
-  _id: string;
+export class AuditRecordEntity {
+  /** CASL subject + `_id` prefix for all audit records */
+  static readonly TYPE = 'AuditRecord';
+
+  _id!: string;
+
   /** the changed doc's `_id`, e.g. `Child:123` */
-  entityId: string;
+  entityId!: string;
 
   /** source db name, e.g. `app` */
-  database: string;
+  database!: string;
 
-  operation: AuditOperation;
+  operation!: AuditOperation;
 
   /** new `_rev` of the written revision */
   rev?: string;
@@ -62,10 +70,10 @@ export interface AuditRecord {
   parentRev?: string;
 
   /** SERVER-set time (never trusted from the client body) */
-  timestamp: string;
+  timestamp!: string;
 
   /** SERVER-set from the authenticated UserInfo (never trusted from the body) */
-  user: { id: string; name: string; roles: string[] };
+  user!: { id: string; name: string; roles: string[] };
 
   /**
    * For create/update/delete: a jsondiffpatch delta (winning-rev -> written-rev).
@@ -75,9 +83,17 @@ export interface AuditRecord {
 }
 
 /**
- * Build the deterministic audit record `_id`, prefixed with the `ChangeAudit`
- * subject so the proxy classifies it as an audit doc (not as the source
- * entity): `ChangeAudit:<entityId>:<timestamp>:<rev>`.
+ * Build the audit-record `_id` prefix for a changed entity id, e.g.
+ * `Child:123` -> `AuditRecord:Child:123`.
+ */
+export function auditIdPrefix(entityId: string): string {
+  return `${AuditRecordEntity.TYPE}:${entityId}`;
+}
+
+/**
+ * Build the deterministic audit record `_id`, prefixed with the
+ * {@link AuditRecordEntity.TYPE} subject so the proxy classifies it as an audit
+ * doc (not as the source entity): `AuditRecord:<entityId>:<timestamp>:<rev>`.
  */
 export function buildAuditId(
   entityId: string,
@@ -92,6 +108,6 @@ export function buildAuditId(
 /**
  * Map an authenticated {@link UserInfo} to the trimmed shape stored on records.
  */
-export function auditUser(user: UserInfo): AuditRecord['user'] {
+export function auditUser(user: UserInfo): AuditRecordEntity['user'] {
   return { id: user?.id, name: user?.name, roles: user?.roles ?? [] };
 }

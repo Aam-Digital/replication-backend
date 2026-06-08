@@ -105,10 +105,10 @@ from concurrent/multi-device edits are captured.
   `DELETE`), one record is written to a separate database derived from the
   source db name: writes to `app` are recorded in `app-audit`. The convention
   is hard-wired, and each `<db>-audit` database is auto-created on first write.
-- Each record's `_id` is `ChangeAudit:<entityId>:<ISO-timestamp>:<rev>`. The
-  `ChangeAudit:` prefix is load-bearing: the proxy derives the CASL subject from
+- Each record's `_id` is `AuditRecord:<entityId>:<ISO-timestamp>:<rev>`. The
+  `AuditRecord:` prefix is load-bearing: the proxy derives the CASL subject from
   the `_id` prefix (`detectDocumentType` = `_id.split(':')[0]`), so audit records
-  are classified as the dedicated subject `ChangeAudit` — not as the source
+  are classified as the dedicated subject `AuditRecord` — not as the source
   entity (`Child`, ...). This is what keeps them un-forgeable and governed by a
   single rule (see Protection).
 - A record contains: the changed `entityId`, source `database`, `operation`
@@ -126,22 +126,22 @@ from concurrent/multi-device edits are captured.
 ### Protection (read-only via the permission engine)
 
 There is no dedicated guard. The `<db>-audit` database is reachable through the
-normal proxy and governed entirely by CASL on the `ChangeAudit` subject:
+normal proxy and governed entirely by CASL on the `AuditRecord` subject:
 
 - The system's own audit writes use the proxy's admin credentials and are
   written **directly** to CouchDB via `CouchdbService`, bypassing the
   permission-checked endpoints — so recording always succeeds.
-- Any **client** write that targets a `ChangeAudit:` document (to the audit DB
+- Any **client** write that targets a `AuditRecord:` document (to the audit DB
   _or_ a forged one in the main app DB) is dropped, because no rule grants
-  `create`/`update`/`delete` on `ChangeAudit`. Rules are global (keyed on the
+  `create`/`update`/`delete` on `AuditRecord`. Rules are global (keyed on the
   subject, not the DB name), so this holds across `_bulk_docs` / `_all_docs` /
   `_changes` / `_bulk_get` / `_find`.
 - A client **read** of audit records is allowed only where a
-  `{ subject: "ChangeAudit", action: "read" }` rule is granted (the proxy filters
+  `{ subject: "AuditRecord", action: "read" }` rule is granted (the proxy filters
   reads via `ability.can('read', doc)`). This is what lets the history-viewing UI
   read the audit DB as an ordinary read-only remote database.
 
-> **Where the read rule lives:** the `ChangeAudit` read rule is part of the
+> **Where the read rule lives:** the `AuditRecord` read rule is part of the
 > application's permission config (the `Config:Permissions` document managed in
 > ndb-core), granted to privileged roles only — not hard-coded here. Without it,
 > the audit DB is invisible and immutable to clients (default-deny), which is the
@@ -149,7 +149,7 @@ normal proxy and governed entirely by CASL on the `ChangeAudit` subject:
 >
 > **Documented trade-off:** whole-document read rules do not strip individual
 > fields, so a user permitted to read an audit record sees the entire diff, and
-> read permission is coarse (the single `ChangeAudit` subject). Mitigation: grant
+> read permission is coarse (the single `AuditRecord` subject). Mitigation: grant
 > the read rule only to privileged roles who already see full records.
 > Field-level redaction would require a bespoke read endpoint instead.
 

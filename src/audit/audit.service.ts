@@ -10,13 +10,13 @@ import { AllDocsResponse } from '../restricted-endpoints/replication/bulk-docume
 import {
   AuditConfig,
   auditDbFor,
-  auditIdPrefix,
   isAuditDb,
   isReplicableId,
 } from './audit.config';
 import {
   AuditEntry,
-  AuditRecord,
+  AuditRecordEntity,
+  auditIdPrefix,
   auditUser,
   buildAuditId,
 } from './audit-record.dto';
@@ -102,7 +102,7 @@ export class AuditService {
 
       // SERVER-set timestamp, never trusted from the client body
       const timestamp = new Date().toISOString();
-      const records: AuditRecord[] = [];
+      const records: AuditRecordEntity[] = [];
 
       for (const entry of relevant) {
         const entityId = entry.newDoc._id;
@@ -185,7 +185,7 @@ export class AuditService {
     existingDoc: DatabaseDocument,
     user: UserInfo,
     timestamp: string,
-  ): AuditRecord {
+  ): AuditRecordEntity {
     const rev = existingDoc._rev;
     return {
       _id: buildAuditId(entityId, timestamp, rev),
@@ -207,7 +207,7 @@ export class AuditService {
     entry: AuditEntry,
     user: UserInfo,
     timestamp: string,
-  ): AuditRecord {
+  ): AuditRecordEntity {
     const rev = entry.newRev ?? entry.newDoc._rev;
     return {
       _id: buildAuditId(entityId, timestamp, rev),

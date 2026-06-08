@@ -18,25 +18,6 @@ export class AuditConfig {
    * `app` are audited in `app-audit`.
    */
   static readonly AUDIT_DB_SUFFIX = '-audit';
-
-  /**
-   * CASL subject prefix for audit record `_id`s (e.g.
-   * `ChangeAudit:Child:123:<ts>:<rev>`). The proxy derives the permission
-   * subject from the `_id` prefix (`detectDocumentType` = `_id.split(':')[0]`),
-   * so this dedicated subject lets a single rule govern audit records — keeping
-   * them read-only and un-forgeable regardless of the source entity's
-   * permissions, and reachable as an ordinary read-only remote DB by the
-   * history-viewing UI (see #4027).
-   */
-  static readonly AUDIT_SUBJECT = 'ChangeAudit';
-}
-
-/**
- * Build the audit-record `_id` prefix for a given changed entity id, e.g.
- * `Child:123` -> `ChangeAudit:Child:123`.
- */
-export function auditIdPrefix(entityId: string): string {
-  return `${AuditConfig.AUDIT_SUBJECT}:${entityId}`;
 }
 
 /**
