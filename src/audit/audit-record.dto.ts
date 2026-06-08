@@ -49,17 +49,24 @@ export interface AuditRecord {
   _id: string;
   /** the changed doc's `_id`, e.g. `Child:123` */
   entityId: string;
+
   /** source db name, e.g. `app` */
   database: string;
+
   operation: AuditOperation;
+
   /** new `_rev` of the written revision */
   rev?: string;
+
   /** the written rev's parent, from the submitted doc's `_revisions` ancestry */
   parentRev?: string;
+
   /** SERVER-set time (never trusted from the client body) */
   timestamp: string;
+
   /** SERVER-set from the authenticated UserInfo (never trusted from the body) */
   user: { id: string; name: string; roles: string[] };
+
   /**
    * For create/update/delete: a jsondiffpatch delta (winning-rev -> written-rev).
    * For baseline: the full previous document (there is nothing to diff against).
