@@ -162,10 +162,6 @@ reach the backend and cannot be audited by any backend component. The genuine
 guarantee is conflict-branch capture and a trustworthy authenticated author and
 server timestamp — not a complete per-keystroke history.
 
-The CouchDB admin reverse proxy at `/couchdb/` (admin-only) bypasses the
-permission engine; audit protection relies on CouchDB only being reachable via
-the proxy on the internal network.
-
 # Development
 
 This system is Node.js application built with the [NestJS](https://nestjs.com/) framework.
