@@ -297,6 +297,12 @@ describe('BulkDocumentService', () => {
 
     await service.handleBulkDocs(request, normalUser, 'app');
 
+    // the filtered docs are actually written to the source db
+    expect(mockCouchDBService.post).toHaveBeenCalledWith('app', '_bulk_docs', {
+      new_edits: false,
+      docs: [updatedChild],
+    });
+
     expect(mockAuditService.record).toHaveBeenCalledTimes(1);
     const [db, entries, user] = mockAuditService.record.mock.calls[0];
     expect(db).toBe('app');

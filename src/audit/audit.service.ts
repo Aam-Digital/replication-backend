@@ -133,8 +133,9 @@ export class AuditService {
       );
     } catch (err) {
       // best-effort: log but never fail the original write
+      const reason = err instanceof Error ? err.message : JSON.stringify(err);
       this.logger.error(
-        `Failed to write audit records for db '${db}': ${err}`,
+        `Failed to write audit records for db '${db}': ${reason}`,
         err instanceof Error ? err.stack : undefined,
       );
     }
