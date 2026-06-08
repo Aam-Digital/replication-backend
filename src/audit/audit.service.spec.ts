@@ -199,7 +199,9 @@ it('never audits the audit database itself', async () => {
 });
 
 it('recordBulkWrite audits an update (new_edits:false, rev from body)', async () => {
-  const { service, couchdb } = makeService({ existingAuditRows: [{ id: 'x' }] });
+  const { service, couchdb } = makeService({
+    existingAuditRows: [{ id: 'x' }],
+  });
   const existingDocs = new Map<string, any>([
     ['Child:1', { _id: 'Child:1', _rev: '1-a', name: 'A' }],
   ]);
