@@ -198,6 +198,61 @@ it('never audits the audit database itself', async () => {
   expect(couchdb.post).not.toHaveBeenCalled();
 });
 
+it('recordBulkWrite audits an update (new_edits:false, rev from body)', async () => {
+  const { service, couchdb } = makeService({ existingAuditRows: [{ id: 'x' }] });
+  const existingDocs = new Map<string, any>([
+    ['Child:1', { _id: 'Child:1', _rev: '1-a', name: 'A' }],
+  ]);
+  const written = {
+    new_edits: false,
+    docs: [{ _id: 'Child:1', _rev: '2-b', name: 'B' }],
+  };
+  // new_edits:false response lists only failures (none here)
+  const response: any[] = [];
+
+  await service.recordBulkWrite('app', written, existingDocs, response, user);
+
+  const records = postedRecords(couchdb);
+  expect(records).toHaveLength(1);
+  expect(records[0].operation).toBe('update');
+  expect(records[0].rev).toBe('2-b');
+  expect(records[0].diff).toEqual({ name: ['A', 'B'] });
+});
+
+it('recordBulkWrite takes the rev from the response on the new_edits:true path', async () => {
+  const { service, couchdb } = makeService();
+  const written = {
+    new_edits: true,
+    docs: [{ _id: 'Child:1', name: 'A' }],
+  };
+  // new_edits:true response carries {ok, id, rev} per doc
+  const response = [{ ok: true, id: 'Child:1', rev: '5-server' }];
+
+  await service.recordBulkWrite('app', written, new Map(), response, user);
+
+  const records = postedRecords(couchdb);
+  expect(records).toHaveLength(1);
+  expect(records[0].operation).toBe('create');
+  expect(records[0].rev).toBe('5-server');
+});
+
+it('recordBulkWrite skips conflicted/errored docs', async () => {
+  const { service, couchdb } = makeService();
+  const existingDocs = new Map<string, any>([
+    ['Child:1', { _id: 'Child:1', _rev: '1-a', name: 'A' }],
+  ]);
+  const written = {
+    new_edits: false,
+    docs: [{ _id: 'Child:1', _rev: '2-b', name: 'B' }],
+  };
+  // doc reported as a conflict -> not audited
+  const response = [{ id: 'Child:1', error: 'conflict', reason: 'x', rev: '' }];
+
+  await service.recordBulkWrite('app', written, existingDocs, response, user);
+
+  expect(couchdb.post).not.toHaveBeenCalled();
+});
+
 it('does not throw when the audit write fails (best-effort)', async () => {
   const { service, couchdb } = makeService();
   couchdb.post.mockImplementation(() => {

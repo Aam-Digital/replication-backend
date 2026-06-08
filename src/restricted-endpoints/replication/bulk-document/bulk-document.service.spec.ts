@@ -22,10 +22,10 @@ describe('BulkDocumentService', () => {
   let childDoc: DatabaseDocument;
   let mockRulesService: RulesService;
   let mockCouchDBService: CouchdbService;
-  let mockAuditService: { record: jest.Mock };
+  let mockAuditService: { recordBulkWrite: jest.Mock };
 
   beforeEach(async () => {
-    mockAuditService = { record: jest.fn() };
+    mockAuditService = { recordBulkWrite: jest.fn() };
     mockRulesService = {
       getRulesForUser: () => [
         { action: 'update', subject: 'Child' },
@@ -280,19 +280,21 @@ describe('BulkDocumentService', () => {
     expect(result.docs.map((d) => d._id)).toEqual([schoolDoc._id]);
   });
 
-  it('writes filtered docs and audits them on handleBulkDocs (new_edits:false)', async () => {
+  it('writes filtered docs and audits the write on handleBulkDocs', async () => {
     const updatedChild = getChildDoc();
     updatedChild._rev = '2-new';
     const request: BulkDocsRequest = {
       new_edits: false,
       docs: [updatedChild],
     };
+    const existingChild = getChildDoc();
+    const bulkResponse: any[] = [];
     jest.spyOn(mockCouchDBService, 'post').mockImplementation((_db, path) => {
       if (path === '_all_docs') {
-        return of(createAllDocsResponse(getChildDoc()));
+        return of(createAllDocsResponse(existingChild));
       }
       // _bulk_docs with new_edits:false returns only failures (none here)
-      return of([]);
+      return of(bulkResponse);
     });
 
     await service.handleBulkDocs(request, normalUser, 'app');
@@ -303,63 +305,35 @@ describe('BulkDocumentService', () => {
       docs: [updatedChild],
     });
 
-    expect(mockAuditService.record).toHaveBeenCalledTimes(1);
-    const [db, entries, user] = mockAuditService.record.mock.calls[0];
+    // the write is handed to the audit service: source db, filtered request,
+    // the pre-write existing docs, the couch response and the user
+    expect(mockAuditService.recordBulkWrite).toHaveBeenCalledTimes(1);
+    const [db, written, existingDocs, response, user] =
+      mockAuditService.recordBulkWrite.mock.calls[0];
     expect(db).toBe('app');
+    expect(written).toEqual({ new_edits: false, docs: [updatedChild] });
+    expect(existingDocs).toBeInstanceOf(Map);
+    expect(existingDocs.get('Child:1')).toEqual(existingChild);
+    expect(response).toBe(bulkResponse);
     expect(user).toBe(normalUser);
-    expect(entries).toHaveLength(1);
-    expect(entries[0].operation).toBe('update');
-    expect(entries[0].newRev).toBe('2-new');
-    expect(entries[0].existingDoc._id).toBe('Child:1');
   });
 
-  it('audits with rev from the response on the new_edits:true path', async () => {
-    const newChild = getChildDoc();
-    const request: BulkDocsRequest = {
-      new_edits: true,
-      docs: [newChild],
-    };
-    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: 'create', subject: 'Child' },
-      { action: 'update', subject: 'Child' },
-    ]);
-    jest.spyOn(mockCouchDBService, 'post').mockImplementation((_db, path) => {
-      if (path === '_all_docs') {
-        // no existing doc -> create
-        return of({ total_rows: 0, offset: 0, rows: [] });
-      }
-      // _bulk_docs new_edits:true returns {ok, id, rev} per doc
-      return of([{ ok: true, id: 'Child:1', rev: '5-server' }]);
-    });
-
-    await service.handleBulkDocs(request, normalUser, 'app');
-
-    expect(mockAuditService.record).toHaveBeenCalledTimes(1);
-    const entries = mockAuditService.record.mock.calls[0][1];
-    expect(entries).toHaveLength(1);
-    expect(entries[0].operation).toBe('create');
-    expect(entries[0].newRev).toBe('5-server');
-  });
-
-  it('skips conflicted/errored docs when building audit entries', async () => {
-    const updatedChild = getChildDoc();
-    updatedChild._rev = '2-new';
+  it('audits only the permission-filtered docs, not the rejected ones', async () => {
     const request: BulkDocsRequest = {
       new_edits: false,
-      docs: [updatedChild],
+      docs: [childDoc, schoolDoc],
     };
-    jest.spyOn(mockCouchDBService, 'post').mockImplementation((_db, path) => {
-      if (path === '_all_docs') {
-        return of(createAllDocsResponse(getChildDoc()));
-      }
-      // _bulk_docs reports this doc as a conflict
-      return of([{ id: 'Child:1', error: 'conflict', reason: 'x', rev: '' }]);
-    });
+    jest
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValue(of(createAllDocsResponse(childDoc, schoolDoc)));
 
     await service.handleBulkDocs(request, normalUser, 'app');
 
-    expect(mockAuditService.record).toHaveBeenCalledTimes(1);
-    expect(mockAuditService.record.mock.calls[0][1]).toHaveLength(0);
+    // normalUser may update Child but not School, so only Child is audited
+    const written = mockAuditService.recordBulkWrite.mock.calls[0][1];
+    expect(written.docs.map((d: DatabaseDocument) => d._id)).toEqual([
+      'Child:1',
+    ]);
   });
 
   function getSchoolDoc(): DatabaseDocument {

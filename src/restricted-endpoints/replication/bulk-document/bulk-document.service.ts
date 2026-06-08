@@ -10,8 +10,6 @@ import {
   BulkDocsRequest,
   BulkDocsResponse,
   DatabaseDocument,
-  DocError,
-  DocSuccess,
   FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
@@ -24,7 +22,6 @@ import { Ability } from '@casl/ability';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
 import { AuditService } from '../../../audit/audit.service';
-import { AuditEntry } from '../../../audit/audit-record.dto';
 
 /**
  * Handle bulk document requests with the remote CouchDB server
@@ -101,9 +98,11 @@ export class BulkDocumentService {
     const response = await firstValueFrom(
       this.couchdbService.post<BulkDocsResponse>(db, '_bulk_docs', filtered),
     );
-    await this.auditService.record(
+    await this.auditService.recordBulkWrite(
       db,
-      this.buildAuditEntries(filtered, existingDocs, response),
+      filtered,
+      existingDocs,
+      response,
       user,
     );
     return response;
@@ -162,75 +161,6 @@ export class BulkDocumentService {
           this.documentFilter.isReplicable(doc._id) &&
           this.hasPermissionsForDoc(doc, existingDocs.get(doc._id), ability),
       ),
-    };
-  }
-
-  /**
-   * Build the audit entries for the successfully written docs.
-   *
-   * `new_edits === false` (PouchDB push): CouchDB returns ONLY failed docs, so
-   * a doc is successful when absent from the error list and its new `_rev`
-   * comes from the submitted body. Otherwise the response carries `{ok, rev}`
-   * per doc and the rev comes from there. Conflicts/errors are skipped in both.
-   */
-  private buildAuditEntries(
-    filtered: BulkDocsRequest,
-    existingDocs: Map<string, DatabaseDocument>,
-    response: BulkDocsResponse,
-  ): AuditEntry[] {
-    const { errorIds, revById } = this.indexBulkResponse(response);
-    const newEditsFalse = filtered.new_edits === false;
-    return filtered.docs
-      .map((doc) =>
-        this.toAuditEntry(doc, existingDocs, errorIds, revById, newEditsFalse),
-      )
-      .filter((entry): entry is AuditEntry => entry !== null);
-  }
-
-  /** Index the `_bulk_docs` response into errored ids and successful revs. */
-  private indexBulkResponse(response: BulkDocsResponse) {
-    const errorIds = new Set<string>();
-    const revById = new Map<string, string>();
-    for (const result of response ?? []) {
-      if ((result as DocError).error) {
-        errorIds.add(result.id);
-      } else {
-        revById.set(result.id, (result as DocSuccess).rev);
-      }
-    }
-    return { errorIds, revById };
-  }
-
-  /** Build a single audit entry, or null if the doc was not successfully written. */
-  private toAuditEntry(
-    doc: DatabaseDocument,
-    existingDocs: Map<string, DatabaseDocument>,
-    errorIds: Set<string>,
-    revById: Map<string, string>,
-    newEditsFalse: boolean,
-  ): AuditEntry | null {
-    const id = doc._id;
-    if (!id) {
-      return null;
-    }
-    const succeeded = newEditsFalse ? !errorIds.has(id) : revById.has(id);
-    if (!succeeded) {
-      return null;
-    }
-    const existingDoc = existingDocs.get(id);
-    let operation: AuditEntry['operation'];
-    if (doc._deleted) {
-      operation = 'delete';
-    } else if (existingDoc) {
-      operation = 'update';
-    } else {
-      operation = 'create';
-    }
-    return {
-      existingDoc,
-      newDoc: doc,
-      newRev: newEditsFalse ? doc._rev : revById.get(id),
-      operation,
     };
   }
 
