@@ -100,6 +100,18 @@ describe('BulkDocumentService', () => {
     expect(result).toEqual(createAllDocsResponse(childDoc));
   });
 
+  it('should pass through error rows (missing keys) in AllDocs without crashing', () => {
+    const allDocsResponse = createAllDocsResponse(schoolDoc);
+    // CouchDB returns rows without an `id` for unknown keys
+    const errorRow = { key: 'School:missing', error: 'not_found' } as any;
+    allDocsResponse.rows.push(errorRow);
+
+    const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
+
+    expect(result.rows).toContain(errorRow);
+    expect(result.rows).toHaveLength(2);
+  });
+
   it('should not filter out deleted docs in AllDocs', () => {
     const allDocsResponse = createAllDocsResponse(schoolDoc, childDoc);
     schoolDoc._deleted = true;
