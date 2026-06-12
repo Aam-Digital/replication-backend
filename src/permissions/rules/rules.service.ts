@@ -50,6 +50,21 @@ export class RulesService implements OnModuleInit {
 
   private readonly logger = new Logger(RulesService.name);
   private permission!: RulesConfig;
+  private _configVersion = 0;
+
+  /**
+   * Monotonically increasing counter, incremented whenever the in-memory
+   * permission config changes. Lets consumers (e.g. PermissionService)
+   * cheaply detect that rules derived from the config must be recomputed.
+   */
+  get configVersion(): number {
+    return this._configVersion;
+  }
+
+  private setPermission(config: RulesConfig): void {
+    this.permission = config;
+    this._configVersion++;
+  }
 
   constructor(
     private configService: ConfigService,
@@ -92,7 +107,7 @@ export class RulesService implements OnModuleInit {
 
         // Do not overwrite permissions that may have arrived from the live feed already.
         if (this.permission === undefined) {
-          this.permission = data;
+          this.setPermission(data);
         }
         return;
       } catch (error) {
@@ -142,7 +157,7 @@ export class RulesService implements OnModuleInit {
    */
   private enterBootstrapMode(db: string): void {
     if (this.permission === undefined) {
-      this.permission = RulesService.bootstrapPermissions();
+      this.setPermission(RulesService.bootstrapPermissions());
     }
     this.logger.warn(
       `[PERMISSIONS_BOOTSTRAP_MODE] BOOTSTRAP MODE: no permission document "${Permission.DOC_ID}" found in "${db}". ` +
@@ -199,7 +214,7 @@ export class RulesService implements OnModuleInit {
       return;
     }
 
-    this.permission = newPermissions;
+    this.setPermission(newPermissions);
 
     if (
       prevPermissions !== undefined && // do not clear upon restart of the API
