@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { get, has } from 'lodash';
-import { firstValueFrom } from 'rxjs';
+import { catchError, concatMap, EMPTY, filter, firstValueFrom } from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
 import { ExponentialBackoff } from '../../common/exponential-backoff';
 import { isLikelyTransientError } from '../../common/http-error-classification';
@@ -163,47 +163,67 @@ export class RulesService implements OnModuleInit {
   }
 
   private watchPermissionChanges(db = 'app') {
-    this.documentChangesService.getChanges(db).subscribe((change) => {
-      if (change.id !== Permission.DOC_ID) {
-        return;
-      }
+    // The shared changes feed only delivers document IDs (no doc bodies, to
+    // keep the constant background feed lightweight) — fetch the permission
+    // document on demand when its ID shows up. concatMap serializes fetches
+    // so rapid consecutive config updates cannot apply out of order.
+    this.documentChangesService
+      .getChanges(db)
+      .pipe(
+        filter((change) => change.id === Permission.DOC_ID),
+        concatMap(() =>
+          this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
+            catchError((error: unknown) => {
+              this.logger.warn(
+                `Failed to fetch updated permission document for ${db}; keeping previous in-memory permissions.`,
+                error instanceof Error ? error.stack : String(error),
+              );
+              return EMPTY;
+            }),
+          ),
+        ),
+      )
+      .subscribe((permissionDoc) =>
+        this.applyUpdatedPermission(db, permissionDoc),
+      );
+  }
 
-      const prevPermissions = this.permission;
-      const newPermissions = change.doc?.data;
+  private applyUpdatedPermission(db: string, permissionDoc: Permission): void {
+    const prevPermissions = this.permission;
+    const newPermissions = permissionDoc?.data;
 
-      if (!PermissionConfigValidator.isValidRulesConfig(newPermissions)) {
-        this.logger.warn(
-          `Permissions change for ${db} did not contain valid data; keeping previous in-memory permissions.`,
-        );
-        return;
-      }
+    if (!PermissionConfigValidator.isValidRulesConfig(newPermissions)) {
+      this.logger.warn(
+        `Permissions change for ${db} did not contain valid data; keeping previous in-memory permissions.`,
+      );
+      return;
+    }
 
-      this.permission = newPermissions;
+    this.permission = newPermissions;
 
-      if (
-        prevPermissions !== undefined && // do not clear upon restart of the API
-        JSON.stringify(prevPermissions) !== JSON.stringify(newPermissions)
-      ) {
-        this.userIdentityService.clearCache();
-        setTimeout(
-          () =>
-            this.adminService
-              .clearLocal(db)
-              .then(() => {
-                this.logger.log(
-                  'Permissions changed - triggered clearLocal:' + db,
-                );
-              })
-              .catch((error: unknown) => {
-                this.logger.error(
-                  `Failed to clear local docs after permission update for ${db}`,
-                  error instanceof Error ? error.stack : String(error),
-                );
-              }),
-          1000,
-        );
-      }
-    });
+    if (
+      prevPermissions !== undefined && // do not clear upon restart of the API
+      JSON.stringify(prevPermissions) !== JSON.stringify(newPermissions)
+    ) {
+      this.userIdentityService.clearCache();
+      setTimeout(
+        () =>
+          this.adminService
+            .clearLocal(db)
+            .then(() => {
+              this.logger.log(
+                'Permissions changed - triggered clearLocal:' + db,
+              );
+            })
+            .catch((error: unknown) => {
+              this.logger.error(
+                `Failed to clear local docs after permission update for ${db}`,
+                error instanceof Error ? error.stack : String(error),
+              );
+            }),
+        1000,
+      );
+    }
   }
   /**
    * Get all rules that are related to the roles of the user.
