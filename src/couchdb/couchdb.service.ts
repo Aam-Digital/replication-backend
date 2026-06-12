@@ -5,8 +5,9 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { AxiosResponse } from 'axios';
+import { AxiosResponse, Method } from 'axios';
 import { catchError, map, Observable, of } from 'rxjs';
+import { Readable } from 'stream';
 import {
   DatabaseDocument,
   DocSuccess,
@@ -107,6 +108,100 @@ export class CouchdbService {
         }
         throw err;
       }),
+    );
+  }
+
+  /**
+   * GET a CouchDB endpoint as a raw response stream (see {@link postStream}).
+   */
+  getStream(
+    databaseName?: string,
+    documentId?: string,
+    params?: Record<string, unknown>,
+  ): Promise<Readable> {
+    return this.requestStream(
+      'get',
+      this.buildDocUrl(databaseName, documentId),
+      undefined,
+      params,
+    );
+  }
+
+  /**
+   * POST to a CouchDB endpoint and return the raw response body stream
+   * instead of a buffered, parsed object.
+   *
+   * Used for large responses (_all_docs, _bulk_get, _find) that are
+   * filtered and forwarded incrementally instead of being held in memory.
+   *
+   * Rejects with the same HttpException mapping as the buffered methods if
+   * CouchDB responds with an error status.
+   */
+  postStream(
+    dbName: string,
+    documentID: string,
+    body: unknown,
+    params?: Record<string, unknown>,
+  ): Promise<Readable> {
+    return this.requestStream(
+      'post',
+      this.buildDocUrl(dbName, documentID),
+      body,
+      params,
+    );
+  }
+
+  private async requestStream(
+    method: Method,
+    url: string,
+    data: unknown,
+    params?: Record<string, unknown>,
+  ): Promise<Readable> {
+    try {
+      const response = await this.httpService.axiosRef.request<Readable>({
+        method,
+        url,
+        data,
+        params,
+        responseType: 'stream',
+        // axios does not decompress stream responses — request an
+        // uncompressed body on this internal hop; client-facing compression
+        // is applied separately by the compression middleware
+        headers: { 'Accept-Encoding': 'identity' },
+      });
+      return response.data;
+    } catch (error) {
+      throw await this.toBufferedError(error);
+    }
+  }
+
+  /**
+   * The axios error interceptor wraps error responses in HttpExceptions —
+   * but for stream requests the wrapped body is itself a stream. Read it
+   * so callers get the same parsed-JSON HttpException as buffered methods.
+   */
+  private async toBufferedError(error: unknown): Promise<unknown> {
+    if (!(error instanceof HttpException)) {
+      return error;
+    }
+    const body = error.getResponse();
+    if (!(body instanceof Readable)) {
+      return error;
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of body) {
+      chunks.push(Buffer.from(chunk));
+    }
+    const text = Buffer.concat(chunks).toString();
+    let parsed: unknown = text;
+    try {
+      parsed = JSON.parse(text);
+    } catch {
+      // keep raw text if the error body is not JSON
+    }
+    return new HttpException(
+      parsed as string | Record<string, unknown>,
+      error.getStatus(),
     );
   }
 
