@@ -15,6 +15,7 @@ describe('PermissionService', () => {
   beforeEach(async () => {
     mockRulesService = {
       getRulesForUser: () => undefined,
+      configVersion: 0,
     } as any;
     mockCouchDBService = {
       get: () => of({}),
@@ -159,6 +160,74 @@ describe('PermissionService', () => {
       'app-attachments',
     );
     expect(result2).toBe(false);
+  });
+
+  describe('ability caching', () => {
+    it('should reuse the cached ability for repeated calls with the same user', () => {
+      const getRulesSpy = jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
+
+      const first = service.getAbilityFor(normalUser);
+      const second = service.getAbilityFor(normalUser);
+
+      expect(second).toBe(first);
+      expect(getRulesSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should build separate abilities for different users', () => {
+      const getRulesSpy = jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
+      const otherUser = new UserInfo('other-id', 'otherUser', ['user_app']);
+
+      const first = service.getAbilityFor(normalUser);
+      const second = service.getAbilityFor(otherUser);
+
+      expect(second).not.toBe(first);
+      expect(getRulesSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('should rebuild the ability when the permission config version changes', () => {
+      const getRulesSpy = jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
+
+      const first = service.getAbilityFor(normalUser);
+      (mockRulesService as any).configVersion = 1;
+      const second = service.getAbilityFor(normalUser);
+
+      expect(second).not.toBe(first);
+      expect(getRulesSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('should rebuild the ability after the TTL expired', () => {
+      jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
+      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(0);
+
+      const first = service.getAbilityFor(normalUser);
+      nowSpy.mockReturnValue(PermissionService.ABILITY_CACHE_TTL_MS + 1);
+      const second = service.getAbilityFor(normalUser);
+
+      expect(second).not.toBe(first);
+      nowSpy.mockRestore();
+    });
+
+    it('should cache the anonymous (public) ability separately from users', () => {
+      const getRulesSpy = jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
+
+      const anonymous = service.getAbilityFor(undefined as any);
+      const second = service.getAbilityFor(undefined as any);
+      const userAbility = service.getAbilityFor(normalUser);
+
+      expect(second).toBe(anonymous);
+      expect(userAbility).not.toBe(anonymous);
+      expect(getRulesSpy).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('should return isAllowedTo to for app-attachment based "update" action for entity', async () => {
