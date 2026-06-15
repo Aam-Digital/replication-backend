@@ -125,17 +125,14 @@ from concurrent/multi-device edits are captured.
 
 ### Protection (read-only via the permission engine)
 
-There is no dedicated guard. The `<db>-audit` database is reachable through the
+The `<db>-audit` database is reachable through the
 normal proxy and governed entirely by CASL on the `AuditRecord` subject:
 
 - The system's own audit writes use the proxy's admin credentials and are
   written **directly** to CouchDB via `CouchdbService`, bypassing the
-  permission-checked endpoints — so recording always succeeds.
+  permission-checked endpoints, so recording always succeeds.
 - Any **client** write that targets a `AuditRecord:` document (to the audit DB
-  _or_ a forged one in the main app DB) is dropped, because no rule grants
-  `create`/`update`/`delete` on `AuditRecord`. Rules are global (keyed on the
-  subject, not the DB name), so this holds across `_bulk_docs` / `_all_docs` /
-  `_changes` / `_bulk_get` / `_find`.
+  _or_ a forged one in the main app DB) is dropped.
 - A client **read** of audit records is allowed only where a
   `{ subject: "AuditRecord", action: "read" }` rule is granted (the proxy filters
   reads via `ability.can('read', doc)`). This is what lets the history-viewing UI
