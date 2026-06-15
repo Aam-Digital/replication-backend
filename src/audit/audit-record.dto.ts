@@ -63,7 +63,10 @@ export class AuditRecordEntity {
 
   operation!: AuditOperation;
 
-  /** new `_rev` of the written revision */
+  /**
+    * new `_rev` of the written revision.
+    *  (not the _rev of this AuditRecordEntity in the DB)
+    */
   rev?: string;
 
   /** the written rev's parent, from the submitted doc's `_revisions` ancestry */
