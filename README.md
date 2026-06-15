@@ -90,7 +90,7 @@ A example for how this could look can be found [here](https://github.com/Aam-Dig
 
 The backend can record a tamper-resistant change log of every entity write, so
 that "what changed, by whom and when" can be reconstructed for audit/legal
-purposes (see [issue #4026](https://github.com/Aam-Digital/ndb-core/issues/4026)).
+purposes.
 
 Because the proxy holds the authenticated Keycloak identity at write time and
 sees every revision a client pushes, it is the right place to record this: the
