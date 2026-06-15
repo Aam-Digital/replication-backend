@@ -105,12 +105,6 @@ from concurrent/multi-device edits are captured.
   `DELETE`), one record is written to a separate database derived from the
   source db name: writes to `app` are recorded in `app-audit`. The convention
   is hard-wired, and each `<db>-audit` database is auto-created on first write.
-- Each record's `_id` is `AuditRecord:<entityId>:<ISO-timestamp>:<rev>`. The
-  `AuditRecord:` prefix is load-bearing: the proxy derives the CASL subject from
-  the `_id` prefix (`detectDocumentType` = `_id.split(':')[0]`), so audit records
-  are classified as the dedicated subject `AuditRecord` — not as the source
-  entity (`Child`, ...). This is what keeps them un-forgeable and governed by a
-  single rule (see Protection).
 - A record contains: the changed `entityId`, source `database`, `operation`
   (`create` / `update` / `delete` / `baseline`), the new `rev` and its
   `parentRev`, a **server-set** `timestamp`, the **authenticated** `user`
