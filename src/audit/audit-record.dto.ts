@@ -53,6 +53,7 @@ export class AuditRecordEntity {
   /** CASL subject + `_id` prefix for all audit records */
   static readonly TYPE = 'AuditRecord';
 
+  /**  the internal uuid of this AuditRecordEntity doc in the DB */
   _id!: string;
 
   /** the changed doc's `_id`, e.g. `Child:123` */
