@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { firstValueFrom } from 'rxjs';
 import { omit } from 'lodash';
 import * as jsondiffpatch from 'jsondiffpatch';
@@ -13,12 +12,7 @@ import {
   DocSuccess,
 } from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { AllDocsResponse } from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/all-docs.dto';
-import {
-  AuditConfig,
-  auditDbFor,
-  isAuditDb,
-  isReplicableId,
-} from './audit.config';
+import { auditDbFor, isAuditDb, isReplicableId } from './audit.config';
 import {
   AuditEntry,
   AuditRecordEntity,
@@ -41,16 +35,43 @@ const IGNORED_DIFF_FIELDS = [
 ];
 
 /**
+ * Contract for recording entity writes to the audit log.
+ *
+ * {@link AuditModule} selects the implementation from the `AUDIT_ENABLED`
+ * flag: {@link DefaultAuditService} when enabled, {@link NoopAuditService} when
+ * disabled. Consumers inject this abstract type and never branch on the flag
+ * themselves.
+ */
+export abstract class AuditService {
+  /** see {@link DefaultAuditService.record} */
+  abstract record(
+    db: string,
+    entries: AuditEntry[],
+    user: UserInfo,
+  ): Promise<void>;
+
+  /** see {@link DefaultAuditService.recordBulkWrite} */
+  abstract recordBulkWrite(
+    db: string,
+    written: BulkDocsRequest,
+    existingDocs: Map<string, DatabaseDocument>,
+    response: BulkDocsResponse,
+    user: UserInfo,
+  ): Promise<void>;
+}
+
+/**
  * Records every entity write to a separate, client-inaccessible `<db>-audit`
- * database. Gated behind the {@link AuditConfig.AUDIT_ENABLED_ENV}
- * flag; a complete no-op when disabled.
+ * database. Provided only when auditing is enabled (see {@link AuditModule});
+ * otherwise {@link NoopAuditService} is wired in its place, so this class is
+ * free of feature-flag checks.
  *
  * Writes are best-effort-but-logged: a failed audit write never blocks
  * or fails the original entity write.
  */
 @Injectable()
-export class AuditService {
-  private readonly logger = new Logger(AuditService.name);
+export class DefaultAuditService extends AuditService {
+  private readonly logger = new Logger(DefaultAuditService.name);
 
   private readonly diffPatcher = jsondiffpatch.create({
     // identify array elements by their entity id so moves/edits diff sanely
@@ -61,23 +82,17 @@ export class AuditService {
   /** audit dbs already known to exist, to avoid repeated create calls */
   private readonly ensuredDbs = new Set<string>();
 
-  constructor(
-    private readonly couchdbService: CouchdbService,
-    private readonly configService: ConfigService,
-  ) {}
-
-  get enabled(): boolean {
-    const value = this.configService.get(AuditConfig.AUDIT_ENABLED_ENV);
-    return value === true || value === 'true';
+  constructor(private readonly couchdbService: CouchdbService) {
+    super();
   }
 
   /**
    * Record the given writes to the derived `<db>-audit` database.
    *
-   * No-op when the feature is disabled or there is nothing replicable to audit.
-   * The first change to a previously-unaudited entity additionally emits a
-   * full-snapshot `baseline` record so history is not lost when the feature is
-   * switched on for an existing system.
+   * No-op when there is nothing replicable to audit. The first change to a
+   * previously-unaudited entity additionally emits a full-snapshot `baseline`
+   * record so history is not lost when the feature is switched on for an
+   * existing system.
    *
    * @param db source database name (e.g. `app`)
    * @param entries the writes performed against `db`
@@ -88,9 +103,6 @@ export class AuditService {
     entries: AuditEntry[],
     user: UserInfo,
   ): Promise<void> {
-    if (!this.enabled) {
-      return;
-    }
     if (isAuditDb(db)) {
       // never audit the audit db itself
       return;

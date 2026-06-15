@@ -1,18 +1,16 @@
 import { of } from 'rxjs';
-import { AuditService } from './audit.service';
+import { AuditService, DefaultAuditService } from './audit.service';
+import { NoopAuditService } from './noop-audit.service';
 import { UserInfo } from '../restricted-endpoints/session/user-auth.dto';
 import { AuditEntry } from './audit-record.dto';
 
-function makeService(opts?: { enabled?: boolean; existingAuditRows?: any[] }) {
+function makeService(opts?: { existingAuditRows?: any[] }) {
   const couchdb = {
     createDb: jest.fn().mockReturnValue(of({ ok: true })),
     get: jest.fn().mockReturnValue(of({ rows: opts?.existingAuditRows ?? [] })),
     post: jest.fn().mockReturnValue(of({})),
   };
-  const config = {
-    get: () => (opts?.enabled === false ? 'false' : 'true'),
-  };
-  const service = new AuditService(couchdb as any, config as any);
+  const service = new DefaultAuditService(couchdb as any);
   return { service, couchdb };
 }
 
@@ -22,16 +20,19 @@ function postedRecords(couchdb: any) {
   return couchdb.post.mock.calls[0][2].docs;
 }
 
-it('is a no-op when the feature is disabled', async () => {
-  const { service, couchdb } = makeService({ enabled: false });
+it('NoopAuditService records nothing (wired when the feature is disabled)', async () => {
+  const service: AuditService = new NoopAuditService();
 
-  await service.record(
-    'app',
-    [{ newDoc: { _id: 'Child:1', _rev: '1-a' }, operation: 'create' }],
-    user,
-  );
-
-  expect(couchdb.post).not.toHaveBeenCalled();
+  await expect(
+    service.record(
+      'app',
+      [{ newDoc: { _id: 'Child:1', _rev: '1-a' }, operation: 'create' }],
+      user,
+    ),
+  ).resolves.toBeUndefined();
+  await expect(
+    service.recordBulkWrite('app', { docs: [] } as any, new Map(), [], user),
+  ).resolves.toBeUndefined();
 });
 
 it('writes one create record with server timestamp and authenticated user', async () => {
