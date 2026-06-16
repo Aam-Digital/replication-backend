@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { AxiosResponse } from 'axios';
-import { catchError, map, Observable } from 'rxjs';
+import { catchError, map, Observable, of } from 'rxjs';
 import {
   DatabaseDocument,
   DocSuccess,
@@ -90,6 +90,24 @@ export class CouchdbService {
       url += documentId;
     }
     return url;
+  }
+
+  /**
+   * Create a database. Resolves successfully if it already exists (412).
+   * Uses the proxy's admin credentials (applied to all requests by default).
+   */
+  createDb(dbName: string): Observable<{ ok: boolean }> {
+    return this.httpService.put<{ ok: boolean }>(this.buildDocUrl(dbName)).pipe(
+      map((response) => response.data),
+      catchError((err) => {
+        const status = err?.status ?? err?.getStatus?.();
+        if (status === 412) {
+          // database already exists
+          return of({ ok: true });
+        }
+        throw err;
+      }),
+    );
   }
 
   put(dbName: string, document: DatabaseDocument): Observable<DocSuccess> {

@@ -33,8 +33,8 @@ import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
 @Controller()
 export class BulkDocEndpointsController {
   constructor(
-    private couchdbService: CouchdbService,
-    private documentFilter: BulkDocumentService,
+    private readonly couchdbService: CouchdbService,
+    private readonly bulkDocumentService: BulkDocumentService,
   ) {}
 
   /**
@@ -55,15 +55,7 @@ export class BulkDocEndpointsController {
     @Body() body: BulkDocsRequest,
     @User() user: UserInfo,
   ): Observable<BulkDocsResponse> {
-    return from(this.documentFilter.filterBulkDocsRequest(body, user, db)).pipe(
-      switchMap((filteredBody) =>
-        this.couchdbService.post<BulkDocsResponse>(
-          db,
-          '_bulk_docs',
-          filteredBody,
-        ),
-      ),
-    );
+    return from(this.bulkDocumentService.handleBulkDocs(body, user, db));
   }
 
   /**
@@ -86,7 +78,7 @@ export class BulkDocEndpointsController {
   ): Observable<FindResponse> {
     return from(this.couchdbService.post<FindResponse>(db, '_find', body)).pipe(
       switchMap((response) => {
-        return of(this.documentFilter.filterFindResponse(response, user));
+        return of(this.bulkDocumentService.filterFindResponse(response, user));
       }),
     );
   }
@@ -112,7 +104,7 @@ export class BulkDocEndpointsController {
       .post<BulkGetResponse>(db, '_bulk_get', body, queryParams)
       .pipe(
         map((response) =>
-          this.documentFilter.filterBulkGetResponse(response, user),
+          this.bulkDocumentService.filterBulkGetResponse(response, user),
         ),
       );
   }
@@ -138,7 +130,7 @@ export class BulkDocEndpointsController {
       .post<AllDocsResponse>(db, '_all_docs', body, queryParams)
       .pipe(
         map((response) =>
-          this.documentFilter.filterAllDocsResponse(response, user),
+          this.bulkDocumentService.filterAllDocsResponse(response, user),
         ),
       );
   }
@@ -153,7 +145,7 @@ export class BulkDocEndpointsController {
       .get<AllDocsResponse>(db, '_all_docs', queryParams)
       .pipe(
         map((response) =>
-          this.documentFilter.filterAllDocsResponse(response, user),
+          this.bulkDocumentService.filterAllDocsResponse(response, user),
         ),
       );
   }

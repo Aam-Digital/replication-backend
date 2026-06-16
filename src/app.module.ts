@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { AppConfiguration } from './config/configuration';
 import { CouchdbModule } from './couchdb/couchdb.module';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-end
     AdminModule,
     CouchdbModule,
     AuthModule,
+    AuditModule,
     RestrictedEndpointsModule,
   ],
 })

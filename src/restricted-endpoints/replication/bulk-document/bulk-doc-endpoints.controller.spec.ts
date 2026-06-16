@@ -24,6 +24,7 @@ describe('BulkDocEndpointsController', () => {
       filterBulkGetResponse: () => null,
       filterAllDocsResponse: () => null,
       filterBulkDocsRequest: () => null,
+      handleBulkDocs: () => null,
       filterFindResponse: () => null,
     } as any;
 
@@ -120,7 +121,7 @@ describe('BulkDocEndpointsController', () => {
     expect(result).toEqual(filteredResponse);
   });
 
-  it('should use the document filter service in _bulk_docs', async () => {
+  it('should delegate _bulk_docs to the document service (filter + write + audit)', async () => {
     const request: BulkDocsRequest = {
       new_edits: false,
       docs: [
@@ -130,43 +131,24 @@ describe('BulkDocEndpointsController', () => {
           _revisions: { start: 1, ids: ['someRev'] },
           someProperty: 'someValue',
         },
-        {
-          _id: 'School:1',
-          _rev: 'anotherRev',
-          _revisions: { start: 1, ids: ['anotherRev'] },
-          anotherProperty: 'anotherProperty',
-        },
       ],
     };
-    jest.spyOn(mockCouchDBService, 'post');
-    const filteredRequest: BulkDocsRequest = {
-      new_edits: false,
-      docs: [
-        {
-          _id: 'School:1',
-          _rev: 'anotherRev',
-          _revisions: { start: 1, ids: ['anotherRev'] },
-          anotherProperty: 'anotherProperty',
-        },
-      ],
-    };
+    const response = [{ ok: true, id: 'Child:1', rev: 'someRev' }];
     jest
-      .spyOn(documentFilter, 'filterBulkDocsRequest')
-      .mockReturnValue(Promise.resolve(filteredRequest));
+      .spyOn(documentFilter, 'handleBulkDocs')
+      .mockReturnValue(Promise.resolve(response as any));
     const user = new UserInfo('user-id', 'username', ['admin']);
 
-    await firstValueFrom(controller.bulkDocs('db', request, user));
+    const result = await firstValueFrom(
+      controller.bulkDocs('db', request, user),
+    );
 
-    expect(documentFilter.filterBulkDocsRequest).toHaveBeenCalledWith(
+    expect(documentFilter.handleBulkDocs).toHaveBeenCalledWith(
       request,
       user,
       'db',
     );
-    expect(mockCouchDBService.post).toHaveBeenCalledWith(
-      'db',
-      '_bulk_docs',
-      filteredRequest,
-    );
+    expect(result).toEqual(response);
   });
 
   it('find() should use the document filter service', async () => {

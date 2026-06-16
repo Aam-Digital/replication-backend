@@ -8,6 +8,7 @@ import {
 import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
+  BulkDocsResponse,
   DatabaseDocument,
   FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
@@ -20,6 +21,7 @@ import { firstValueFrom } from 'rxjs';
 import { Ability } from '@casl/ability';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
+import { AuditService } from '../../../audit/audit.service';
 
 /**
  * Handle bulk document requests with the remote CouchDB server
@@ -28,9 +30,10 @@ import { DocumentFilterService } from '../document-filter/document-filter.servic
 @Injectable()
 export class BulkDocumentService {
   constructor(
-    private permissionService: PermissionService,
-    private couchdbService: CouchdbService,
-    private documentFilter: DocumentFilterService,
+    private readonly permissionService: PermissionService,
+    private readonly couchdbService: CouchdbService,
+    private readonly documentFilter: DocumentFilterService,
+    private readonly auditService: AuditService,
   ) {}
 
   filterBulkGetResponse(
@@ -78,14 +81,52 @@ export class BulkDocumentService {
     };
   }
 
+  /**
+   * Filter, write and audit a bulk-docs request as one cohesive unit.
+   *
+   * The previously-fetched `existingDocs` (needed for permission checks) is
+   * reused as the "before" state for the audit diff, so it never leaves the
+   * service and the hot path fetches each existing doc only once.
+   */
+  async handleBulkDocs(
+    request: BulkDocsRequest,
+    user: UserInfo,
+    db: string,
+  ): Promise<BulkDocsResponse> {
+    const existingDocs = await this.fetchExistingDocs(request.docs, db);
+    const filtered = this.filterDocs(request, user, existingDocs);
+    const response = await firstValueFrom(
+      this.couchdbService.post<BulkDocsResponse>(db, '_bulk_docs', filtered),
+    );
+    await this.auditService.recordBulkWrite(
+      db,
+      filtered,
+      existingDocs,
+      response,
+      user,
+    );
+    return response;
+  }
+
   async filterBulkDocsRequest(
     request: BulkDocsRequest,
     user: UserInfo,
     db: string,
   ): Promise<BulkDocsRequest> {
-    const ability = this.permissionService.getAbilityFor(user);
+    const existingDocs = await this.fetchExistingDocs(request.docs, db);
+    return this.filterDocs(request, user, existingDocs);
+  }
+
+  /**
+   * Fetch the current revision of every doc in the request (for permission
+   * checks and as the audit "before" state), keyed by `_id`.
+   */
+  private async fetchExistingDocs(
+    docs: DatabaseDocument[],
+    db: string,
+  ): Promise<Map<string, DatabaseDocument>> {
     const allDocsRequest: AllDocsRequest = {
-      keys: request.docs.map((doc) => doc._id!),
+      keys: docs.map((doc) => doc._id).filter((id): id is string => !!id),
     };
     const response = await firstValueFrom(
       this.couchdbService.post<AllDocsResponse>(
@@ -97,17 +138,28 @@ export class BulkDocumentService {
         },
       ),
     );
+    const existingDocs = new Map<string, DatabaseDocument>();
+    for (const row of response.rows ?? []) {
+      if (row.doc) {
+        existingDocs.set(row.id, row.doc);
+      }
+    }
+    return existingDocs;
+  }
+
+  private filterDocs(
+    request: BulkDocsRequest,
+    user: UserInfo,
+    existingDocs: Map<string, DatabaseDocument>,
+  ): BulkDocsRequest {
+    const ability = this.permissionService.getAbilityFor(user);
     return {
       new_edits: request.new_edits,
       docs: request.docs.filter(
         (doc) =>
-          this.documentFilter.isReplicable(doc._id!) &&
-          this.hasPermissionsForDoc(
-            doc,
-            response.rows.find((responseDoc) => responseDoc.id === doc._id)
-              ?.doc ?? undefined,
-            ability,
-          ),
+          !!doc._id &&
+          this.documentFilter.isReplicable(doc._id) &&
+          this.hasPermissionsForDoc(doc, existingDocs.get(doc._id), ability),
       ),
     };
   }
@@ -119,7 +171,8 @@ export class BulkDocumentService {
       warning: request.warning,
       docs: request.docs.filter(
         (doc) =>
-          this.documentFilter.isReplicable(doc._id!) &&
+          !!doc._id &&
+          this.documentFilter.isReplicable(doc._id) &&
           ability.can('read', doc),
       ),
     };

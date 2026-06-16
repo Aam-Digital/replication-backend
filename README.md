@@ -86,6 +86,72 @@ A swagger / OpenAPI interface can be visited at `/api/` which shows all endpoint
 Additionally, a separate check on the client side is necessary that cleans up the local database whenever a client looses read permissions for a document.
 A example for how this could look can be found [here](https://github.com/Aam-Digital/ndb-core/blob/master/src/app/core/permissions/permission-enforcer/permission-enforcer.service.ts).
 
+## Audit / Changelog Recording
+
+The backend can record a tamper-resistant change log of every entity write, so
+that "what changed, by whom and when" can be reconstructed for audit/legal
+purposes.
+
+Because the proxy holds the authenticated Keycloak identity at write time and
+sees every revision a client pushes, it is the right place to record this: the
+"who" and the server-set timestamp are trustworthy, and conflicting branches
+from concurrent/multi-device edits are captured.
+
+### How it works
+
+- Enabled via the `AUDIT_ENABLED` environment variable (default `false`). When
+  disabled the feature is a complete no-op — no behavior change on any write path.
+- On each successful write (bulk `_bulk_docs` replication, single `PUT`, and
+  `DELETE`), one record is written to a separate database derived from the
+  source db name: writes to `app` are recorded in `app-audit`. The convention
+  is hard-wired, and each `<db>-audit` database is auto-created on first write.
+- A record contains: the changed `entityId`, source `database`, `operation`
+  (`create` / `update` / `delete` / `baseline`), the new `rev` and its
+  `parentRev`, a **server-set** `timestamp`, the **authenticated** `user`
+  (`{ id, name, roles }`), and a [`jsondiffpatch`](https://www.npmjs.com/package/jsondiffpatch)
+  `diff` of the change. The client's local `updated`/`created` metadata
+  (`{ at, by }`) is kept inside the diff; only internal CouchDB noise (`_rev`,
+  `_revisions`, `_conflicts`, `_attachments`) is excluded.
+- **Seamless activation:** the first change to an entity that has no prior audit
+  record additionally emits a full-snapshot `baseline` record, so history is not
+  lost when the feature is switched on for an existing system. No migration is
+  needed.
+
+### Protection (read-only via the permission engine)
+
+The `<db>-audit` database is reachable through the
+normal proxy and governed entirely by CASL on the `AuditRecord` subject:
+
+- The system's own audit writes use the proxy's admin credentials and are
+  written **directly** to CouchDB via `CouchdbService`, bypassing the
+  permission-checked endpoints, so recording always succeeds.
+- Any **client** write that targets a `AuditRecord:` document (to the audit DB
+  _or_ a forged one in the main app DB) is dropped.
+- A client **read** of audit records is allowed only where a
+  `{ subject: "AuditRecord", action: "read" }` rule is granted (the proxy filters
+  reads via `ability.can('read', doc)`). This is what lets the history-viewing UI
+  read the audit DB as an ordinary read-only remote database.
+
+> **Where the read rule lives:** the `AuditRecord` read rule is part of the
+> application's permission config (the `Config:Permissions` document managed in
+> ndb-core), granted to privileged roles only — not hard-coded here. Without it,
+> the audit DB is invisible and immutable to clients (default-deny), which is the
+> safe default.
+>
+> **Documented trade-off:** whole-document read rules do not strip individual
+> fields, so a user permitted to read an audit record sees the entire diff, and
+> read permission is coarse (the single `AuditRecord` subject). Mitigation: grant
+> the read rule only to privileged roles who already see full records.
+> Field-level redaction would require a bespoke read endpoint instead.
+
+### Known limitation
+
+Only revisions _pushed_ by clients are captured. PouchDB sends only **leaf**
+revisions with their ancestry, so intermediate same-device/offline edits never
+reach the backend and cannot be audited by any backend component. The genuine
+guarantee is conflict-branch capture and a trustworthy authenticated author and
+server timestamp.
+
 # Development
 
 This system is Node.js application built with the [NestJS](https://nestjs.com/) framework.
