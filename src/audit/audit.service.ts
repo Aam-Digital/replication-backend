@@ -108,6 +108,15 @@ export class DefaultAuditService extends AuditService {
       return;
     }
 
+    /**
+     * Keep only auditable entries. This is NOT an "is new entity" check:
+     * creates, updates and deletes all carry a `newDoc` (a delete's `newDoc` is
+     * the tombstone with `_deleted: true`), so none of them are filtered out
+     * here — the create-vs-update distinction is made later via `existingDoc`.
+     * The `newDoc` guard only drops malformed/empty entries and narrows the type
+     * so `newDoc._id` is reachable for the `isReplicableId` check (which skips
+     * CouchDB-internal docs like `_design/`/`_local/`).
+     */
     const relevant = (entries ?? []).filter(
       (entry) => entry?.newDoc && isReplicableId(entry.newDoc._id),
     );

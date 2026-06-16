@@ -44,15 +44,15 @@ export interface AuditEntry {
  * `_id` encodes the entity id and timestamp for performant per-entity range
  * queries: `AuditRecord:<entityId>:<ISO-timestamp>:<new-rev>`.
  *
- * Owns the {@link AuditRecordEntity.TYPE} subject prefix (mirroring how ndb-core
+ * Owns the {@link AuditRecordEntity.ENTITY_TYPE} subject prefix (mirroring how ndb-core
  * entities expose their type): the proxy derives the CASL subject from the `_id`
  * prefix (`detectDocumentType` = `_id.split(':')[0]`), so audit docs are
  * classified as the dedicated subject `AuditRecord`, not as the source entity.
  */
 export class AuditRecordEntity {
   /** CASL subject + `_id` prefix for all audit records */
-  static readonly TYPE = 'AuditRecord';
-
+  static readonly ENTITY_TYPE = 'AuditRecord';
+ 
   /**  the internal uuid of this AuditRecordEntity doc in the DB */
   _id!: string;
 
@@ -65,9 +65,9 @@ export class AuditRecordEntity {
   operation!: AuditOperation;
 
   /**
-    * new `_rev` of the written revision.
-    *  (not the _rev of this AuditRecordEntity in the DB)
-    */
+   * new `_rev` of the written revision.
+   *  (not the _rev of this AuditRecordEntity in the DB)
+   */
   rev?: string;
 
   /** the written rev's parent, from the submitted doc's `_revisions` ancestry */
@@ -91,12 +91,12 @@ export class AuditRecordEntity {
  * `Child:123` -> `AuditRecord:Child:123`.
  */
 export function auditIdPrefix(entityId: string): string {
-  return `${AuditRecordEntity.TYPE}:${entityId}`;
+  return `${AuditRecordEntity.ENTITY_TYPE}:${entityId}`;
 }
 
 /**
  * Build the deterministic audit record `_id`, prefixed with the
- * {@link AuditRecordEntity.TYPE} subject so the proxy classifies it as an audit
+ * {@link AuditRecordEntity.ENTITY_TYPE} subject so the proxy classifies it as an audit
  * doc (not as the source entity): `AuditRecord:<entityId>:<timestamp>:<rev>`.
  */
 export function buildAuditId(

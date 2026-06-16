@@ -172,6 +172,25 @@ it('records a delete operation', async () => {
   expect(postedRecords(couchdb)[0].operation).toBe('delete');
 });
 
+it('writes a baseline before the delete when the first audited operation is a delete (restore-from-delete)', async () => {
+  const { service, couchdb } = makeService({ existingAuditRows: [] });
+  const entry: AuditEntry = {
+    existingDoc: { _id: 'Child:1', _rev: '1-a', name: 'A' },
+    newDoc: { _id: 'Child:1', _rev: '2-b', _deleted: true },
+    operation: 'delete',
+  };
+
+  await service.record('app', [entry], user);
+
+  const records = postedRecords(couchdb);
+  expect(records).toHaveLength(2);
+  // the baseline captures the full pre-delete snapshot so the entity can be
+  // restored even though its first-ever audit record is the deletion
+  expect(records[0].operation).toBe('baseline');
+  expect(records[0].diff).toEqual({ _id: 'Child:1', name: 'A' });
+  expect(records[1].operation).toBe('delete');
+});
+
 it('skips non-replicable documents (_design/, _local/)', async () => {
   const { service, couchdb } = makeService();
 
