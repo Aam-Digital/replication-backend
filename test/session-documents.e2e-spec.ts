@@ -36,7 +36,7 @@ describe('Session & document endpoints (e2e)', () => {
         .expect(201);
       expect(res.body).toMatchObject({ name: 'user', roles: ['user_app'] });
       expect(
-        res.headers['set-cookie']?.find((h: string) =>
+        (res.headers['set-cookie'] as unknown as string[])?.find((h: string) =>
           h.includes('access_token='),
         ),
       ).toBeDefined();
@@ -65,7 +65,7 @@ describe('Session & document endpoints (e2e)', () => {
         .post('/_session')
         .send({ name: 'user', password: 'user-pw' })
         .expect(201);
-      const cookieHeader = login.headers['set-cookie'].find((h: string) =>
+      const cookieHeader = (login.headers['set-cookie'] as unknown as string[]).find((h: string) =>
         h.includes('access_token='),
       );
       const cookie = cookieHeader!.split(';')[0];
