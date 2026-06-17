@@ -1,5 +1,8 @@
 .env
 
+# Claude Code worktrees (local only, must never be committed as submodules)
+.claude/worktrees/
+
 # Created by https://www.toptal.com/developers/gitignore/api/node,webstorm,visualstudiocode
 # Edit at https://www.toptal.com/developers/gitignore?templates=node,webstorm,visualstudiocode
 
