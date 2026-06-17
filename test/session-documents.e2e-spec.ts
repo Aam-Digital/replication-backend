@@ -35,7 +35,11 @@ describe('Session & document endpoints (e2e)', () => {
         .send({ name: 'user', password: 'user-pw' })
         .expect(201);
       expect(res.body).toMatchObject({ name: 'user', roles: ['user_app'] });
-      expect(res.headers['set-cookie']?.[0]).toContain('access_token=');
+      expect(
+        res.headers['set-cookie']?.find((h: string) =>
+          h.includes('access_token='),
+        ),
+      ).toBeDefined();
     });
 
     it('POST rejects invalid credentials', () => {
@@ -61,7 +65,10 @@ describe('Session & document endpoints (e2e)', () => {
         .post('/_session')
         .send({ name: 'user', password: 'user-pw' })
         .expect(201);
-      const cookie = login.headers['set-cookie'][0].split(';')[0];
+      const cookieHeader = login.headers['set-cookie'].find((h: string) =>
+        h.includes('access_token='),
+      );
+      const cookie = cookieHeader!.split(';')[0];
 
       const res = await request(ctx.app.getHttpServer())
         .get('/_session')

@@ -59,18 +59,25 @@ export async function startTestApp(
   process.env.JWT_PUBLIC_KEY =
     '-----BEGIN PUBLIC KEY-----\ne2e-test\n-----END PUBLIC KEY-----';
 
-  const moduleFixture: TestingModule = await Test.createTestingModule({
-    imports: [AppModule],
-  }).compile();
+  let app: INestApplication | undefined;
+  try {
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [AppModule],
+    }).compile();
 
-  // mirror main.ts bootstrap: body parsing is applied as middleware
-  // by RestrictedEndpointsModule (10mb limit), not by the framework default
-  const app = moduleFixture.createNestApplication({
-    bodyParser: false,
-    logger: false,
-  });
-  app.use(cookieParser());
-  await app.init();
+    // mirror main.ts bootstrap: body parsing is applied as middleware
+    // by RestrictedEndpointsModule (10mb limit), not by the framework default
+    app = moduleFixture.createNestApplication({
+      bodyParser: false,
+      logger: false,
+    });
+    app.use(cookieParser());
+    await app.init();
+  } catch (err) {
+    await app?.close();
+    await couch.stop();
+    throw err;
+  }
 
   couch.clearRequestLog();
 

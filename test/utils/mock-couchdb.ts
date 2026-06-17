@@ -30,6 +30,7 @@ export class MockCouchDb {
   private readonly longpolls: {
     db: string;
     since: number;
+    limit: number;
     includeDocs: boolean;
     res: express.Response;
     timer: NodeJS.Timeout;
@@ -214,7 +215,12 @@ export class MockCouchDb {
       if (lp.db !== db) {
         continue;
       }
-      const response = this.changesSince(db, lp.since, 100, lp.includeDocs);
+      const response = this.changesSince(
+        db,
+        lp.since,
+        lp.limit,
+        lp.includeDocs,
+      );
       if (response.results.length > 0) {
         clearTimeout(lp.timer);
         this.longpolls.splice(i, 1);
@@ -247,12 +253,10 @@ export class MockCouchDb {
         .split(':');
       const user = this.users.get(name);
       if (!user || user.password !== password) {
-        return res
-          .status(401)
-          .json({
-            error: 'unauthorized',
-            reason: 'Name or password is incorrect.',
-          });
+        return res.status(401).json({
+          error: 'unauthorized',
+          reason: 'Name or password is incorrect.',
+        });
       }
       res.json({ ok: true, userCtx: { name, roles: user.roles } });
     });
@@ -281,6 +285,7 @@ export class MockCouchDb {
         const entry = {
           db,
           since,
+          limit,
           includeDocs,
           res,
           timer: setTimeout(() => {

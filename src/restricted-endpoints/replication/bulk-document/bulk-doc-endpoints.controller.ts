@@ -46,6 +46,9 @@ export class BulkDocEndpointsController {
    * @param user logged in user
    * @returns BulkDocsResponse list of success or error messages regarding the to-be-saved documents
    */
+  // TODO(#274): denied docs are silently dropped rather than returning forbidden error entries per input;
+  // this breaks the CouchDB one-result-per-input contract and may cause PouchDB retry churn
+  // https://github.com/Aam-Digital/replication-backend/issues/274
   @Post('/:db/_bulk_docs')
   @ApiOperation({
     description: `Upload multiple documents with a single request.\n\ncaveats: only works with ?include_docs=true`,

@@ -169,6 +169,9 @@ describe('Replication endpoints (e2e)', () => {
       expect(ids).toEqual(['Child:1', 'Note:1']);
     });
 
+    // TODO: fix filterAllDocsResponse to apply permission checks even when include_docs is absent,
+    // so that unauthorized doc IDs/revs are not leaked as bare metadata rows.
+    // After the fix, update the expectation below to exclude 'School:1'.
     it('keeps rows without doc content when include_docs is not set', async () => {
       // current behavior: only the doc body is permission-checked,
       // bare rows (id + rev) pass through except for ignored prefixes
@@ -197,6 +200,8 @@ describe('Replication endpoints (e2e)', () => {
     });
   });
 
+  // TODO(#274): response only contains forwarded docs, breaking the one-result-per-input CouchDB contract
+  // https://github.com/Aam-Digital/replication-backend/issues/274
   describe('POST /:db/_bulk_docs', () => {
     it('forwards only permitted writes to CouchDB', async () => {
       ctx.couch.clearRequestLog();
