@@ -1,6 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "group:allNonMajor"],
+  "extends": [
+    "config:recommended",
+    "group:allNonMajor",
+    ":maintainLockFilesMonthly"
+  ],
   "enabledManagers": ["npm"],
   "timezone": "Etc/UTC",
   "schedule": ["after 00:00 and before 09:00 on Monday"],
@@ -12,9 +16,6 @@
   "rangeStrategy": "bump",
   "constraints": {
     "npm": ">=11.0.0"
-  },
-  "lockFileMaintenance": {
-    "enabled": true
   },
   "packageRules": [
     {
@@ -32,10 +33,6 @@
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "weekly-non-major-updates",
       "automerge": false
-    },
-    {
-      "matchUpdateTypes": ["lockFileMaintenance"],
-      "groupName": "weekly-non-major-updates"
     }
   ]
 }
