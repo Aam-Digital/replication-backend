@@ -35,7 +35,7 @@
     "js-yaml": "4.2.0",
     "cookie-parser": "^1.4.7",
     "http-proxy-middleware": "^3.0.7",
-    "jsondiffpatch": "^0.5.0",
+    "jsondiffpatch": "^0.7.0",
     "lodash": "^4.18.1",
     "passport": "^0.7.0",
     "passport-http": "^0.3.0",
@@ -81,8 +81,18 @@
     "rootDir": "src",
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.(t|j)s$": [
+        "ts-jest",
+        {
+          "tsconfig": {
+            "allowJs": true
+          }
+        }
+      ]
     },
+    "transformIgnorePatterns": [
+      "node_modules/(?!jsondiffpatch)"
+    ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
     ],

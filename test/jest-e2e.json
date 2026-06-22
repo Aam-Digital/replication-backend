@@ -5,6 +5,14 @@
   "testRegex": ".e2e-spec.ts$",
   "testTimeout": 15000,
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
-  }
+    "^.+\\.(t|j)s$": [
+      "ts-jest",
+      {
+        "tsconfig": {
+          "allowJs": true
+        }
+      }
+    ]
+  },
+  "transformIgnorePatterns": ["node_modules/(?!jsondiffpatch)"]
 }
