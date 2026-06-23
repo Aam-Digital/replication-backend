@@ -13,30 +13,30 @@ afterEach(() => {
   }
 });
 
-it('GET /_features/audit returns enabled=true when AUDIT_ENABLED=true (public, not captured by the /:db proxy routes)', async () => {
+it('GET /_features reports audit.enabled=true when AUDIT_ENABLED=true (public, not captured by the /:db proxy routes)', async () => {
   process.env.AUDIT_ENABLED = 'true';
   const ctx = await startTestApp();
   try {
     // unauthenticated request: a 200 with the feature body proves the literal
-    // route wins over /:db/:docId (which would otherwise treat this as db
-    // `_features`, doc `audit`) and needs no auth
+    // route wins over /:db (which would otherwise treat this as db `_features`)
+    // and needs no auth
     await request(ctx.app.getHttpServer())
-      .get('/_features/audit')
+      .get('/_features')
       .expect(200)
-      .expect({ enabled: true });
+      .expect({ audit: { enabled: true } });
   } finally {
     await ctx.stop();
   }
 });
 
-it('GET /_features/audit returns enabled=false when AUDIT_ENABLED is unset', async () => {
+it('GET /_features reports audit.enabled=false when AUDIT_ENABLED is unset', async () => {
   delete process.env.AUDIT_ENABLED;
   const ctx = await startTestApp();
   try {
     await request(ctx.app.getHttpServer())
-      .get('/_features/audit')
+      .get('/_features')
       .expect(200)
-      .expect({ enabled: false });
+      .expect({ audit: { enabled: false } });
   } finally {
     await ctx.stop();
   }

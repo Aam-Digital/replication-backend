@@ -8,6 +8,7 @@ import { AppConfiguration } from './config/configuration';
 import { CouchdbModule } from './couchdb/couchdb.module';
 import { RestrictedEndpointsModule } from './restricted-endpoints/restricted-endpoints.module';
 import { AuditModule } from './audit/audit.module';
+import { FeaturesModule } from './features/features.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { AuditModule } from './audit/audit.module';
     CouchdbModule,
     AuthModule,
     AuditModule,
+    FeaturesModule,
     RestrictedEndpointsModule,
   ],
 })

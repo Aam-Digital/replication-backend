@@ -3,7 +3,6 @@ import { HttpModule } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { CouchdbService } from '../couchdb/couchdb.service';
 import { isAuditEnabled } from './audit.config';
-import { AuditFeatureController } from './audit-feature.controller';
 import { AuditService, DefaultAuditService } from './audit.service';
 import { NoopAuditService } from './noop-audit.service';
 
@@ -32,7 +31,6 @@ import { NoopAuditService } from './noop-audit.service';
 @Global()
 @Module({
   imports: [HttpModule],
-  controllers: [AuditFeatureController],
   providers: [
     {
       provide: AuditService,
