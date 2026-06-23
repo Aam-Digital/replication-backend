@@ -2,7 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { CouchdbService } from '../couchdb/couchdb.service';
-import { AuditConfig } from './audit.config';
+import { isAuditEnabled } from './audit.config';
 import { AuditService, DefaultAuditService } from './audit.service';
 import { NoopAuditService } from './noop-audit.service';
 
@@ -39,7 +39,7 @@ import { NoopAuditService } from './noop-audit.service';
         config: ConfigService,
         couchdb: CouchdbService,
       ): AuditService =>
-        config.get<boolean>(AuditConfig.AUDIT_ENABLED_ENV, false)
+        isAuditEnabled(config)
           ? new DefaultAuditService(couchdb)
           : new NoopAuditService(),
     },

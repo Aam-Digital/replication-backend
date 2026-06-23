@@ -1,3 +1,5 @@
+import { ConfigService } from '@nestjs/config';
+
 /**
  * Configuration and naming conventions for the audit / changelog feature.
  *
@@ -44,4 +46,16 @@ export function isAuditDb(db: string): boolean {
  */
 export function isReplicableId(id: string | undefined): boolean {
   return !!id && !id.startsWith('_design/') && !id.startsWith('_local/');
+}
+
+/**
+ * Whether change-logging is enabled, from the {@link AuditConfig.AUDIT_ENABLED_ENV}
+ * flag. Single source of truth: used both to pick the audit service
+ * implementation (Default vs Noop) and to report the feature to the frontend.
+ * Coerces the env value explicitly (`ConfigService.get` returns the raw string,
+ * so `'false'` must not read as truthy).
+ */
+export function isAuditEnabled(config: ConfigService): boolean {
+  const value = config.get(AuditConfig.AUDIT_ENABLED_ENV);
+  return value === true || value === 'true';
 }
