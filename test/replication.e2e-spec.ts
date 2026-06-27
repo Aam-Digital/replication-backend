@@ -174,7 +174,7 @@ describe('Replication endpoints (e2e)', () => {
         .post('/app/_all_docs?include_docs=true')
         .set(...basicAuth('user', 'user-pw'))
         .send({ keys: ['Child:1', 'Child:does-not-exist'] })
-        .expect(201);
+        .expect(200);
       expect(res.body.rows).toHaveLength(2);
       expect(res.body.rows[1]).toMatchObject({
         key: 'Child:does-not-exist',
