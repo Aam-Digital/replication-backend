@@ -27,6 +27,8 @@ In both cases the following environment variables should be defined:
 - `DATABASE_URL` the URL where the CouchDB instance can be accessed
 - `DATABASE_USER` the name of a user that is a `member` of all databases inside the CouchDB instance. In case the proxy is also used to create new entries in the `_users` database, then this user needs to be `admin` in this database.
 - `DATABASE_PASSWORD` the password for the `DATABASE_USER`
+- `DATABASE_TIMEOUT_MS` (optional) per-request timeout in milliseconds for requests to CouchDB (default `60000`). Requests that exceed this are aborted instead of hanging forever. Must stay above ~`55000`, because the internal changes feed uses 50s longpoll requests that must not be aborted client-side.
+- `DATABASE_MAX_SOCKETS` (optional) maximum number of parallel keep-alive connections to CouchDB (default `50`). Bounds the connection load that request bursts (e.g. many syncing clients) can place on CouchDB.
 - `PERMISSION_DB` the database name where the permissions definition document is stored
 - `JWT_SECRET` a secret to create JWT tokens. They are used in the JWT auth which works similar to CouchDB's `POST /_session` endpoint. This should be changed to prevent others to create fake JWT tokens.
 - `JWT_PUBLIC_KEY` the public key which can be used to validate a JWT in the authorization header (bearer). The structure is the same as and compatible with [CouchDB JWT auth](https://docs.couchdb.org/en/stable/api/server/authn.html#jwt-authentication).
