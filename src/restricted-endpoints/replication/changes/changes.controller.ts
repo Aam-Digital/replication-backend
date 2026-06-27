@@ -4,8 +4,10 @@ import {
   Logger,
   Param,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { omit } from 'lodash';
 import { firstValueFrom, map } from 'rxjs';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
@@ -66,63 +68,100 @@ export class ChangesController {
    * Get the changes stream.
    * The changes feed only returns the doc IDs to which the requesting user has access.
    * Even if `include_docs: true` is set, the stream will not return the document content.
+   *
+   * Permitted results are written to the response as soon as each internal
+   * CouchDB batch is filtered, instead of accumulating everything in memory
+   * first (#109). The envelope fields (last_seq, pending, lostPermissions)
+   * are appended once the iteration finishes.
+   *
    * @param db
-   * @param params
    * @param user
+   * @param params
+   * @param res
    */
   @Get(':db/_changes')
   async changes(
     @Param('db') db: string,
     @User() user: UserInfo,
-    @Query() params?: ChangesParams,
-  ): Promise<ChangesResponse> {
+    @Query() params: ChangesParams | undefined,
+    @Res() res: Response,
+  ): Promise<void> {
     const startTime = Date.now();
     const userName = user?.name ?? 'anonymous';
     const ability = this.permissionService.getAbilityFor(user);
-    const change: ChangesResponse = {
-      results: [],
-      lostPermissions: [],
-      last_seq: '',
-      pending: 0,
-    };
+    const lostPermissions: string[] = [];
+    let resultsWritten = 0;
+    let lastSeq = '';
+    let pending = 0;
     let since = params?.since;
     let iterations = 0;
     let totalFetched = 0;
-    while (true) {
-      iterations++;
-      const remainingChangesUntilLimit =
-        (params?.limit ?? Infinity) - change.results.length;
-      const res = await this.getPermittedChanges(
-        db,
-        { ...params, since },
-        ability,
-        remainingChangesUntilLimit,
+    try {
+      while (true) {
+        iterations++;
+        const remainingChangesUntilLimit =
+          (params?.limit ?? Infinity) - resultsWritten;
+        // note: the first fetch happens before any byte is written, so
+        // upstream errors (e.g. unknown db) still yield a proper error status
+        const batch = await this.getPermittedChanges(
+          db,
+          { ...params, since },
+          ability,
+          remainingChangesUntilLimit,
+        );
+        totalFetched += batch._totalFetchedFromCouch ?? 0;
+
+        if (iterations === 1) {
+          res.status(200);
+          res.setHeader('content-type', 'application/json');
+          await this.writeChunk(res, '{"results":[');
+        }
+        for (const result of batch.results) {
+          const item =
+            params?.include_docs === 'true' ? result : omit(result, 'doc');
+          await this.writeChunk(
+            res,
+            (resultsWritten > 0 ? ',' : '') + JSON.stringify(item),
+          );
+          resultsWritten++;
+        }
+        lostPermissions.push(...(batch.lostPermissions ?? []));
+        lastSeq = batch.last_seq;
+        pending = batch.pending;
+
+        const elapsed = Date.now() - startTime;
+        if (
+          pending === 0 ||
+          (params?.limit !== undefined && resultsWritten >= params.limit) ||
+          elapsed >= MAX_PROCESSING_TIME_MS ||
+          res.destroyed // client disconnected
+        ) {
+          // enough changes found, none left, or time budget exhausted
+          break;
+        }
+        since = lastSeq;
+      }
+
+      await this.writeChunk(
+        res,
+        `],"last_seq":${JSON.stringify(lastSeq)},"pending":${pending}` +
+          `,"lostPermissions":${JSON.stringify(lostPermissions)}}`,
       );
-      totalFetched += res._totalFetchedFromCouch ?? 0;
-      if (params?.include_docs === 'true') {
-        change.results.push(...res.results);
-      } else {
-        // doc content not requested: drop the (potentially large) doc bodies
-        // per iteration instead of accumulating all of them in memory until
-        // the end of the loop
-        change.results.push(...res.results.map((c) => omit(c, 'doc')));
+      res.end();
+    } catch (error) {
+      if (!res.headersSent) {
+        // nothing sent yet — let the regular exception handling reply
+        throw error;
       }
-      if (change.lostPermissions) {
-        change.lostPermissions.push(...(res.lostPermissions ?? []));
-      }
-      change.last_seq = res.last_seq;
-      change.pending = res.pending;
-      const elapsed = Date.now() - startTime;
-      if (
-        change.pending === 0 ||
-        (params?.limit !== undefined &&
-          change.results.length >= params.limit) ||
-        elapsed >= MAX_PROCESSING_TIME_MS
-      ) {
-        // enough changes found, none left, or time budget exhausted
-        break;
-      }
-      since = res.last_seq;
+      // mid-stream failure: abort the connection so the client sees a
+      // truncated response (and retries) instead of valid-looking JSON
+      this.logger.warn(
+        `aborting streamed _changes response after error: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      res.destroy();
+      return;
     }
 
     const duration = Date.now() - startTime;
@@ -132,19 +171,44 @@ export class ChangesController {
       duration,
       iterations,
       fetched: totalFetched,
-      permitted: change.results.length,
-      lost: change.lostPermissions?.length ?? 0,
+      permitted: resultsWritten,
+      lost: lostPermissions.length,
       since: params?.since ?? 'undefined',
       limit: params?.limit ?? 'none',
-      pending: change.pending,
+      pending,
     };
     if (duration > 2000 || iterations > 2) {
       this.logger.warn('_changes request slow', details);
     } else {
       this.logger.debug('_changes request completed', details);
     }
+  }
 
-    return change;
+  /**
+   * Write a chunk to the response, awaiting the drain event when the
+   * client cannot keep up (backpressure).
+   */
+  private writeChunk(res: Response, chunk: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (res.destroyed) {
+        reject(new Error('client disconnected'));
+        return;
+      }
+      if (res.write(chunk)) {
+        resolve();
+        return;
+      }
+      const onDrain = () => {
+        res.off('close', onClose);
+        resolve();
+      };
+      const onClose = () => {
+        res.off('drain', onDrain);
+        reject(new Error('client disconnected'));
+      };
+      res.once('drain', onDrain);
+      res.once('close', onClose);
+    });
   }
 
   getPermittedChanges(

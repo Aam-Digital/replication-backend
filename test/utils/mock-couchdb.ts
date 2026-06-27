@@ -44,6 +44,12 @@ export class MockCouchDb {
     headers: Record<string, string | string[] | undefined>;
   }[] = [];
 
+  /**
+   * When set, the next _all_docs request receives a truncated JSON body and
+   * an aborted connection — simulating CouchDB failing mid-response.
+   */
+  truncateNextAllDocs = false;
+
   get url(): string {
     return `http://127.0.0.1:${(this.server!.address() as AddressInfo).port}`;
   }
@@ -314,6 +320,19 @@ export class MockCouchDb {
       req: express.Request<{ db: string }>,
       res: express.Response,
     ) => {
+      if (this.truncateNextAllDocs) {
+        this.truncateNextAllDocs = false;
+        res.setHeader('content-type', 'application/json');
+        // flush a valid-looking first part of the response so the proxy
+        // starts forwarding it, then cut the connection mid-body
+        const rows = Array.from(
+          { length: 50 },
+          (_, i) => `{"id":"Child:${i}","key":"Child:${i}","value":{"rev":"1-mock"}}`,
+        );
+        res.write('{"total_rows":99,"offset":0,"rows":[' + rows.join(','));
+        setTimeout(() => res.destroy(), 50);
+        return;
+      }
       const db = req.params.db;
       const docs = this.getDb(db);
       const includeDocs = req.query.include_docs === 'true';

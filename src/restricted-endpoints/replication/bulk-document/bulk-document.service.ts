@@ -5,7 +5,11 @@ import {
   ErrorDoc,
   OkDoc,
 } from './couchdb-dtos/bulk-get.dto';
-import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
+import {
+  AllDocsRequest,
+  AllDocsResponse,
+  DocMetaInf,
+} from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
   BulkDocsResponse,
@@ -40,18 +44,37 @@ export class BulkDocumentService {
     response: BulkGetResponse,
     user: UserInfo,
   ): BulkGetResponse {
-    const ability = this.permissionService.getAbilityFor(user);
-    const withPermissions: BulkGetResult[] = response.results
-      .filter((result) => this.documentFilter.isReplicable(result.id))
-      .map((result) => ({
-        id: result.id,
-        docs: result.docs.filter((doc) =>
-          this.isPermittedBulkGetDoc(doc, ability),
-        ),
-      }));
-    // Only return results where at least one document is left
+    const mapResult = this.bulkGetResultMapper(user);
     return {
-      results: withPermissions.filter((result) => result.docs.length > 0),
+      results: response.results
+        .map(mapResult)
+        .filter((result): result is BulkGetResult => result !== undefined),
+    };
+  }
+
+  /**
+   * Per-item filter for single results of a `_bulk_get` response.
+   * Returns the result with non-permitted docs removed,
+   * or `undefined` if the whole result should be dropped.
+   *
+   * Used by {@link filterBulkGetResponse} and by the streaming endpoint.
+   */
+  bulkGetResultMapper(
+    user: UserInfo,
+  ): (result: BulkGetResult) => BulkGetResult | undefined {
+    const ability = this.permissionService.getAbilityFor(user);
+    return (result) => {
+      if (!this.documentFilter.isReplicable(result.id)) {
+        return undefined;
+      }
+      const docs = result.docs.filter((doc) =>
+        this.isPermittedBulkGetDoc(doc, ability),
+      );
+      // Only return results where at least one document is left
+      if (docs.length === 0) {
+        return undefined;
+      }
+      return { id: result.id, docs };
     };
   }
 
@@ -69,21 +92,27 @@ export class BulkDocumentService {
     response: AllDocsResponse,
     user: UserInfo,
   ): AllDocsResponse {
-    const ability = this.permissionService.getAbilityFor(user);
+    const isPermitted = this.allDocsRowFilter(user);
     return {
       total_rows: response.total_rows,
       offset: response.offset,
-      rows: response.rows.filter(
-        (row) =>
-          // rows without id are error entries for missing keys
-          // (e.g. {key, error: "not_found"}) and are passed through
-          !row.id ||
-          (this.documentFilter.isReplicable(row.id) &&
-            (row.doc
-              ? row.doc._deleted || ability.can('read', row.doc)
-              : true)),
-      ),
+      rows: response.rows.filter(isPermitted),
     };
+  }
+
+  /**
+   * Per-row permission filter for `_all_docs` responses.
+   *
+   * Used by {@link filterAllDocsResponse} and by the streaming endpoint.
+   */
+  allDocsRowFilter(user: UserInfo): (row: DocMetaInf) => boolean {
+    const ability = this.permissionService.getAbilityFor(user);
+    return (row) =>
+      // rows without id are error entries for missing keys
+      // (e.g. {key, error: "not_found"}) and are passed through
+      !row.id ||
+      (this.documentFilter.isReplicable(row.id) &&
+        (row.doc ? row.doc._deleted || ability.can('read', row.doc) : true));
   }
 
   /**
@@ -170,17 +199,25 @@ export class BulkDocumentService {
   }
 
   filterFindResponse(request: FindResponse, user: UserInfo): FindResponse {
-    const ability = this.permissionService.getAbilityFor(user);
+    const isPermitted = this.findDocFilter(user);
     return {
       bookmark: request.bookmark,
       warning: request.warning,
-      docs: request.docs.filter(
-        (doc) =>
-          !!doc._id &&
-          this.documentFilter.isReplicable(doc._id) &&
-          ability.can('read', doc),
-      ),
+      docs: request.docs.filter(isPermitted),
     };
+  }
+
+  /**
+   * Per-doc permission filter for `_find` responses.
+   *
+   * Used by {@link filterFindResponse} and by the streaming endpoint.
+   */
+  findDocFilter(user: UserInfo): (doc: DatabaseDocument) => boolean {
+    const ability = this.permissionService.getAbilityFor(user);
+    return (doc) =>
+      !!doc._id &&
+      this.documentFilter.isReplicable(doc._id) &&
+      ability.can('read', doc);
   }
 
   private hasPermissionsForDoc(

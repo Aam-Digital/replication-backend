@@ -128,7 +128,7 @@ describe('Replication endpoints (e2e)', () => {
             { id: '_design/some-view' },
           ],
         })
-        .expect(201);
+        .expect(200);
 
       const ids = res.body.results.map((r: { id: string }) => r.id);
       expect(ids).toEqual(['Child:1', 'Note:1']);
@@ -141,7 +141,7 @@ describe('Replication endpoints (e2e)', () => {
         .post('/app/_bulk_get')
         .set(...basicAuth('user', 'user-pw'))
         .send({ docs: [{ id: 'Child:does-not-exist' }] })
-        .expect(201);
+        .expect(200);
       expect(res.body.results).toHaveLength(1);
       expect(res.body.results[0].docs[0].error).toMatchObject({
         error: 'not_found',
@@ -153,7 +153,7 @@ describe('Replication endpoints (e2e)', () => {
         .post('/app/_bulk_get')
         .set(...basicAuth('user', 'user-pw'))
         .send({ docs: [{ id: 'Child:deleted' }] })
-        .expect(201);
+        .expect(200);
       expect(res.body.results[0].docs[0].ok).toMatchObject({ _deleted: true });
     });
   });
@@ -164,7 +164,7 @@ describe('Replication endpoints (e2e)', () => {
         .post('/app/_all_docs?include_docs=true')
         .set(...basicAuth('user', 'user-pw'))
         .send({ keys: ['Child:1', 'School:1', 'Note:1', 'Note:2'] })
-        .expect(201);
+        .expect(200);
       const ids = res.body.rows.map((r: { id: string }) => r.id);
       expect(ids).toEqual(['Child:1', 'Note:1']);
     });
@@ -192,13 +192,25 @@ describe('Replication endpoints (e2e)', () => {
         .post('/app/_all_docs')
         .set(...basicAuth('user', 'user-pw'))
         .send({ keys: ['Child:1', 'School:1', '_design/some-view'] })
-        .expect(201);
+        .expect(200);
       const ids = res.body.rows.map((r: { id: string }) => r.id);
       expect(ids).toEqual(['Child:1', 'School:1']);
     });
   });
 
   describe('GET /:db/_all_docs', () => {
+    it('aborts the response instead of sending valid-looking partial JSON when CouchDB fails mid-stream', async () => {
+      ctx.couch.truncateNextAllDocs = true;
+
+      // the connection is cut after the first forwarded bytes, so the client
+      // must see a network error rather than a complete 200 response
+      await expect(
+        request(ctx.app.getHttpServer())
+          .get('/app/_all_docs?include_docs=true')
+          .set(...basicAuth('admin', 'admin-pw')),
+      ).rejects.toThrow(/aborted|socket hang up|ECONNRESET/i);
+    });
+
     it('filters all database rows by read permission', async () => {
       const res = await request(ctx.app.getHttpServer())
         .get('/app/_all_docs?include_docs=true')
@@ -256,7 +268,7 @@ describe('Replication endpoints (e2e)', () => {
         .post('/app/_find')
         .set(...basicAuth('user', 'user-pw'))
         .send({ selector: { subject: 'authored' } })
-        .expect(201);
+        .expect(200);
       expect(res.body.docs.map((d: { _id: string }) => d._id)).toEqual([
         'Note:1',
       ]);
@@ -265,7 +277,7 @@ describe('Replication endpoints (e2e)', () => {
         .post('/app/_find')
         .set(...basicAuth('user', 'user-pw'))
         .send({ selector: { subject: 'foreign' } })
-        .expect(201);
+        .expect(200);
       expect(denied.body.docs).toEqual([]);
     });
   });
