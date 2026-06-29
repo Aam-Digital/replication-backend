@@ -100,9 +100,7 @@ describe('BulkDocEndpointsController', () => {
     );
     expect(documentFilter.bulkGetResultMapper).toHaveBeenCalledWith(user);
     expect(body()).toEqual({
-      results: [
-        { id: 'permittedID', docs: [{ ok: { _id: 'permittedID' } }] },
-      ],
+      results: [{ id: 'permittedID', docs: [{ ok: { _id: 'permittedID' } }] }],
     });
   });
 

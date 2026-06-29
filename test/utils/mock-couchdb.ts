@@ -327,7 +327,8 @@ export class MockCouchDb {
         // starts forwarding it, then cut the connection mid-body
         const rows = Array.from(
           { length: 50 },
-          (_, i) => `{"id":"Child:${i}","key":"Child:${i}","value":{"rev":"1-mock"}}`,
+          (_, i) =>
+            `{"id":"Child:${i}","key":"Child:${i}","value":{"rev":"1-mock"}}`,
         );
         res.write('{"total_rows":99,"offset":0,"rows":[' + rows.join(','));
         setTimeout(() => res.destroy(), 50);

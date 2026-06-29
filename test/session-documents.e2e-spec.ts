@@ -65,9 +65,9 @@ describe('Session & document endpoints (e2e)', () => {
         .post('/_session')
         .send({ name: 'user', password: 'user-pw' })
         .expect(201);
-      const cookieHeader = (login.headers['set-cookie'] as unknown as string[]).find((h: string) =>
-        h.includes('access_token='),
-      );
+      const cookieHeader = (
+        login.headers['set-cookie'] as unknown as string[]
+      ).find((h: string) => h.includes('access_token='));
       const cookie = cookieHeader!.split(';')[0];
 
       const res = await request(ctx.app.getHttpServer())

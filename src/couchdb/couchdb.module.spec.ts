@@ -12,9 +12,8 @@ function agentOptions(agent: unknown): {
   keepAlive?: boolean;
   maxSockets?: number;
 } {
-  return (
-    agent as { options: { keepAlive?: boolean; maxSockets?: number } }
-  ).options;
+  return (agent as { options: { keepAlive?: boolean; maxSockets?: number } })
+    .options;
 }
 
 describe('couchdbHttpOptions', () => {

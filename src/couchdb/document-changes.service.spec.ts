@@ -54,7 +54,12 @@ describe('DocumentChangesService', () => {
       last_seq: '1',
       results: [
         { id: 'Child:1', seq: '1', changes: [{ rev: '1-abc' }] },
-        { id: 'User:john', seq: '2', changes: [{ rev: '1-def' }], deleted: true },
+        {
+          id: 'User:john',
+          seq: '2',
+          changes: [{ rev: '1-def' }],
+          deleted: true,
+        },
       ],
       pending: 0,
     });

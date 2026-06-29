@@ -146,9 +146,7 @@ describe('JsonArrayFilterTransform', () => {
   });
 
   it('rejects on truncated upstream JSON', async () => {
-    await expect(
-      filterJson('{"rows":[{"id":"a"}', keepAll),
-    ).rejects.toThrow();
+    await expect(filterJson('{"rows":[{"id":"a"}', keepAll)).rejects.toThrow();
   });
 
   it('rejects when the root is not an object', async () => {

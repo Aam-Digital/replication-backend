@@ -13,7 +13,7 @@ import { ApiOperation } from '@nestjs/swagger';
 import { Response } from 'express';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
-import { from, Observable, switchMap } from 'rxjs';
+import { from, Observable } from 'rxjs';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../../auth/user.decorator';
 import {
