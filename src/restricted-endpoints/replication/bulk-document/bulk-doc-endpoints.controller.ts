@@ -21,6 +21,7 @@ import {
   FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
 import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
+import { OnlyAuthenticated } from '../../../auth/only-authenticated.decorator';
 
 /**
  * Handle endpoints for the CouchDB replication process and bulk actions
@@ -84,6 +85,22 @@ export class BulkDocEndpointsController {
         return of(this.bulkDocumentService.filterFindResponse(response, user));
       }),
     );
+  }
+
+  /**
+   * Create an index to speed up queries using the '_find' endpoint.
+   * Indices are especially necessary when using sort inside a find-query.
+   * The request is directly forwarded to the CouchDB instance {@link https://docs.couchdb.org/en/stable/api/database/find.html#post--db-_index}.
+   * The user needs to be authenticated but no further permissions are enforced.
+   *
+   * @param db name of the database for which the index should be created
+   * @param body index definition, see CouchDB docs for more details
+   */
+  @Post('/:db/_index')
+  @OnlyAuthenticated()
+  @ApiOperation({ description: `Create new index for the '_find' endpoint` })
+  create_index(@Param('db') db: string, @Body() body: object) {
+    return from(this.couchdbService.post(db, '_index', body));
   }
 
   /**
