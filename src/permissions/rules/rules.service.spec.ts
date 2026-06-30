@@ -235,6 +235,22 @@ describe('RulesService', () => {
     jest.useRealTimers();
   });
 
+  it('fails closed to bootstrap permissions when the permission doc is deleted', () => {
+    jest.useFakeTimers();
+
+    changesSubject.next({ seq: '1', id: Permission.DOC_ID, deleted: true });
+    jest.advanceTimersByTime(1500);
+
+    // bootstrap grants admin_app only → admin keeps access, others are denied
+    expect(service.getRulesForUser(adminUser)).toEqual([
+      { action: 'manage', subject: 'all' },
+    ]);
+    expect(service.getRulesForUser(normalUser)).toEqual([]);
+    expect(mockUserIdentityService.clearCache).toHaveBeenCalled();
+
+    jest.useRealTimers();
+  });
+
   it('should increment configVersion when the permission config changes', () => {
     jest.useFakeTimers();
     const initialVersion = service.configVersion;

@@ -60,8 +60,6 @@ export function jsonTokenParser(): Transform {
  */
 export class JsonArrayFilterTransform extends Transform {
   private mode: 'init' | 'members' | 'value' | 'items' | 'done' = 'init';
-  /** whether the current value/item belongs to the target array */
-  private inTargetArray = false;
   private pendingKey = '';
   private firstMember = true;
   private firstItem = true;
@@ -107,7 +105,6 @@ export class JsonArrayFilterTransform extends Transform {
         if (token.name === 'keyValue') {
           this.pendingKey = token.value as string;
           this.mode = 'value';
-          this.inTargetArray = false;
           this.assembler = undefined;
           return;
         }

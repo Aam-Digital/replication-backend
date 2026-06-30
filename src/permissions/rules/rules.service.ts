@@ -7,7 +7,16 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { get, has } from 'lodash';
-import { catchError, concatMap, EMPTY, filter, firstValueFrom } from 'rxjs';
+import {
+  catchError,
+  concatMap,
+  EMPTY,
+  filter,
+  firstValueFrom,
+  retry,
+  throwError,
+  timer,
+} from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
 import { ExponentialBackoff } from '../../common/exponential-backoff';
 import { isLikelyTransientError } from '../../common/http-error-classification';
@@ -37,6 +46,11 @@ export class RulesService implements OnModuleInit {
   static readonly INIT_MAX_TOTAL_MS = 60_000;
   /** Cap (ms) for the exponentially-growing backoff delay between retries. */
   static readonly INIT_MAX_DELAY_MS = 10_000;
+  /**
+   * Retries for an on-demand permission-document fetch (triggered by the
+   * changes feed) before falling back to the previous in-memory config.
+   */
+  static readonly UPDATE_FETCH_MAX_RETRIES = 3;
 
   /**
    * Synthesised permission config used when the permission document does not
@@ -186,17 +200,46 @@ export class RulesService implements OnModuleInit {
       .getChanges(db)
       .pipe(
         filter((change) => change.id === Permission.DOC_ID),
-        concatMap(() =>
-          this.couchdbService.get<Permission>(db, Permission.DOC_ID).pipe(
-            catchError((error: unknown) => {
-              this.logger.warn(
-                `Failed to fetch updated permission document for ${db}; keeping previous in-memory permissions.`,
-                error instanceof Error ? error.stack : String(error),
-              );
-              return EMPTY;
-            }),
-          ),
-        ),
+        concatMap((change) => {
+          if (change.deleted) {
+            // the permission document was removed — fail closed to bootstrap
+            // permissions instead of silently keeping the previous (possibly
+            // permissive) in-memory rules
+            this.applyPermissionDeletion(db);
+            return EMPTY;
+          }
+          return this.couchdbService
+            .get<Permission>(db, Permission.DOC_ID)
+            .pipe(
+              // a transient fetch failure must not silently drop the update —
+              // retry with backoff before giving up (non-transient errors are
+              // rethrown immediately and handled by catchError below)
+              retry({
+                count: RulesService.UPDATE_FETCH_MAX_RETRIES,
+                delay: (error: unknown, retryCount: number) => {
+                  if (!isLikelyTransientError(error)) {
+                    return throwError(() => error);
+                  }
+                  const delayMs = Math.min(
+                    1000 * 2 ** (retryCount - 1),
+                    RulesService.INIT_MAX_DELAY_MS,
+                  );
+                  this.logger.log(
+                    `Retrying permission document fetch for ${db} (attempt ${retryCount}).`,
+                    { retryDelayMs: delayMs },
+                  );
+                  return timer(delayMs);
+                },
+              }),
+              catchError((error: unknown) => {
+                this.logger.warn(
+                  `Failed to fetch updated permission document for ${db} after retries; keeping previous in-memory permissions.`,
+                  error instanceof Error ? error.stack : String(error),
+                );
+                return EMPTY;
+              }),
+            );
+        }),
       )
       .subscribe((permissionDoc) =>
         this.applyUpdatedPermission(db, permissionDoc),
@@ -215,30 +258,55 @@ export class RulesService implements OnModuleInit {
     }
 
     this.setPermission(newPermissions);
+    this.onPermissionsChanged(db, prevPermissions, newPermissions);
+  }
 
+  /**
+   * The permission document was deleted — fail closed by switching to the
+   * bootstrap config (admin_app only), so a removed config cannot leave the
+   * previous, more permissive rules in effect.
+   */
+  private applyPermissionDeletion(db: string): void {
+    this.logger.warn(
+      `[PERMISSIONS] Permission document "${Permission.DOC_ID}" was deleted in ${db}; failing closed to bootstrap permissions (admin_app only).`,
+    );
+    const prevPermissions = this.permission;
+    const bootstrap = RulesService.bootstrapPermissions();
+    this.setPermission(bootstrap);
+    this.onPermissionsChanged(db, prevPermissions, bootstrap);
+  }
+
+  /**
+   * Invalidate caches and re-trigger client sync when the in-memory permission
+   * config actually changed (shared by config-update and config-deletion).
+   */
+  private onPermissionsChanged(
+    db: string,
+    prevPermissions: RulesConfig | undefined,
+    newPermissions: RulesConfig,
+  ): void {
     if (
-      prevPermissions !== undefined && // do not clear upon restart of the API
-      JSON.stringify(prevPermissions) !== JSON.stringify(newPermissions)
+      prevPermissions === undefined || // do not clear upon restart of the API
+      JSON.stringify(prevPermissions) === JSON.stringify(newPermissions)
     ) {
-      this.userIdentityService.clearCache();
-      setTimeout(
-        () =>
-          this.adminService
-            .clearLocal(db)
-            .then(() => {
-              this.logger.log(
-                'Permissions changed - triggered clearLocal:' + db,
-              );
-            })
-            .catch((error: unknown) => {
-              this.logger.error(
-                `Failed to clear local docs after permission update for ${db}`,
-                error instanceof Error ? error.stack : String(error),
-              );
-            }),
-        1000,
-      );
+      return;
     }
+    this.userIdentityService.clearCache();
+    setTimeout(
+      () =>
+        this.adminService
+          .clearLocal(db)
+          .then(() => {
+            this.logger.log('Permissions changed - triggered clearLocal:' + db);
+          })
+          .catch((error: unknown) => {
+            this.logger.error(
+              `Failed to clear local docs after permission update for ${db}`,
+              error instanceof Error ? error.stack : String(error),
+            );
+          }),
+      1000,
+    );
   }
   /**
    * Get all rules that are related to the roles of the user.

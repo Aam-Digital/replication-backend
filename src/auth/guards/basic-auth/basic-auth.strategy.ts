@@ -6,6 +6,7 @@ import { firstValueFrom } from 'rxjs';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { setUser } from '@sentry/node';
 import { createHash } from 'crypto';
+import { TtlCache } from '../../../common/ttl-cache';
 
 /**
  * Authenticate a user from the BasicAuth header of a request.
@@ -21,10 +22,10 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
   /** safety cap to bound memory use */
   static readonly LOGIN_CACHE_MAX_ENTRIES = 1000;
 
-  private readonly loginCache = new Map<
-    string,
-    { user: UserInfo; expiresAtMs: number }
-  >();
+  private readonly loginCache = new TtlCache<UserInfo>(
+    BasicAuthStrategy.LOGIN_CACHE_TTL_MS,
+    BasicAuthStrategy.LOGIN_CACHE_MAX_ENTRIES,
+  );
 
   constructor(private couchdbService: CouchdbService) {
     super();
@@ -33,9 +34,9 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
   async validate(username: string, password: string): Promise<UserInfo> {
     const key = this.cacheKey(username, password);
     const cached = this.loginCache.get(key);
-    if (cached && cached.expiresAtMs > Date.now()) {
-      setUser({ username: cached.user.name });
-      return cached.user;
+    if (cached) {
+      setUser({ username: cached.name });
+      return cached;
     }
 
     // failed logins throw here and are never cached
@@ -43,14 +44,7 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
       this.couchdbService.login(username, password),
     );
 
-    if (this.loginCache.size >= BasicAuthStrategy.LOGIN_CACHE_MAX_ENTRIES) {
-      // simple wholesale eviction; entries are cheap to rebuild
-      this.loginCache.clear();
-    }
-    this.loginCache.set(key, {
-      user,
-      expiresAtMs: Date.now() + BasicAuthStrategy.LOGIN_CACHE_TTL_MS,
-    });
+    this.loginCache.set(key, user);
 
     setUser({ username: user.name });
     return user;

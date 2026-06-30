@@ -1,5 +1,5 @@
 import { HttpModule, HttpModuleOptions } from '@nestjs/axios';
-import { Global, Module } from '@nestjs/common';
+import { Global, Logger, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
@@ -19,6 +19,15 @@ export const DEFAULT_DATABASE_TIMEOUT_MS = 60_000;
 export const DEFAULT_DATABASE_MAX_SOCKETS = 50;
 
 /**
+ * Lower bound for the request timeout. The internal changes feed issues 50s
+ * longpoll requests through the same HTTP client; a timeout at or below that
+ * window would abort the feed every cycle (breaking permission-change
+ * propagation and identity-cache invalidation), so a too-low configured value
+ * is clamped up to this floor.
+ */
+export const MIN_DATABASE_TIMEOUT_MS = 55_000;
+
+/**
  * HTTP client options for all requests to CouchDB:
  *
  * - a request timeout, so that a hung CouchDB connection (e.g. half-open
@@ -30,9 +39,15 @@ export const DEFAULT_DATABASE_MAX_SOCKETS = 50;
 export function couchdbHttpOptions(
   configService: ConfigService,
 ): HttpModuleOptions {
-  const timeout =
+  const configuredTimeout =
     Number(configService.get(DATABASE_TIMEOUT_ENV)) ||
     DEFAULT_DATABASE_TIMEOUT_MS;
+  const timeout = Math.max(configuredTimeout, MIN_DATABASE_TIMEOUT_MS);
+  if (configuredTimeout < MIN_DATABASE_TIMEOUT_MS) {
+    new Logger('CouchdbModule').warn(
+      `${DATABASE_TIMEOUT_ENV}=${configuredTimeout}ms is below the ${MIN_DATABASE_TIMEOUT_MS}ms floor (the internal changes feed uses 50s longpoll requests); using ${timeout}ms instead.`,
+    );
+  }
   const maxSockets =
     Number(configService.get(DATABASE_MAX_SOCKETS_ENV)) ||
     DEFAULT_DATABASE_MAX_SOCKETS;
