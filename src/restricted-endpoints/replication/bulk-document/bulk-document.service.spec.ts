@@ -12,7 +12,7 @@ import {
   BulkDocsRequest,
   DatabaseDocument,
 } from './couchdb-dtos/bulk-docs.dto';
-import { BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
+import { BulkGetResponse, BulkGetResult } from './couchdb-dtos/bulk-get.dto';
 import { AuditService } from '../../../audit/audit.service';
 
 describe('BulkDocumentService', () => {
@@ -54,6 +54,26 @@ describe('BulkDocumentService', () => {
     service = module.get<BulkDocumentService>(BulkDocumentService);
   });
 
+  // The streaming endpoints filter responses via the reusable per-item
+  // mappers; these helpers apply them to a whole buffered response so the
+  // tests exercise the same logic the controllers run.
+  const filterBulkGet = (r: BulkGetResponse, u: UserInfo): BulkGetResponse => ({
+    results: r.results
+      .map(service.bulkGetResultMapper(u))
+      .filter((x): x is BulkGetResult => x !== undefined),
+  });
+  const filterAllDocs = (r: AllDocsResponse, u: UserInfo): AllDocsResponse => ({
+    ...r,
+    rows: r.rows.filter(service.allDocsRowFilter(u)),
+  });
+  const filterFind = (
+    r: { docs: DatabaseDocument[]; bookmark?: string },
+    u: UserInfo,
+  ) => ({
+    ...r,
+    docs: r.docs.filter(service.findDocFilter(u)),
+  });
+
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
@@ -61,13 +81,13 @@ describe('BulkDocumentService', () => {
   it('should filter out docs without read permissions in BulkGet', () => {
     const bulkGetResponse = createBulkGetResponse(schoolDoc, childDoc);
 
-    const result = service.filterBulkGetResponse(bulkGetResponse, normalUser);
+    const result = filterBulkGet(bulkGetResponse, normalUser);
 
     expect(result).toEqual(createBulkGetResponse(schoolDoc));
   });
 
   it('should filter out docs without read permissions in response', () => {
-    const result = service.filterFindResponse(
+    const result = filterFind(
       {
         docs: [getSchoolDoc(), getChildDoc(), getReportDoc()],
         bookmark: '',
@@ -84,7 +104,7 @@ describe('BulkDocumentService', () => {
     childDoc._deleted = true;
     schoolDoc._deleted = true;
 
-    const result = service.filterBulkGetResponse(bulkGetResponse, normalUser);
+    const result = filterBulkGet(bulkGetResponse, normalUser);
 
     expect(result).toEqual(bulkGetResponse);
   });
@@ -95,9 +115,21 @@ describe('BulkDocumentService', () => {
       .spyOn(mockRulesService, 'getRulesForUser')
       .mockReturnValue([{ action: 'manage', subject: 'Child' }]);
 
-    const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
+    const result = filterAllDocs(allDocsResponse, normalUser);
 
     expect(result).toEqual(createAllDocsResponse(childDoc));
+  });
+
+  it('should pass through error rows (missing keys) in AllDocs without crashing', () => {
+    const allDocsResponse = createAllDocsResponse(schoolDoc);
+    // CouchDB returns rows without an `id` for unknown keys
+    const errorRow = { key: 'School:missing', error: 'not_found' } as any;
+    allDocsResponse.rows.push(errorRow);
+
+    const result = filterAllDocs(allDocsResponse, normalUser);
+
+    expect(result.rows).toContain(errorRow);
+    expect(result.rows).toHaveLength(2);
   });
 
   it('should not filter out deleted docs in AllDocs', () => {
@@ -108,7 +140,7 @@ describe('BulkDocumentService', () => {
       .spyOn(mockRulesService, 'getRulesForUser')
       .mockReturnValue([{ action: 'manage', subject: 'Child' }]);
 
-    const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
+    const result = filterAllDocs(allDocsResponse, normalUser);
 
     expect(result).toEqual(createAllDocsResponse(schoolDoc, childDoc));
   });
@@ -225,7 +257,7 @@ describe('BulkDocumentService', () => {
       .spyOn(mockRulesService, 'getRulesForUser')
       .mockReturnValue([{ action: 'manage', subject: 'all' }]);
 
-    const result = service.filterBulkGetResponse(bulkGetResponse, normalUser);
+    const result = filterBulkGet(bulkGetResponse, normalUser);
 
     expect(result.results.map((r) => r.id)).toEqual([schoolDoc._id]);
   });
@@ -240,7 +272,7 @@ describe('BulkDocumentService', () => {
       .spyOn(mockRulesService, 'getRulesForUser')
       .mockReturnValue([{ action: 'manage', subject: 'all' }]);
 
-    const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
+    const result = filterAllDocs(allDocsResponse, normalUser);
 
     expect(result.rows.map((r) => r.id)).toEqual([schoolDoc._id]);
   });
@@ -272,7 +304,7 @@ describe('BulkDocumentService', () => {
       .spyOn(mockRulesService, 'getRulesForUser')
       .mockReturnValue([{ action: 'manage', subject: 'all' }]);
 
-    const result = service.filterFindResponse(
+    const result = filterFind(
       { docs: [getSchoolDoc(), designDoc], bookmark: '' },
       normalUser,
     );

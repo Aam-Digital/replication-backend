@@ -23,7 +23,7 @@ describe('DocumentChangesService', () => {
     service = module.get(DocumentChangesService);
   });
 
-  it('should start feed at current sequence using since=now', () => {
+  it('should start feed at current sequence without fetching doc contents', () => {
     const changesSubject = new Subject();
     jest
       .spyOn(mockCouchdbService, 'get')
@@ -34,11 +34,14 @@ describe('DocumentChangesService', () => {
     expect(mockCouchdbService.get).toHaveBeenCalledWith(
       'app',
       '_changes',
-      expect.objectContaining({ since: 'now', include_docs: true }),
+      expect.objectContaining({ since: 'now' }),
     );
+    // the internal feed must not transfer doc bodies for every change
+    const params = (mockCouchdbService.get as jest.Mock).mock.calls[0][2];
+    expect(params.include_docs).toBeUndefined();
   });
 
-  it('should emit individual change results from the feed', () => {
+  it('should emit individual change events (id/seq/deleted only) from the feed', () => {
     const changesSubject = new Subject();
     jest
       .spyOn(mockCouchdbService, 'get')
@@ -51,14 +54,19 @@ describe('DocumentChangesService', () => {
       last_seq: '1',
       results: [
         { id: 'Child:1', seq: '1', changes: [{ rev: '1-abc' }] },
-        { id: 'User:john', seq: '2', changes: [{ rev: '1-def' }] },
+        {
+          id: 'User:john',
+          seq: '2',
+          changes: [{ rev: '1-def' }],
+          deleted: true,
+        },
       ],
       pending: 0,
     });
 
     expect(emitted).toEqual([
-      { id: 'Child:1', seq: '1', changes: [{ rev: '1-abc' }] },
-      { id: 'User:john', seq: '2', changes: [{ rev: '1-def' }] },
+      { id: 'Child:1', seq: '1' },
+      { id: 'User:john', seq: '2', deleted: true },
     ]);
   });
 
@@ -134,9 +142,7 @@ describe('DocumentChangesService', () => {
     });
 
     expect(mockCouchdbService.get).toHaveBeenCalledTimes(2);
-    expect(emitted).toEqual([
-      { id: 'User:alice', seq: '2', changes: [{ rev: '2-a' }] },
-    ]);
+    expect(emitted).toEqual([{ id: 'User:alice', seq: '2' }]);
 
     jest.useRealTimers();
   });
