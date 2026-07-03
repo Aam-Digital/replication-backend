@@ -33,9 +33,12 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
   async validate(username: string, password: string): Promise<UserInfo> {
     const key = this.cacheKey(username, password);
     const cached = this.loginCache.get(key);
-    if (cached && cached.expiresAtMs > Date.now()) {
-      setUser({ username: cached.user.name });
-      return cached.user;
+    if (cached) {
+      if (cached.expiresAtMs > Date.now()) {
+        setUser({ username: cached.user.name });
+        return cached.user;
+      }
+      this.loginCache.delete(key); // drop the expired entry
     }
 
     // failed logins throw here and are never cached
@@ -43,10 +46,7 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
       this.couchdbService.login(username, password),
     );
 
-    if (this.loginCache.size >= BasicAuthStrategy.LOGIN_CACHE_MAX_ENTRIES) {
-      // simple wholesale eviction; entries are cheap to rebuild
-      this.loginCache.clear();
-    }
+    this.evictIfNeeded();
     this.loginCache.set(key, {
       user,
       expiresAtMs: Date.now() + BasicAuthStrategy.LOGIN_CACHE_TTL_MS,
@@ -54,6 +54,30 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
 
     setUser({ username: user.name });
     return user;
+  }
+
+  /**
+   * Keep the cache bounded: drop expired entries first, then evict the oldest
+   * live ones (Map preserves insertion order) — so exceeding the cap degrades
+   * the coldest entries instead of wiping every warm one.
+   */
+  private evictIfNeeded(): void {
+    if (this.loginCache.size < BasicAuthStrategy.LOGIN_CACHE_MAX_ENTRIES) {
+      return;
+    }
+    const now = Date.now();
+    for (const [key, entry] of this.loginCache) {
+      if (entry.expiresAtMs <= now) {
+        this.loginCache.delete(key);
+      }
+    }
+    while (this.loginCache.size >= BasicAuthStrategy.LOGIN_CACHE_MAX_ENTRIES) {
+      const oldest = this.loginCache.keys().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      this.loginCache.delete(oldest);
+    }
   }
 
   /** never store plaintext credentials — key entries on a digest */
