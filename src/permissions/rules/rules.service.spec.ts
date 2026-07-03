@@ -235,6 +235,40 @@ describe('RulesService', () => {
     jest.useRealTimers();
   });
 
+  it('fails closed to bootstrap permissions when the permission doc is deleted', () => {
+    jest.useFakeTimers();
+
+    changesSubject.next({ seq: '1', id: Permission.DOC_ID, deleted: true });
+    jest.advanceTimersByTime(1500);
+
+    // bootstrap grants admin_app only → admin keeps access, others are denied
+    expect(service.getRulesForUser(adminUser)).toEqual([
+      { action: 'manage', subject: 'all' },
+    ]);
+    expect(service.getRulesForUser(normalUser)).toEqual([]);
+    expect(mockUserIdentityService.clearCache).toHaveBeenCalled();
+
+    jest.useRealTimers();
+  });
+
+  it('should increment configVersion when the permission config changes', () => {
+    jest.useFakeTimers();
+    const initialVersion = service.configVersion;
+    expect(initialVersion).toBeGreaterThan(0); // initial load counted
+
+    const updatedPermission = new Permission({
+      user_app: [{ action: 'manage', subject: 'all' }],
+    });
+    jest
+      .spyOn(mockCouchdbService, 'get')
+      .mockReturnValue(of(updatedPermission));
+
+    changesSubject.next({ seq: '1', id: updatedPermission._id! });
+
+    expect(service.configVersion).toBe(initialVersion + 1);
+    jest.useRealTimers();
+  });
+
   /**
    * Build a fresh RulesService instance with a configurable CouchdbService mock,
    * WITHOUT calling onModuleInit. Returns the service plus the change feed subject
