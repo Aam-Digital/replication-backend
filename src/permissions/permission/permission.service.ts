@@ -33,6 +33,16 @@ export function detectDocumentType(subject: DatabaseDocument): string {
  */
 @Injectable()
 export class PermissionService {
+  /** TTL aligned with the user identity cache in UserIdentityService */
+  static readonly ABILITY_CACHE_TTL_MS = 5 * 60 * 1000;
+  /** safety cap to bound memory for systems with very many distinct users */
+  static readonly ABILITY_CACHE_MAX_ENTRIES = 1000;
+
+  private readonly abilityCache = new Map<
+    string,
+    { ability: DocumentAbility; configVersion: number; expiresAtMs: number }
+  >();
+
   constructor(
     private rulesService: RulesService,
     private couchdbService: CouchdbService,
@@ -42,14 +52,56 @@ export class PermissionService {
    * Creates an ability object containing all rules that are defined for the roles of the given user.
    * This ability object can be used to check the permissions of the user on various documents.
    *
+   * Abilities are cached per user identity: building one deep-clones all
+   * rules (user variable injection) and compiles them with CASL, which is
+   * wasteful to repeat on every request. Entries are invalidated when the
+   * permission config changes (via RulesService.configVersion) or after a
+   * TTL, mirroring the user identity cache.
+   *
    * @param user for which the ability object should be created
    * @returns DocumentAbility that allows to check the users permissions on a given document and action
    */
   getAbilityFor(user: UserInfo): DocumentAbility {
+    const key = this.abilityCacheKey(user);
+    const configVersion = this.rulesService.configVersion;
+    const cached = this.abilityCache.get(key);
+    if (
+      cached &&
+      cached.configVersion === configVersion &&
+      cached.expiresAtMs > Date.now()
+    ) {
+      return cached.ability;
+    }
+
     const rules = this.rulesService.getRulesForUser(user);
-    return new DocumentAbility(rules, {
+    const ability = new DocumentAbility(rules, {
       detectSubjectType: detectDocumentType,
     });
+
+    if (this.abilityCache.size >= PermissionService.ABILITY_CACHE_MAX_ENTRIES) {
+      // simple wholesale eviction; entries are cheap to rebuild
+      this.abilityCache.clear();
+    }
+    this.abilityCache.set(key, {
+      ability,
+      configVersion,
+      expiresAtMs: Date.now() + PermissionService.ABILITY_CACHE_TTL_MS,
+    });
+    return ability;
+  }
+
+  /**
+   * Cache key covering everything that influences the computed rules.
+   * RulesService can inject *any* `${user.*}` field into rule conditions, so
+   * the key reflects the whole user object — keying on a fixed subset would
+   * let two users that differ only in some other referenced field share a
+   * cached ability.
+   */
+  private abilityCacheKey(user: UserInfo): string {
+    if (!user) {
+      return 'anonymous';
+    }
+    return JSON.stringify(user);
   }
 
   async isAllowedTo(
