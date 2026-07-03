@@ -91,15 +91,17 @@ export class PermissionService {
   }
 
   /**
-   * Cache key derived from everything that influences the computed rules:
-   * roles select the rule sets; id, name and projects can be injected into
-   * rule conditions as `${user...}` variables.
+   * Cache key covering everything that influences the computed rules.
+   * RulesService can inject *any* `${user.*}` field into rule conditions, so
+   * the key reflects the whole user object — keying on a fixed subset would
+   * let two users that differ only in some other referenced field share a
+   * cached ability.
    */
   private abilityCacheKey(user: UserInfo): string {
     if (!user) {
       return 'anonymous';
     }
-    return JSON.stringify([user.id, user.name, user.roles, user.projects]);
+    return JSON.stringify(user);
   }
 
   async isAllowedTo(
