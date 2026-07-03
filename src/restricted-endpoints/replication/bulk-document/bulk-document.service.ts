@@ -1,10 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import {
-  BulkGetResponse,
-  BulkGetResult,
-  ErrorDoc,
-  OkDoc,
-} from './couchdb-dtos/bulk-get.dto';
+import { BulkGetResult, ErrorDoc, OkDoc } from './couchdb-dtos/bulk-get.dto';
 import {
   AllDocsRequest,
   AllDocsResponse,
@@ -14,7 +9,6 @@ import {
   BulkDocsRequest,
   BulkDocsResponse,
   DatabaseDocument,
-  FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
 import {
@@ -40,24 +34,12 @@ export class BulkDocumentService {
     private readonly auditService: AuditService,
   ) {}
 
-  filterBulkGetResponse(
-    response: BulkGetResponse,
-    user: UserInfo,
-  ): BulkGetResponse {
-    const mapResult = this.bulkGetResultMapper(user);
-    return {
-      results: response.results
-        .map(mapResult)
-        .filter((result): result is BulkGetResult => result !== undefined),
-    };
-  }
-
   /**
    * Per-item filter for single results of a `_bulk_get` response.
    * Returns the result with non-permitted docs removed,
    * or `undefined` if the whole result should be dropped.
    *
-   * Used by {@link filterBulkGetResponse} and by the streaming endpoint.
+   * Used by the streaming `_bulk_get` endpoint.
    */
   bulkGetResultMapper(
     user: UserInfo,
@@ -88,22 +70,10 @@ export class BulkDocumentService {
     }
   }
 
-  filterAllDocsResponse(
-    response: AllDocsResponse,
-    user: UserInfo,
-  ): AllDocsResponse {
-    const isPermitted = this.allDocsRowFilter(user);
-    return {
-      total_rows: response.total_rows,
-      offset: response.offset,
-      rows: response.rows.filter(isPermitted),
-    };
-  }
-
   /**
    * Per-row permission filter for `_all_docs` responses.
    *
-   * Used by {@link filterAllDocsResponse} and by the streaming endpoint.
+   * Used by the streaming `_all_docs` endpoint.
    */
   allDocsRowFilter(user: UserInfo): (row: DocMetaInf) => boolean {
     const ability = this.permissionService.getAbilityFor(user);
@@ -198,19 +168,10 @@ export class BulkDocumentService {
     };
   }
 
-  filterFindResponse(request: FindResponse, user: UserInfo): FindResponse {
-    const isPermitted = this.findDocFilter(user);
-    return {
-      bookmark: request.bookmark,
-      warning: request.warning,
-      docs: request.docs.filter(isPermitted),
-    };
-  }
-
   /**
    * Per-doc permission filter for `_find` responses.
    *
-   * Used by {@link filterFindResponse} and by the streaming endpoint.
+   * Used by the streaming `_find` endpoint.
    */
   findDocFilter(user: UserInfo): (doc: DatabaseDocument) => boolean {
     const ability = this.permissionService.getAbilityFor(user);

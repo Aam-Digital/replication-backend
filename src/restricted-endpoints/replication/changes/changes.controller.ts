@@ -198,16 +198,26 @@ export class ChangesController {
         resolve();
         return;
       }
+      const cleanup = () => {
+        res.off('drain', onDrain);
+        res.off('close', onFailure);
+        res.off('error', onFailure);
+      };
       const onDrain = () => {
-        res.off('close', onClose);
+        cleanup();
         resolve();
       };
-      const onClose = () => {
-        res.off('drain', onDrain);
+      // socket error or close while back-pressured: settle the promise so the
+      // request handler never hangs (which would leak a CouchDB keep-alive
+      // socket). 'error' is required — without it a socket error that does not
+      // also emit 'close' would leave this promise pending forever.
+      const onFailure = () => {
+        cleanup();
         reject(new Error('client disconnected'));
       };
       res.once('drain', onDrain);
-      res.once('close', onClose);
+      res.once('close', onFailure);
+      res.once('error', onFailure);
     });
   }
 
