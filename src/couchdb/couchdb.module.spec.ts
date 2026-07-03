@@ -5,6 +5,7 @@ import {
   DATABASE_TIMEOUT_ENV,
   DEFAULT_DATABASE_MAX_SOCKETS,
   DEFAULT_DATABASE_TIMEOUT_MS,
+  MIN_DATABASE_TIMEOUT_MS,
 } from './couchdb.module';
 
 /** read the (untyped) constructor options back from an http(s).Agent */
@@ -56,5 +57,13 @@ describe('couchdbHttpOptions', () => {
     expect(agentOptions(options.httpAgent).maxSockets).toBe(
       DEFAULT_DATABASE_MAX_SOCKETS,
     );
+  });
+
+  it('clamps a too-low timeout up to the floor so it cannot abort the longpoll feed', () => {
+    const options = couchdbHttpOptions(
+      new ConfigService({ [DATABASE_TIMEOUT_ENV]: '30000' }),
+    );
+
+    expect(options.timeout).toBe(MIN_DATABASE_TIMEOUT_MS);
   });
 });
