@@ -34,34 +34,39 @@ export class AdminService {
    * This function should be called whenever the permissions change to re-trigger sync
    */
   async clearLocal(db: string): Promise<void> {
-    // ids already attempted (successful or failed) — guards against endless
-    // looping if a doc cannot be deleted and keeps pagination simple:
-    // deleted docs disappear from _local_docs, so re-fetching the first page
-    // naturally moves through the remainder.
-    const attemptedIds = new Set<string>();
     let failedCount = 0;
+    // Page forward through _local_docs by id cursor. Advancing past the last
+    // id seen each page (independent of whether its deletion succeeded) means
+    // an undeletable doc cannot block progress to later pages, and we never
+    // hold the full id set in memory. _local_docs paginates via
+    // `startkey_docid` (see CouchDB /db/_local_docs docs), not `startkey`.
+    let startkeyDocid: string | undefined;
 
     for (;;) {
+      const params: Record<string, unknown> = {
+        limit: AdminService.CLEAR_LOCAL_BATCH_SIZE,
+      };
+      if (startkeyDocid !== undefined) {
+        params.startkey_docid = startkeyDocid;
+        params.skip = 1; // exclude the boundary doc already processed
+      }
+
       const localDocsResponse = await firstValueFrom(
-        this.couchdbService.get<AllDocsResponse>(db, '_local_docs', {
-          limit: AdminService.CLEAR_LOCAL_BATCH_SIZE,
-        }),
+        this.couchdbService.get<AllDocsResponse>(db, '_local_docs', params),
       );
 
-      // Get IDs of the replication checkpoints,
-      // skipping couchdb-internal docs
-      const ids = localDocsResponse.rows
-        .map((doc) => doc.id)
-        .filter(
-          (id) =>
-            !id.includes('purge-mrview') &&
-            !id.includes('shard-sync') &&
-            !attemptedIds.has(id),
-        );
-
-      if (ids.length === 0) {
+      const rows = localDocsResponse.rows;
+      if (rows.length === 0) {
         break;
       }
+      startkeyDocid = rows[rows.length - 1].id;
+
+      // Get IDs of the replication checkpoints, skipping couchdb-internal docs
+      const ids = rows
+        .map((doc) => doc.id)
+        .filter(
+          (id) => !id.includes('purge-mrview') && !id.includes('shard-sync'),
+        );
 
       for (
         let i = 0;
@@ -73,7 +78,6 @@ export class AdminService {
           chunk.map((id) => firstValueFrom(this.couchdbService.delete(db, id))),
         );
         results.forEach((result, index) => {
-          attemptedIds.add(chunk[index]);
           if (result.status === 'rejected') {
             failedCount++;
             this.logger.warn(
@@ -81,6 +85,10 @@ export class AdminService {
             );
           }
         });
+      }
+
+      if (rows.length < AdminService.CLEAR_LOCAL_BATCH_SIZE) {
+        break; // last page
       }
     }
 
