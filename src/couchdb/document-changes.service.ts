@@ -21,11 +21,22 @@ import {
   isAuthHttpError,
   isLikelyTransientError,
 } from '../common/http-error-classification';
-import {
-  ChangeResult,
-  ChangesResponse,
-} from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
+import { ChangesResponse } from '../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
 import { CouchdbService } from './couchdb.service';
+
+/**
+ * A document change notification without the document body.
+ *
+ * The internal feed intentionally does not request doc contents
+ * (no `include_docs`) so that the constant background feed does not
+ * transfer and parse every document written to the database.
+ * Consumers that need the document must fetch it on demand.
+ */
+export interface DocumentChangeEvent {
+  id: string;
+  seq: string;
+  deleted?: boolean;
+}
 
 /**
  * Maintains a single CouchDB _changes longpoll feed per database
@@ -34,7 +45,7 @@ import { CouchdbService } from './couchdb.service';
 @Injectable()
 export class DocumentChangesService implements OnModuleDestroy {
   private readonly logger = new Logger(DocumentChangesService.name);
-  private readonly feeds = new Map<string, Subject<ChangeResult>>();
+  private readonly feeds = new Map<string, Subject<DocumentChangeEvent>>();
   private readonly subscriptions = new Map<string, Subscription>();
 
   constructor(private readonly couchdbService: CouchdbService) {}
@@ -59,22 +70,22 @@ export class DocumentChangesService implements OnModuleDestroy {
   }
 
   /**
-   * Returns an Observable that emits each individual ChangeResult
-   * from the _changes feed of the given database.
+   * Returns an Observable that emits a {@link DocumentChangeEvent} for each
+   * individual change from the _changes feed of the given database.
    *
    * The underlying longpoll connection is started on the first call
    * and shared across all callers for that database.
    */
-  getChanges(db: string): Observable<ChangeResult> {
+  getChanges(db: string): Observable<DocumentChangeEvent> {
     if (!this.feeds.has(db)) {
-      const subject = new Subject<ChangeResult>();
+      const subject = new Subject<DocumentChangeEvent>();
       this.feeds.set(db, subject);
       this.startFeed(db, subject);
     }
     return this.feeds.get(db)!.asObservable();
   }
 
-  private startFeed(db: string, subject: Subject<ChangeResult>): void {
+  private startFeed(db: string, subject: Subject<DocumentChangeEvent>): void {
     let lastSeq: string = 'now';
     // Tracks consecutive failures so we can back off the request rate and
     // throttle log output until the feed recovers.
@@ -84,7 +95,6 @@ export class DocumentChangesService implements OnModuleDestroy {
       of({
         feed: 'longpoll',
         since: lastSeq,
-        include_docs: true,
         timeout: 50000,
       }),
     );
@@ -111,7 +121,11 @@ export class DocumentChangesService implements OnModuleDestroy {
           backoff.reset();
           lastSeq = changes.last_seq;
           for (const result of changes.results ?? []) {
-            subject.next(result);
+            subject.next({
+              id: result.id,
+              seq: result.seq,
+              deleted: result.deleted,
+            });
           }
         },
         error: (err) => {
