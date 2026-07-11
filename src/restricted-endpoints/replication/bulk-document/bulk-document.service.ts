@@ -1,16 +1,14 @@
 import { Injectable } from '@nestjs/common';
+import { BulkGetResult, ErrorDoc, OkDoc } from './couchdb-dtos/bulk-get.dto';
 import {
-  BulkGetResponse,
-  BulkGetResult,
-  ErrorDoc,
-  OkDoc,
-} from './couchdb-dtos/bulk-get.dto';
-import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
+  AllDocsRequest,
+  AllDocsResponse,
+  DocMetaInf,
+} from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
   BulkDocsResponse,
   DatabaseDocument,
-  FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
 import {
@@ -36,22 +34,29 @@ export class BulkDocumentService {
     private readonly auditService: AuditService,
   ) {}
 
-  filterBulkGetResponse(
-    response: BulkGetResponse,
+  /**
+   * Per-item filter for single results of a `_bulk_get` response.
+   * Returns the result with non-permitted docs removed,
+   * or `undefined` if the whole result should be dropped.
+   *
+   * Used by the streaming `_bulk_get` endpoint.
+   */
+  bulkGetResultMapper(
     user: UserInfo,
-  ): BulkGetResponse {
+  ): (result: BulkGetResult) => BulkGetResult | undefined {
     const ability = this.permissionService.getAbilityFor(user);
-    const withPermissions: BulkGetResult[] = response.results
-      .filter((result) => this.documentFilter.isReplicable(result.id))
-      .map((result) => ({
-        id: result.id,
-        docs: result.docs.filter((doc) =>
-          this.isPermittedBulkGetDoc(doc, ability),
-        ),
-      }));
-    // Only return results where at least one document is left
-    return {
-      results: withPermissions.filter((result) => result.docs.length > 0),
+    return (result) => {
+      if (!this.documentFilter.isReplicable(result.id)) {
+        return undefined;
+      }
+      const docs = result.docs.filter((doc) =>
+        this.isPermittedBulkGetDoc(doc, ability),
+      );
+      // Only return results where at least one document is left
+      if (docs.length === 0) {
+        return undefined;
+      }
+      return { id: result.id, docs };
     };
   }
 
@@ -65,20 +70,19 @@ export class BulkDocumentService {
     }
   }
 
-  filterAllDocsResponse(
-    response: AllDocsResponse,
-    user: UserInfo,
-  ): AllDocsResponse {
+  /**
+   * Per-row permission filter for `_all_docs` responses.
+   *
+   * Used by the streaming `_all_docs` endpoint.
+   */
+  allDocsRowFilter(user: UserInfo): (row: DocMetaInf) => boolean {
     const ability = this.permissionService.getAbilityFor(user);
-    return {
-      total_rows: response.total_rows,
-      offset: response.offset,
-      rows: response.rows.filter(
-        (row) =>
-          this.documentFilter.isReplicable(row.id) &&
-          (row.doc ? row.doc._deleted || ability.can('read', row.doc) : true),
-      ),
-    };
+    return (row) =>
+      // rows without id are error entries for missing keys
+      // (e.g. {key, error: "not_found"}) and are passed through
+      !row.id ||
+      (this.documentFilter.isReplicable(row.id) &&
+        (row.doc ? row.doc._deleted || ability.can('read', row.doc) : true));
   }
 
   /**
@@ -164,18 +168,17 @@ export class BulkDocumentService {
     };
   }
 
-  filterFindResponse(request: FindResponse, user: UserInfo): FindResponse {
+  /**
+   * Per-doc permission filter for `_find` responses.
+   *
+   * Used by the streaming `_find` endpoint.
+   */
+  findDocFilter(user: UserInfo): (doc: DatabaseDocument) => boolean {
     const ability = this.permissionService.getAbilityFor(user);
-    return {
-      bookmark: request.bookmark,
-      warning: request.warning,
-      docs: request.docs.filter(
-        (doc) =>
-          !!doc._id &&
-          this.documentFilter.isReplicable(doc._id) &&
-          ability.can('read', doc),
-      ),
-    };
+    return (doc) =>
+      !!doc._id &&
+      this.documentFilter.isReplicable(doc._id) &&
+      ability.can('read', doc);
   }
 
   private hasPermissionsForDoc(
