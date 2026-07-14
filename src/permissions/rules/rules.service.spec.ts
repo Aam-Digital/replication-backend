@@ -241,50 +241,62 @@ describe('RulesService', () => {
   });
 
   it('should restore managed defaults when a change strips them', async () => {
-    (mockCouchdbService.put as jest.Mock).mockClear();
-    const adminRule: DocumentRule = { action: 'read', subject: 'Child' };
-    const strippedDoc = new Permission({
-      ...testPermission.data,
-      default: [adminRule],
-    });
-    strippedDoc._rev = '2-abc';
+    jest.useFakeTimers({ doNotFake: ['nextTick'] });
+    try {
+      (mockCouchdbService.put as jest.Mock).mockClear();
+      const adminRule: DocumentRule = { action: 'read', subject: 'Child' };
+      const strippedDoc = new Permission({
+        ...testPermission.data,
+        default: [adminRule],
+      });
+      strippedDoc._rev = '2-abc';
 
-    changesSubject.next({
-      doc: strippedDoc,
-      id: Permission.DOC_ID,
-      seq: '3',
-      changes: [{ rev: '2-abc' }],
-    });
-    await new Promise(process.nextTick);
+      changesSubject.next({
+        doc: strippedDoc,
+        id: Permission.DOC_ID,
+        seq: '3',
+        changes: [{ rev: '2-abc' }],
+      });
+      await new Promise(process.nextTick);
+      jest.advanceTimersByTime(1500);
 
-    expect(mockCouchdbService.put).toHaveBeenCalledWith(
-      DATABASE_NAME,
-      expect.objectContaining({
-        _rev: '2-abc',
-        data: expect.objectContaining({
-          default: [...MANAGED_DEFAULT_RULES, adminRule],
+      expect(mockCouchdbService.put).toHaveBeenCalledWith(
+        DATABASE_NAME,
+        expect.objectContaining({
+          _rev: '2-abc',
+          data: expect.objectContaining({
+            default: [...MANAGED_DEFAULT_RULES, adminRule],
+          }),
         }),
-      }),
-    );
+      );
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should not write again when a change already contains the managed defaults', async () => {
-    (mockCouchdbService.put as jest.Mock).mockClear();
-    const enrichedDoc = new Permission({
-      ...testPermission.data,
-      default: [...MANAGED_DEFAULT_RULES],
-    });
-    enrichedDoc._rev = '2-abc';
+    jest.useFakeTimers({ doNotFake: ['nextTick'] });
+    try {
+      (mockCouchdbService.put as jest.Mock).mockClear();
+      const enrichedDoc = new Permission({
+        ...testPermission.data,
+        default: [...MANAGED_DEFAULT_RULES],
+      });
+      enrichedDoc._rev = '2-abc';
 
-    changesSubject.next({
-      doc: enrichedDoc,
-      id: Permission.DOC_ID,
-      seq: '3',
-      changes: [{ rev: '2-abc' }],
-    });
-    await new Promise(process.nextTick);
+      changesSubject.next({
+        doc: enrichedDoc,
+        id: Permission.DOC_ID,
+        seq: '3',
+        changes: [{ rev: '2-abc' }],
+      });
+      await new Promise(process.nextTick);
+      jest.advanceTimersByTime(1500);
 
-    expect(mockCouchdbService.put).not.toHaveBeenCalled();
+      expect(mockCouchdbService.put).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should retry with the current doc when the write-back hits a rev conflict', async () => {
