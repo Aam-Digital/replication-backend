@@ -240,6 +240,79 @@ describe('RulesService', () => {
     jest.useRealTimers();
   });
 
+  it('should restore managed defaults when a change strips them', async () => {
+    (mockCouchdbService.put as jest.Mock).mockClear();
+    const adminRule: DocumentRule = { action: 'read', subject: 'Child' };
+    const strippedDoc = new Permission({
+      ...testPermission.data,
+      default: [adminRule],
+    });
+    strippedDoc._rev = '2-abc';
+
+    changesSubject.next({
+      doc: strippedDoc,
+      id: Permission.DOC_ID,
+      seq: '3',
+      changes: [{ rev: '2-abc' }],
+    });
+    await new Promise(process.nextTick);
+
+    expect(mockCouchdbService.put).toHaveBeenCalledWith(
+      DATABASE_NAME,
+      expect.objectContaining({
+        _rev: '2-abc',
+        data: expect.objectContaining({
+          default: [...MANAGED_DEFAULT_RULES, adminRule],
+        }),
+      }),
+    );
+  });
+
+  it('should not write again when a change already contains the managed defaults', async () => {
+    (mockCouchdbService.put as jest.Mock).mockClear();
+    const enrichedDoc = new Permission({
+      ...testPermission.data,
+      default: [...MANAGED_DEFAULT_RULES],
+    });
+    enrichedDoc._rev = '2-abc';
+
+    changesSubject.next({
+      doc: enrichedDoc,
+      id: Permission.DOC_ID,
+      seq: '3',
+      changes: [{ rev: '2-abc' }],
+    });
+    await new Promise(process.nextTick);
+
+    expect(mockCouchdbService.put).not.toHaveBeenCalled();
+  });
+
+  it('should retry with the current doc when the write-back hits a rev conflict', async () => {
+    (mockCouchdbService.put as jest.Mock)
+      .mockClear()
+      .mockReturnValueOnce(
+        throwError(() => new HttpException('conflict', HttpStatus.CONFLICT)),
+      )
+      .mockReturnValue(of({ ok: true, id: Permission.DOC_ID, rev: '4-a' }));
+    const currentDoc = new Permission({ ...testPermission.data });
+    currentDoc._rev = '3-newer';
+    (mockCouchdbService.get as jest.Mock).mockReturnValue(of(currentDoc));
+
+    changesSubject.next({
+      doc: new Permission({ ...testPermission.data }),
+      id: Permission.DOC_ID,
+      seq: '4',
+      changes: [{ rev: '2-b' }],
+    });
+    await new Promise(process.nextTick);
+
+    expect(mockCouchdbService.put).toHaveBeenCalledTimes(2);
+    expect(mockCouchdbService.put).toHaveBeenLastCalledWith(
+      DATABASE_NAME,
+      expect.objectContaining({ _rev: '3-newer' }),
+    );
+  });
+
   it('should write managed default rules into the permission doc on startup', () => {
     expect(mockCouchdbService.put).toHaveBeenCalledWith(
       DATABASE_NAME,

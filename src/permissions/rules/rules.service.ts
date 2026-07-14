@@ -206,6 +206,8 @@ export class RulesService implements OnModuleInit {
           1000,
         );
       }
+
+      void this.ensureManagedDefaults(db, change.doc as Permission);
     });
   }
 
