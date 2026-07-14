@@ -1,6 +1,7 @@
 import { RawRuleOf } from '@casl/ability';
 import {
   HttpException,
+  HttpStatus,
   Injectable,
   Logger,
   OnModuleInit,
@@ -16,6 +17,7 @@ import { DocumentChangesService } from '../../couchdb/document-changes.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { DocumentAbility } from '../permission/permission.service';
 import { UserIdentityService } from '../user-identity/user-identity.service';
+import { mergeManagedDefaults } from './default-permissions';
 import { Permission, RulesConfig } from './permission';
 import { PermissionConfigValidator } from './permission-config.validator';
 
@@ -94,6 +96,7 @@ export class RulesService implements OnModuleInit {
         if (this.permission === undefined) {
           this.permission = data;
         }
+        await this.ensureManagedDefaults(db, permissionDoc);
         return;
       } catch (error) {
         if (error instanceof HttpException && error.getStatus() === 404) {
@@ -205,6 +208,63 @@ export class RulesService implements OnModuleInit {
       }
     });
   }
+
+  /**
+   * Idempotently write the managed system-default rules into the `default`
+   * section of the permission document (see {@link MANAGED_DEFAULT_RULES}).
+   * Retries on rev conflicts with a freshly fetched doc so that concurrent
+   * admin edits or multiple backend instances converge. Never throws: a
+   * failed write-back must not break permission loading, and the next change
+   * event triggers another attempt (self-healing).
+   */
+  private async ensureManagedDefaults(db: string, doc: Permission) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (!PermissionConfigValidator.isValidRulesConfig(doc?.data)) {
+        return;
+      }
+      const { merged, changed } = mergeManagedDefaults(doc.data.default);
+      if (!changed) {
+        return;
+      }
+
+      const updatedDoc: Permission = {
+        ...doc,
+        data: { ...doc.data, default: merged },
+      };
+      try {
+        await firstValueFrom(this.couchdbService.put(db, updatedDoc));
+        this.logger.log(
+          `Managed default permissions written to "${Permission.DOC_ID}" in "${db}"`,
+        );
+        return;
+      } catch (error) {
+        const isConflict =
+          error instanceof HttpException &&
+          error.getStatus() === HttpStatus.CONFLICT;
+        if (!isConflict || attempt === 2) {
+          this.logger.error(
+            `Failed to write managed default permissions to "${db}"`,
+            error instanceof Error ? error.stack : String(error),
+          );
+          return;
+        }
+        try {
+          doc = await firstValueFrom(
+            this.couchdbService.get<Permission>(db, Permission.DOC_ID),
+          );
+        } catch (fetchError) {
+          this.logger.error(
+            `Failed to re-fetch permission doc after write conflict in "${db}"`,
+            fetchError instanceof Error
+              ? fetchError.stack
+              : String(fetchError),
+          );
+          return;
+        }
+      }
+    }
+  }
+
   /**
    * Get all rules that are related to the roles of the user.
    *

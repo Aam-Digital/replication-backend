@@ -8,6 +8,7 @@ import { DocumentChangesService } from '../../couchdb/document-changes.service';
 import { ChangeResult } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { UserIdentityService } from '../user-identity/user-identity.service';
+import { MANAGED_DEFAULT_RULES } from './default-permissions';
 import { Permission } from './permission';
 import { DocumentRule, RulesService } from './rules.service';
 
@@ -52,6 +53,9 @@ describe('RulesService', () => {
 
     mockCouchdbService = {
       get: jest.fn().mockReturnValue(of(testPermission)),
+      put: jest
+        .fn()
+        .mockReturnValue(of({ ok: true, id: Permission.DOC_ID, rev: '2-x' })),
     } as any;
 
     const mockDocumentChangesService = {
@@ -234,6 +238,43 @@ describe('RulesService', () => {
     expect(mockAdminService.clearLocal).toHaveBeenCalled();
 
     jest.useRealTimers();
+  });
+
+  it('should write managed default rules into the permission doc on startup', () => {
+    expect(mockCouchdbService.put).toHaveBeenCalledWith(
+      DATABASE_NAME,
+      expect.objectContaining({
+        _id: Permission.DOC_ID,
+        data: {
+          ...testPermission.data,
+          default: MANAGED_DEFAULT_RULES,
+        },
+      }),
+    );
+    // in-memory rules are not modified directly; the enriched doc arrives via the changes feed
+    expect(service.getRulesForUser(normalUser)).toEqual(userRules);
+  });
+
+  it('should not write when managed defaults are already present', async () => {
+    (mockCouchdbService.put as jest.Mock).mockClear();
+    testPermission.data.default = [...MANAGED_DEFAULT_RULES];
+
+    await service.onModuleInit();
+
+    expect(mockCouchdbService.put).not.toHaveBeenCalled();
+  });
+
+  it('should not write managed defaults in bootstrap mode', async () => {
+    const bootstrapPut = jest.fn();
+    jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => {});
+    const { freshService } = await buildFreshService({
+      ...notFoundCouchdb(),
+      put: bootstrapPut,
+    } as any);
+
+    await freshService.onModuleInit();
+
+    expect(bootstrapPut).not.toHaveBeenCalled();
   });
 
   /**
