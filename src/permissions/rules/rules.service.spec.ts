@@ -270,7 +270,7 @@ describe('RulesService', () => {
     const { freshService } = await buildFreshService({
       ...notFoundCouchdb(),
       put: bootstrapPut,
-    } as any);
+    });
 
     await freshService.onModuleInit();
 
@@ -284,11 +284,18 @@ describe('RulesService', () => {
    */
   async function buildFreshService(couchdbServiceOverride: {
     get: jest.Mock;
+    put?: jest.Mock;
   }): Promise<{
     freshService: RulesService;
     freshChangesSubject: Subject<ChangeResult>;
   }> {
     const freshChangesSubject = new Subject<ChangeResult>();
+    const couchdbMock = {
+      put: jest
+        .fn()
+        .mockReturnValue(of({ ok: true, id: Permission.DOC_ID, rev: '2-x' })),
+      ...couchdbServiceOverride,
+    };
     const freshModule = await Test.createTestingModule({
       providers: [
         RulesService,
@@ -300,7 +307,7 @@ describe('RulesService', () => {
         },
         { provide: AdminService, useValue: mockAdminService },
         { provide: UserIdentityService, useValue: mockUserIdentityService },
-        { provide: CouchdbService, useValue: couchdbServiceOverride },
+        { provide: CouchdbService, useValue: couchdbMock },
         {
           provide: DocumentChangesService,
           useValue: {
