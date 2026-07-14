@@ -274,6 +274,39 @@ describe('RulesService', () => {
     }
   });
 
+  it('should heal a malformed (non-array) default section without crashing', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick'] });
+    try {
+      (mockCouchdbService.put as jest.Mock).mockClear();
+      const malformedDoc = new Permission({
+        ...testPermission.data,
+        default: null as any,
+      });
+      malformedDoc._rev = '2-abc';
+
+      changesSubject.next({
+        doc: malformedDoc,
+        id: Permission.DOC_ID,
+        seq: '3',
+        changes: [{ rev: '2-abc' }],
+      });
+      await new Promise(process.nextTick);
+      jest.advanceTimersByTime(1500);
+
+      expect(mockCouchdbService.put).toHaveBeenCalledWith(
+        DATABASE_NAME,
+        expect.objectContaining({
+          _rev: '2-abc',
+          data: expect.objectContaining({
+            default: MANAGED_DEFAULT_RULES,
+          }),
+        }),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('should not write again when a change already contains the managed defaults', async () => {
     jest.useFakeTimers({ doNotFake: ['nextTick'] });
     try {
