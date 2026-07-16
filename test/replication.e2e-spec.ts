@@ -44,10 +44,10 @@ describe('Replication endpoints (e2e)', () => {
       expect(ids).toContain('Child:2');
       expect(ids).toContain('Note:1');
       expect(ids).toContain('Child:deleted'); // tombstones pass through
+      expect(ids).toContain('Config:Permissions'); // readable via managed system defaults
       expect(ids).not.toContain('School:1');
       expect(ids).not.toContain('Note:2');
       expect(ids).not.toContain('_design/some-view'); // filtered prefix
-      expect(ids).not.toContain('Config:Permissions');
 
       // notifies the client to purge docs it may no longer access
       expect(res.body.lostPermissions).toContain('School:1');

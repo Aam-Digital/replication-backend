@@ -207,7 +207,8 @@ export class RulesService implements OnModuleInit {
                 );
               }),
           1000,
-        );
+          // a pending clearLocal must not keep the process alive on shutdown
+        ).unref();
       }
 
       void this.ensureManagedDefaults(db, change.doc as Permission);
