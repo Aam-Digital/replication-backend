@@ -269,18 +269,19 @@ export class RulesService implements OnModuleInit {
     if (!changed) {
       return 'done';
     }
-    if (dropped.length > 0) {
-      this.logger.warn(
-        `Customized rule(s) carrying the "${SYSTEM_DEFAULT_MARKER}" marker were replaced in "${db}": ${JSON.stringify(dropped)}`,
-      );
-    }
-
     const updatedDoc: Permission = {
       ...doc,
       data: { ...doc.data, default: merged },
     };
     try {
       await firstValueFrom(this.couchdbService.put(db, updatedDoc));
+      if (dropped.length > 0) {
+        // warn only after the write persisted, so a failed or conflicting
+        // attempt does not falsely claim rules were replaced
+        this.logger.warn(
+          `Customized rule(s) carrying the "${SYSTEM_DEFAULT_MARKER}" marker were replaced in "${db}": ${JSON.stringify(dropped)}`,
+        );
+      }
       this.logger.log(
         `Managed default permissions written to "${Permission.DOC_ID}" in "${db}"`,
       );
