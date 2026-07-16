@@ -15,7 +15,7 @@ describe('mergeManagedDefaults', () => {
     expect(merged).toEqual([...MANAGED_DEFAULT_RULES, adminRule]);
 
     // a missing default section yields exactly the managed rules
-    const fromEmpty = mergeManagedDefaults(undefined);
+    const fromEmpty = mergeManagedDefaults();
     expect(fromEmpty.changed).toBe(true);
     expect(fromEmpty.merged).toEqual(MANAGED_DEFAULT_RULES);
 

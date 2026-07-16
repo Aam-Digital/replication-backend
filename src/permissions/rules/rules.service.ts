@@ -223,69 +223,75 @@ export class RulesService implements OnModuleInit {
    * event triggers another attempt (self-healing).
    */
   private async ensureManagedDefaults(db: string, doc: Permission) {
-    for (let attempt = 0; attempt < 3; attempt++) {
-      try {
-        if (!PermissionConfigValidator.isValidRulesConfig(doc?.data)) {
-          return;
-        }
-        const { merged, changed, dropped } = mergeManagedDefaults(
-          doc.data.default,
+    try {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const outcome = await this.writeManagedDefaults(
+          db,
+          doc,
+          attempt === 2,
         );
-        if (!changed) {
+        if (outcome !== 'conflict') {
           return;
         }
-        if (dropped.length > 0) {
-          this.logger.warn(
-            `Customized rule(s) carrying the "${SYSTEM_DEFAULT_MARKER}" marker were replaced in "${db}": ${JSON.stringify(dropped)}`,
-          );
-        }
-
-        const updatedDoc: Permission = {
-          ...doc,
-          data: { ...doc.data, default: merged },
-        };
-        try {
-          await firstValueFrom(this.couchdbService.put(db, updatedDoc));
-          this.logger.log(
-            `Managed default permissions written to "${Permission.DOC_ID}" in "${db}"`,
-          );
-          return;
-        } catch (error) {
-          const isConflict =
-            error instanceof HttpException &&
-            error.getStatus() === HttpStatus.CONFLICT;
-          if (!isConflict || attempt === 2) {
-            this.logger.error(
-              `Failed to write managed default permissions to "${db}"`,
-              error instanceof Error ? error.stack : String(error),
-            );
-            return;
-          }
-          try {
-            doc = await firstValueFrom(
-              this.couchdbService.get<Permission>(db, Permission.DOC_ID),
-            );
-          } catch (fetchError) {
-            this.logger.error(
-              `Failed to re-fetch permission doc after write conflict in "${db}"`,
-              fetchError instanceof Error
-                ? fetchError.stack
-                : String(fetchError),
-            );
-            return;
-          }
-        }
-      } catch (unexpectedError) {
-        // Belt-and-braces: this method must never throw, even if the merge
-        // logic itself misbehaves in the future.
-        this.logger.error(
-          `Unexpected error while ensuring managed default permissions for "${db}"`,
-          unexpectedError instanceof Error
-            ? unexpectedError.stack
-            : String(unexpectedError),
+        doc = await firstValueFrom(
+          this.couchdbService.get<Permission>(db, Permission.DOC_ID),
         );
-        return;
       }
+    } catch (error) {
+      // Belt-and-braces: this method must never throw, even if the merge
+      // logic or the conflict re-fetch misbehaves; the next change event
+      // triggers another attempt (self-healing).
+      this.logger.error(
+        `Failed to write managed default permissions to "${db}"`,
+        error instanceof Error ? error.stack : String(error),
+      );
+    }
+  }
+
+  /**
+   * One write-back attempt: merge the managed defaults into the doc and PUT
+   * it if anything changed. Returns "conflict" when the PUT hit a rev
+   * conflict and retrying with a freshly fetched doc makes sense; rethrows
+   * any other error for {@link ensureManagedDefaults} to log.
+   */
+  private async writeManagedDefaults(
+    db: string,
+    doc: Permission,
+    isLastAttempt: boolean,
+  ): Promise<'done' | 'conflict'> {
+    if (!PermissionConfigValidator.isValidRulesConfig(doc?.data)) {
+      return 'done';
+    }
+    const { merged, changed, dropped } = mergeManagedDefaults(
+      doc.data.default,
+    );
+    if (!changed) {
+      return 'done';
+    }
+    if (dropped.length > 0) {
+      this.logger.warn(
+        `Customized rule(s) carrying the "${SYSTEM_DEFAULT_MARKER}" marker were replaced in "${db}": ${JSON.stringify(dropped)}`,
+      );
+    }
+
+    const updatedDoc: Permission = {
+      ...doc,
+      data: { ...doc.data, default: merged },
+    };
+    try {
+      await firstValueFrom(this.couchdbService.put(db, updatedDoc));
+      this.logger.log(
+        `Managed default permissions written to "${Permission.DOC_ID}" in "${db}"`,
+      );
+      return 'done';
+    } catch (error) {
+      const isConflict =
+        error instanceof HttpException &&
+        error.getStatus() === HttpStatus.CONFLICT;
+      if (isConflict && !isLastAttempt) {
+        return 'conflict';
+      }
+      throw error;
     }
   }
 
