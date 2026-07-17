@@ -273,6 +273,9 @@ export class RulesService implements OnModuleInit {
       ...doc,
       data: { ...doc.data, default: merged },
     };
+    this.logger.debug(
+      `Writing managed default permissions to "${db}" (rev ${doc._rev ?? 'none'})`,
+    );
     try {
       await firstValueFrom(this.couchdbService.put(db, updatedDoc));
       if (dropped.length > 0) {
@@ -291,6 +294,9 @@ export class RulesService implements OnModuleInit {
         error instanceof HttpException &&
         error.getStatus() === HttpStatus.CONFLICT;
       if (isConflict && !isLastAttempt) {
+        this.logger.debug(
+          `Failed to write managed default permissions to "${db}" due to rev conflict, retrying with fresh doc`,
+        );
         return 'conflict';
       }
       throw error;
