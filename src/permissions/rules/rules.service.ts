@@ -21,7 +21,17 @@ import {
   mergeManagedDefaults,
   SYSTEM_DEFAULT_MARKER,
 } from './default-permissions';
-import { Permission, RulesConfig } from './permission';
+import {
+  ADMIN_APP_ROLE,
+  DEFAULT_SECTION_KEY,
+  LEGACY_DEFAULT_KEY,
+  LEGACY_PUBLIC_KEY,
+  Permission,
+  PUBLIC_SECTION_KEY,
+  RESERVED_ROLE_PREFIX,
+  RESERVED_RULE_CONFIG_KEYS,
+  RulesConfig,
+} from './permission';
 import { PermissionConfigValidator } from './permission-config.validator';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
@@ -50,7 +60,7 @@ export class RulesService implements OnModuleInit {
    * (and anonymous traffic) are denied by default.
    */
   private static bootstrapPermissions(): RulesConfig {
-    return { admin_app: [{ action: 'manage', subject: 'all' }] };
+    return { [ADMIN_APP_ROLE]: [{ action: 'manage', subject: 'all' }] };
   }
 
   private readonly logger = new Logger(RulesService.name);
@@ -263,16 +273,17 @@ export class RulesService implements OnModuleInit {
     if (!PermissionConfigValidator.isValidRulesConfig(doc?.data)) {
       return 'done';
     }
-    const { merged, changed, dropped } = mergeManagedDefaults(
-      doc.data.default,
-    );
-    if (!changed) {
+    const currentDefault =
+      doc.data[DEFAULT_SECTION_KEY] ?? doc.data[LEGACY_DEFAULT_KEY];
+    const hasLegacyDefault = doc.data[LEGACY_DEFAULT_KEY] !== undefined;
+    const { merged, changed, dropped } = mergeManagedDefaults(currentDefault);
+    // still rewrite when only migrating the legacy key across to the new one
+    if (!changed && !hasLegacyDefault) {
       return 'done';
     }
-    const updatedDoc: Permission = {
-      ...doc,
-      data: { ...doc.data, default: merged },
-    };
+    const newData = { ...doc.data, [DEFAULT_SECTION_KEY]: merged };
+    delete newData[LEGACY_DEFAULT_KEY];
+    const updatedDoc: Permission = { ...doc, data: newData };
     this.logger.debug(
       `Writing managed default permissions to "${db}" (rev ${doc._rev ?? 'none'})`,
     );
@@ -318,18 +329,30 @@ export class RulesService implements OnModuleInit {
    */
   getRulesForUser(user: UserInfo): DocumentRule[] {
     if (!user) {
-      return this.permission?.public ?? [];
+      return (
+        this.permission?.[PUBLIC_SECTION_KEY] ??
+        this.permission?.[LEGACY_PUBLIC_KEY] ??
+        []
+      );
     }
     if (this.permission) {
       const userRules = user.roles
-        .filter((role) =>
-          PermissionConfigValidator.hasRole(this.permission, role),
+        .filter(
+          // reserved section keys and any underscore-prefixed name carry
+          // special semantics and never resolve as a user role
+          (role) =>
+            !role.startsWith(RESERVED_ROLE_PREFIX) &&
+            !RESERVED_RULE_CONFIG_KEYS.includes(role) &&
+            PermissionConfigValidator.hasRole(this.permission, role),
         )
         .map((role) => this.permission[role])
         .filter((rules): rules is DocumentRule[] => rules !== undefined)
         .flat();
-      if (this.permission.default) {
-        userRules.unshift(...this.permission.default);
+      const defaultRules =
+        this.permission[DEFAULT_SECTION_KEY] ??
+        this.permission[LEGACY_DEFAULT_KEY];
+      if (defaultRules) {
+        userRules.unshift(...defaultRules);
       }
       return this.injectUserVariablesIntoRules(userRules, user);
     } else {
