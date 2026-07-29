@@ -173,21 +173,56 @@ function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
     // Set sampling rate for profiling - this is relative to tracesSampleRate
     profilesSampleRate: 1.0,
 
-    beforeSend: (event, hint) => {
-      const error = hint.originalException;
-      if (
-        error instanceof HttpException &&
-        error.getStatus() >= 400 &&
-        error.getStatus() < 500
-      ) {
-        return null;
-      }
-
-      if (event.message) {
-        event.fingerprint = [normalizeLogMessage(event.message)];
-      }
-
-      return event;
-    },
+    beforeSend,
   });
+}
+
+/**
+ * Route for an event when none can be determined, kept as an explicit constant
+ * so grouped events don't silently merge with events that do have a route.
+ */
+const UNKNOWN_ROUTE = '<unknown route>';
+
+/**
+ * Decide whether an event is reported, and how it is grouped.
+ *
+ * Exported for testing — the grouping rules here determine whether a Sentry
+ * issue is actionable, so they are worth asserting on directly.
+ */
+export function beforeSend(
+  event: Sentry.ErrorEvent,
+  hint: Sentry.EventHint,
+): Sentry.ErrorEvent | null {
+  const error = hint.originalException;
+  if (
+    error instanceof HttpException &&
+    error.getStatus() >= 400 &&
+    error.getStatus() < 500
+  ) {
+    return null;
+  }
+
+  if (event.message) {
+    event.fingerprint = [normalizeLogMessage(event.message)];
+  }
+
+  // CouchdbService maps every failed axios response to a bare `HttpException`
+  // (see `initMapAxiosErrorsToNestjsExceptions`), whose message renders as the
+  // constant string "Http Exception". Sentry groups on that, so without an
+  // explicit fingerprint every CouchDB fault — any status, any route — merges
+  // into one opaque issue with no status and no route in its title. Fingerprint
+  // on status and route instead, so distinct faults stay distinct and each
+  // group is diagnosable on its own.
+  //
+  // This affects grouping only; the `HttpException` propagated to the client is
+  // untouched, so response bodies and status codes are unchanged.
+  if (error instanceof HttpException) {
+    event.fingerprint = [
+      'HttpException',
+      String(error.getStatus()),
+      event.transaction ?? UNKNOWN_ROUTE,
+    ];
+  }
+
+  return event;
 }
