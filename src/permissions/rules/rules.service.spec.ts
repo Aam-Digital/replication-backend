@@ -255,10 +255,10 @@ describe('RulesService', () => {
     jest.useRealTimers();
   });
 
-  it('should increment configVersion when the permission config changes', () => {
+  it('should emit permissionsChanged when the permission config changes', () => {
     jest.useFakeTimers();
-    const initialVersion = service.configVersion;
-    expect(initialVersion).toBeGreaterThan(0); // initial load counted
+    const changed = jest.fn();
+    service.permissionsChanged$.subscribe(changed);
 
     const updatedPermission = new Permission({
       user_app: [{ action: 'manage', subject: 'all' }],
@@ -269,7 +269,23 @@ describe('RulesService', () => {
 
     changesSubject.next({ seq: '1', id: updatedPermission._id! });
 
-    expect(service.configVersion).toBe(initialVersion + 1);
+    expect(changed).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it('should not emit permissionsChanged when the config document was written without changing its content', () => {
+    jest.useFakeTimers();
+    const changed = jest.fn();
+    service.permissionsChanged$.subscribe(changed);
+
+    // same content as the already loaded config, e.g. a re-save of the document
+    jest
+      .spyOn(mockCouchdbService, 'get')
+      .mockReturnValue(of(new Permission({ ...testPermission.data })));
+
+    changesSubject.next({ seq: '1', id: testPermission._id! });
+
+    expect(changed).not.toHaveBeenCalled();
     jest.useRealTimers();
   });
 
@@ -283,9 +299,7 @@ describe('RulesService', () => {
         default: [adminRule],
       });
       strippedDoc._rev = '2-abc';
-      jest
-        .spyOn(mockCouchdbService, 'get')
-        .mockReturnValue(of(strippedDoc));
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(strippedDoc));
 
       changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
       await new Promise(process.nextTick);
@@ -314,9 +328,7 @@ describe('RulesService', () => {
         default: null as any,
       });
       malformedDoc._rev = '2-abc';
-      jest
-        .spyOn(mockCouchdbService, 'get')
-        .mockReturnValue(of(malformedDoc));
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(malformedDoc));
 
       changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
       await new Promise(process.nextTick);
@@ -345,9 +357,7 @@ describe('RulesService', () => {
         default: [...MANAGED_DEFAULT_RULES],
       });
       enrichedDoc._rev = '2-abc';
-      jest
-        .spyOn(mockCouchdbService, 'get')
-        .mockReturnValue(of(enrichedDoc));
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(enrichedDoc));
 
       changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
       await new Promise(process.nextTick);
@@ -419,7 +429,6 @@ describe('RulesService', () => {
 
     expect(bootstrapPut).not.toHaveBeenCalled();
   });
-
   /**
    * Build a fresh RulesService instance with a configurable CouchdbService mock,
    * WITHOUT calling onModuleInit. Returns the service plus the change feed subject

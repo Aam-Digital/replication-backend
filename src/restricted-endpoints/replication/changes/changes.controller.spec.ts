@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { Observable, of } from 'rxjs';
+import { EMPTY, Observable, of } from 'rxjs';
 import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { PermissionService } from '../../../permissions/permission/permission.service';
@@ -38,6 +38,7 @@ describe('ChangesController', () => {
   const getSpy = jest.spyOn(mockCouchdbService, 'get');
   const mockRulesService = {
     getRulesForUser: () => undefined,
+    permissionsChanged$: EMPTY,
   } as any as RulesService;
   const getRulesSpy = jest.spyOn(mockRulesService, 'getRulesForUser');
 

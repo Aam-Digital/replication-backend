@@ -15,6 +15,7 @@ import {
   filter,
   firstValueFrom,
   retry,
+  Subject,
   throwError,
   timer,
 } from 'rxjs';
@@ -69,20 +70,21 @@ export class RulesService implements OnModuleInit {
 
   private readonly logger = new Logger(RulesService.name);
   private permission!: RulesConfig;
-  private _configVersion = 0;
+  private readonly permissionsChanged = new Subject<void>();
 
   /**
-   * Monotonically increasing counter, incremented whenever the in-memory
-   * permission config changes. Lets consumers (e.g. PermissionService)
-   * cheaply detect that rules derived from the config must be recomputed.
+   * Emits whenever the in-memory permission config actually changed, so that
+   * consumers (e.g. PermissionService) can discard data derived from it.
+   *
+   * Deliberately not emitted for the initial load during {@link onModuleInit}:
+   * no request has been served at that point, so there is nothing derived to
+   * invalidate yet.
    */
-  get configVersion(): number {
-    return this._configVersion;
-  }
+  readonly permissionsChanged$ = this.permissionsChanged.asObservable();
 
+  /** single write point for the in-memory config */
   private setPermission(config: RulesConfig): void {
     this.permission = config;
-    this._configVersion++;
   }
 
   constructor(
@@ -298,6 +300,7 @@ export class RulesService implements OnModuleInit {
     ) {
       return;
     }
+    this.permissionsChanged.next();
     this.userIdentityService.clearCache();
     setTimeout(
       () =>
@@ -328,11 +331,7 @@ export class RulesService implements OnModuleInit {
   private async ensureManagedDefaults(db: string, doc: Permission) {
     try {
       for (let attempt = 0; attempt < 3; attempt++) {
-        const outcome = await this.writeManagedDefaults(
-          db,
-          doc,
-          attempt === 2,
-        );
+        const outcome = await this.writeManagedDefaults(db, doc, attempt === 2);
         if (outcome !== 'conflict') {
           return;
         }
@@ -365,9 +364,7 @@ export class RulesService implements OnModuleInit {
     if (!PermissionConfigValidator.isValidRulesConfig(doc?.data)) {
       return 'done';
     }
-    const { merged, changed, dropped } = mergeManagedDefaults(
-      doc.data.default,
-    );
+    const { merged, changed, dropped } = mergeManagedDefaults(doc.data.default);
     if (!changed) {
       return 'done';
     }

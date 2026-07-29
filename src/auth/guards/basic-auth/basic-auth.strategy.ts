@@ -5,7 +5,7 @@ import { UserInfo } from '../../../restricted-endpoints/session/user-auth.dto';
 import { firstValueFrom } from 'rxjs';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { setUser } from '@sentry/node';
-import { createHash } from 'crypto';
+import { randomBytes, scryptSync } from 'crypto';
 
 /**
  * Authenticate a user from the BasicAuth header of a request.
@@ -25,6 +25,7 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
     string,
     { user: UserInfo; expiresAtMs: number }
   >();
+  private readonly cacheKeySalt = randomBytes(16);
 
   constructor(private couchdbService: CouchdbService) {
     super();
@@ -80,8 +81,12 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
     }
   }
 
-  /** never store plaintext credentials — key entries on a digest */
+  /** never store plaintext credentials — key entries on a slow password hash */
   private cacheKey(username: string, password: string): string {
-    return createHash('sha256').update(`${username}:${password}`).digest('hex');
+    return scryptSync(
+      `${username}:${password}`,
+      this.cacheKeySalt,
+      32,
+    ).toString('hex');
   }
 }
