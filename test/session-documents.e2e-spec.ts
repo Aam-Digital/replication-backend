@@ -83,6 +83,35 @@ describe('Session & document endpoints (e2e)', () => {
         .expect(200);
       expect(res.body.userCtx ?? null).toBeNull();
     });
+
+    it('caches basic auth logins instead of hitting CouchDB per request', async () => {
+      ctx.couch.addUser('burst-user', 'burst-pw', ['user_app']);
+      ctx.couch.clearRequestLog();
+
+      for (let i = 0; i < 3; i++) {
+        await request(ctx.app.getHttpServer())
+          .get('/_session')
+          .set(...basicAuth('burst-user', 'burst-pw'))
+          .expect(200);
+      }
+
+      expect(ctx.couch.sessionRequestCount).toBe(1);
+    });
+
+    it('does not authenticate a wrong password after a cached login', async () => {
+      ctx.couch.addUser('cache-victim', 'right-pw', ['user_app']);
+      await request(ctx.app.getHttpServer())
+        .get('/_session')
+        .set(...basicAuth('cache-victim', 'right-pw'))
+        .expect(200);
+
+      const res = await request(ctx.app.getHttpServer())
+        .get('/_session')
+        .set(...basicAuth('cache-victim', 'wrong-pw'))
+        .expect(200);
+      // falls through all auth modes -> anonymous
+      expect(res.body.userCtx ?? null).toBeNull();
+    });
   });
 
   describe('GET /:db/:docId', () => {

@@ -4,17 +4,20 @@ import { DocumentRule, RulesService } from '../rules/rules.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { DatabaseDocument } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { CouchdbService } from '../../couchdb/couchdb.service';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 
 describe('PermissionService', () => {
   let service: PermissionService;
   let mockRulesService: RulesService;
   let mockCouchDBService: CouchdbService;
+  let permissionsChanged: Subject<void>;
   let normalUser: UserInfo;
 
   beforeEach(async () => {
+    permissionsChanged = new Subject<void>();
     mockRulesService = {
       getRulesForUser: () => undefined,
+      permissionsChanged$: permissionsChanged.asObservable(),
     } as any;
     mockCouchDBService = {
       get: () => of({}),
@@ -159,6 +162,74 @@ describe('PermissionService', () => {
       'app-attachments',
     );
     expect(result2).toBe(false);
+  });
+
+  describe('ability caching', () => {
+    it('should reuse the cached ability for repeated calls with the same user', () => {
+      const getRulesSpy = jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
+
+      const first = service.getAbilityFor(normalUser);
+      const second = service.getAbilityFor(normalUser);
+
+      expect(second).toBe(first);
+      expect(getRulesSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('should build separate abilities for different users', () => {
+      const getRulesSpy = jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
+      const otherUser = new UserInfo('other-id', 'otherUser', ['user_app']);
+
+      const first = service.getAbilityFor(normalUser);
+      const second = service.getAbilityFor(otherUser);
+
+      expect(second).not.toBe(first);
+      expect(getRulesSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('should rebuild the ability when the permission config changed', () => {
+      const getRulesSpy = jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
+
+      const first = service.getAbilityFor(normalUser);
+      permissionsChanged.next();
+      const second = service.getAbilityFor(normalUser);
+
+      expect(second).not.toBe(first);
+      expect(getRulesSpy).toHaveBeenCalledTimes(2);
+    });
+
+    it('should discard cached abilities of all users on a config change', () => {
+      jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
+      const otherUser = new UserInfo('other-id', 'otherUser', ['user_app']);
+
+      const first = service.getAbilityFor(normalUser);
+      const firstOther = service.getAbilityFor(otherUser);
+      permissionsChanged.next();
+
+      expect(service.getAbilityFor(normalUser)).not.toBe(first);
+      expect(service.getAbilityFor(otherUser)).not.toBe(firstOther);
+    });
+
+    it('should cache the anonymous (public) ability separately from users', () => {
+      const getRulesSpy = jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
+
+      const anonymous = service.getAbilityFor(undefined as any);
+      const second = service.getAbilityFor(undefined as any);
+      const userAbility = service.getAbilityFor(normalUser);
+
+      expect(second).toBe(anonymous);
+      expect(userAbility).not.toBe(anonymous);
+      expect(getRulesSpy).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('should return isAllowedTo to for app-attachment based "update" action for entity', async () => {
