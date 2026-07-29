@@ -39,18 +39,22 @@ export const MIN_DATABASE_TIMEOUT_MS = 55_000;
 export function couchdbHttpOptions(
   configService: ConfigService,
 ): HttpModuleOptions {
+  const parsedTimeout = Number(configService.get(DATABASE_TIMEOUT_ENV));
   const configuredTimeout =
-    Number(configService.get(DATABASE_TIMEOUT_ENV)) ||
-    DEFAULT_DATABASE_TIMEOUT_MS;
+    Number.isFinite(parsedTimeout) && parsedTimeout > 0
+      ? parsedTimeout
+      : DEFAULT_DATABASE_TIMEOUT_MS;
   const timeout = Math.max(configuredTimeout, MIN_DATABASE_TIMEOUT_MS);
   if (configuredTimeout < MIN_DATABASE_TIMEOUT_MS) {
     new Logger('CouchdbModule').warn(
       `${DATABASE_TIMEOUT_ENV}=${configuredTimeout}ms is below the ${MIN_DATABASE_TIMEOUT_MS}ms floor (the internal changes feed uses 50s longpoll requests); using ${timeout}ms instead.`,
     );
   }
+  const parsedMaxSockets = Number(configService.get(DATABASE_MAX_SOCKETS_ENV));
   const maxSockets =
-    Number(configService.get(DATABASE_MAX_SOCKETS_ENV)) ||
-    DEFAULT_DATABASE_MAX_SOCKETS;
+    Number.isFinite(parsedMaxSockets) && parsedMaxSockets > 0
+      ? parsedMaxSockets
+      : DEFAULT_DATABASE_MAX_SOCKETS;
   const agentOptions = { keepAlive: true, maxSockets };
   return {
     timeout,

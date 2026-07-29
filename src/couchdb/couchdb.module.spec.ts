@@ -66,4 +66,67 @@ describe('couchdbHttpOptions', () => {
 
     expect(options.timeout).toBe(MIN_DATABASE_TIMEOUT_MS);
   });
+
+  it('rejects negative timeout and falls back to default', () => {
+    const options = couchdbHttpOptions(
+      new ConfigService({ [DATABASE_TIMEOUT_ENV]: '-1' }),
+    );
+
+    expect(options.timeout).toBe(DEFAULT_DATABASE_TIMEOUT_MS);
+  });
+
+  it('rejects zero timeout and falls back to default', () => {
+    const options = couchdbHttpOptions(
+      new ConfigService({ [DATABASE_TIMEOUT_ENV]: '0' }),
+    );
+
+    expect(options.timeout).toBe(DEFAULT_DATABASE_TIMEOUT_MS);
+  });
+
+  it('rejects Infinity timeout and falls back to default', () => {
+    const options = couchdbHttpOptions(
+      new ConfigService({ [DATABASE_TIMEOUT_ENV]: 'Infinity' }),
+    );
+
+    expect(options.timeout).toBe(DEFAULT_DATABASE_TIMEOUT_MS);
+  });
+
+  it('rejects negative maxSockets and falls back to default', () => {
+    const options = couchdbHttpOptions(
+      new ConfigService({ [DATABASE_MAX_SOCKETS_ENV]: '-1' }),
+    );
+
+    expect(agentOptions(options.httpAgent).maxSockets).toBe(
+      DEFAULT_DATABASE_MAX_SOCKETS,
+    );
+    expect(agentOptions(options.httpsAgent).maxSockets).toBe(
+      DEFAULT_DATABASE_MAX_SOCKETS,
+    );
+  });
+
+  it('rejects zero maxSockets and falls back to default', () => {
+    const options = couchdbHttpOptions(
+      new ConfigService({ [DATABASE_MAX_SOCKETS_ENV]: '0' }),
+    );
+
+    expect(agentOptions(options.httpAgent).maxSockets).toBe(
+      DEFAULT_DATABASE_MAX_SOCKETS,
+    );
+    expect(agentOptions(options.httpsAgent).maxSockets).toBe(
+      DEFAULT_DATABASE_MAX_SOCKETS,
+    );
+  });
+
+  it('rejects Infinity maxSockets and falls back to default', () => {
+    const options = couchdbHttpOptions(
+      new ConfigService({ [DATABASE_MAX_SOCKETS_ENV]: 'Infinity' }),
+    );
+
+    expect(agentOptions(options.httpAgent).maxSockets).toBe(
+      DEFAULT_DATABASE_MAX_SOCKETS,
+    );
+    expect(agentOptions(options.httpsAgent).maxSockets).toBe(
+      DEFAULT_DATABASE_MAX_SOCKETS,
+    );
+  });
 });
