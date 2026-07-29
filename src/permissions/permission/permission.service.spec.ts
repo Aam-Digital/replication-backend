@@ -201,20 +201,6 @@ describe('PermissionService', () => {
       expect(getRulesSpy).toHaveBeenCalledTimes(2);
     });
 
-    it('should rebuild the ability after the TTL expired', () => {
-      jest
-        .spyOn(mockRulesService, 'getRulesForUser')
-        .mockReturnValue([{ action: 'read', subject: 'Aser' }]);
-      const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(0);
-
-      const first = service.getAbilityFor(normalUser);
-      nowSpy.mockReturnValue(PermissionService.ABILITY_CACHE_TTL_MS + 1);
-      const second = service.getAbilityFor(normalUser);
-
-      expect(second).not.toBe(first);
-      nowSpy.mockRestore();
-    });
-
     it('should cache the anonymous (public) ability separately from users', () => {
       const getRulesSpy = jest
         .spyOn(mockRulesService, 'getRulesForUser')

@@ -33,15 +33,12 @@ export function detectDocumentType(subject: DatabaseDocument): string {
  */
 @Injectable()
 export class PermissionService {
-  /** TTL aligned with the user identity cache in UserIdentityService */
-  static readonly ABILITY_CACHE_TTL_MS = 5 * 60 * 1000;
   /** safety cap to bound memory for systems with very many distinct users */
   static readonly ABILITY_CACHE_MAX_ENTRIES = 1000;
 
-  private readonly abilityCache = new Map<
-    string,
-    { ability: DocumentAbility; configVersion: number; expiresAtMs: number }
-  >();
+  private readonly abilityCache = new Map<string, DocumentAbility>();
+  /** config version the currently cached abilities were built from */
+  private cachedConfigVersion?: number;
 
   constructor(
     private rulesService: RulesService,
@@ -54,23 +51,28 @@ export class PermissionService {
    *
    * Abilities are cached per user identity: building one deep-clones all
    * rules (user variable injection) and compiles them with CASL, which is
-   * wasteful to repeat on every request. Entries are invalidated when the
-   * permission config changes (via RulesService.configVersion) or after a
-   * TTL, mirroring the user identity cache.
+   * wasteful to repeat on every request.
+   *
+   * An ability is a pure function of the permission config and the user, and
+   * both are pinned in the cache (config via RulesService.configVersion, user
+   * via the cache key) — so no time-based expiry is needed: nothing can go
+   * stale without one of the two changing. A config change discards the whole
+   * cache; a changed user simply maps to a different key.
    *
    * @param user for which the ability object should be created
    * @returns DocumentAbility that allows to check the users permissions on a given document and action
    */
   getAbilityFor(user: UserInfo): DocumentAbility {
-    const key = this.abilityCacheKey(user);
     const configVersion = this.rulesService.configVersion;
+    if (this.cachedConfigVersion !== configVersion) {
+      this.abilityCache.clear();
+      this.cachedConfigVersion = configVersion;
+    }
+
+    const key = this.abilityCacheKey(user);
     const cached = this.abilityCache.get(key);
-    if (
-      cached &&
-      cached.configVersion === configVersion &&
-      cached.expiresAtMs > Date.now()
-    ) {
-      return cached.ability;
+    if (cached) {
+      return cached;
     }
 
     const rules = this.rulesService.getRulesForUser(user);
@@ -82,11 +84,7 @@ export class PermissionService {
       // simple wholesale eviction; entries are cheap to rebuild
       this.abilityCache.clear();
     }
-    this.abilityCache.set(key, {
-      ability,
-      configVersion,
-      expiresAtMs: Date.now() + PermissionService.ABILITY_CACHE_TTL_MS,
-    });
+    this.abilityCache.set(key, ability);
     return ability;
   }
 
