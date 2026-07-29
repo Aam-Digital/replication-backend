@@ -66,4 +66,50 @@ describe('Response compression (e2e)', () => {
     const ids = res.body.rows.map((r: { id: string }) => r.id);
     expect(ids).toContain('Child:big');
   });
+
+  it('compresses _bulk_get responses', async () => {
+    const res = await request(ctx.app.getHttpServer())
+      .post('/app/_bulk_get')
+      .set(...basicAuth('admin', 'admin-pw'))
+      .set('Accept-Encoding', 'gzip')
+      .send({ docs: [{ id: 'Child:big' }, { id: 'Child:small' }] })
+      .expect(201);
+
+    expect(res.headers['content-encoding']).toBe('gzip');
+    const ids = res.body.results.map((r: { id: string }) => r.id);
+    expect(ids).toContain('Child:big');
+    expect(ids).toContain('Child:small');
+    const bigResult = res.body.results.find((r: { id: string }) => r.id === 'Child:big');
+    expect(bigResult.docs[0].ok).toMatchObject({ _id: 'Child:big', payload: 'x'.repeat(4000) });
+  });
+
+  it('compresses _changes responses', async () => {
+    const res = await request(ctx.app.getHttpServer())
+      .get('/app/_changes?include_docs=true')
+      .set(...basicAuth('admin', 'admin-pw'))
+      .set('Accept-Encoding', 'gzip')
+      .expect(200);
+
+    expect(res.headers['content-encoding']).toBe('gzip');
+    const ids = res.body.results.map((r: { id: string }) => r.id);
+    expect(ids).toContain('Child:big');
+    const bigChange = res.body.results.find((r: { id: string }) => r.id === 'Child:big');
+    expect(bigChange.doc).toMatchObject({ _id: 'Child:big', payload: 'x'.repeat(4000) });
+    expect(res.body.last_seq).toBeDefined();
+  });
+
+  it('compresses longpoll _changes responses', async () => {
+    const res = await request(ctx.app.getHttpServer())
+      .get('/app/_changes?feed=longpoll&include_docs=true&timeout=100')
+      .set(...basicAuth('admin', 'admin-pw'))
+      .set('Accept-Encoding', 'gzip')
+      .expect(200);
+
+    expect(res.headers['content-encoding']).toBe('gzip');
+    const ids = res.body.results.map((r: { id: string }) => r.id);
+    expect(ids).toContain('Child:big');
+    const bigChange = res.body.results.find((r: { id: string }) => r.id === 'Child:big');
+    expect(bigChange.doc).toMatchObject({ _id: 'Child:big', payload: 'x'.repeat(4000) });
+    expect(res.body.last_seq).toBeDefined();
+  });
 });
