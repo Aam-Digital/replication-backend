@@ -75,8 +75,13 @@ export class BulkDocumentService {
       offset: response.offset,
       rows: response.rows.filter(
         (row) =>
-          this.documentFilter.isReplicable(row.id) &&
-          (row.doc ? row.doc._deleted || ability.can('read', row.doc) : true),
+          // rows without id are error entries for missing keys
+          // (e.g. {key, error: "not_found"}) and are passed through
+          !row.id ||
+          (this.documentFilter.isReplicable(row.id) &&
+            (row.doc
+              ? row.doc._deleted || ability.can('read', row.doc)
+              : true)),
       ),
     };
   }
