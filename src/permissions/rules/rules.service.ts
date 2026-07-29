@@ -331,11 +331,7 @@ export class RulesService implements OnModuleInit {
   private async ensureManagedDefaults(db: string, doc: Permission) {
     try {
       for (let attempt = 0; attempt < 3; attempt++) {
-        const outcome = await this.writeManagedDefaults(
-          db,
-          doc,
-          attempt === 2,
-        );
+        const outcome = await this.writeManagedDefaults(db, doc, attempt === 2);
         if (outcome !== 'conflict') {
           return;
         }
@@ -368,9 +364,7 @@ export class RulesService implements OnModuleInit {
     if (!PermissionConfigValidator.isValidRulesConfig(doc?.data)) {
       return 'done';
     }
-    const { merged, changed, dropped } = mergeManagedDefaults(
-      doc.data.default,
-    );
+    const { merged, changed, dropped } = mergeManagedDefaults(doc.data.default);
     if (!changed) {
       return 'done';
     }

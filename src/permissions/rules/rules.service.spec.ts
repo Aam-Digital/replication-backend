@@ -299,9 +299,7 @@ describe('RulesService', () => {
         default: [adminRule],
       });
       strippedDoc._rev = '2-abc';
-      jest
-        .spyOn(mockCouchdbService, 'get')
-        .mockReturnValue(of(strippedDoc));
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(strippedDoc));
 
       changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
       await new Promise(process.nextTick);
@@ -330,9 +328,7 @@ describe('RulesService', () => {
         default: null as any,
       });
       malformedDoc._rev = '2-abc';
-      jest
-        .spyOn(mockCouchdbService, 'get')
-        .mockReturnValue(of(malformedDoc));
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(malformedDoc));
 
       changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
       await new Promise(process.nextTick);
@@ -361,9 +357,7 @@ describe('RulesService', () => {
         default: [...MANAGED_DEFAULT_RULES],
       });
       enrichedDoc._rev = '2-abc';
-      jest
-        .spyOn(mockCouchdbService, 'get')
-        .mockReturnValue(of(enrichedDoc));
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(enrichedDoc));
 
       changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
       await new Promise(process.nextTick);

@@ -83,8 +83,10 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
 
   /** never store plaintext credentials — key entries on a slow password hash */
   private cacheKey(username: string, password: string): string {
-    return scryptSync(`${username}:${password}`, this.cacheKeySalt, 32).toString(
-      'hex',
-    );
+    return scryptSync(
+      `${username}:${password}`,
+      this.cacheKeySalt,
+      32,
+    ).toString('hex');
   }
 }
