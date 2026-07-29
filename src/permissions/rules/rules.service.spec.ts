@@ -255,10 +255,10 @@ describe('RulesService', () => {
     jest.useRealTimers();
   });
 
-  it('should increment configVersion when the permission config changes', () => {
+  it('should emit permissionsChanged when the permission config changes', () => {
     jest.useFakeTimers();
-    const initialVersion = service.configVersion;
-    expect(initialVersion).toBeGreaterThan(0); // initial load counted
+    const changed = jest.fn();
+    service.permissionsChanged$.subscribe(changed);
 
     const updatedPermission = new Permission({
       user_app: [{ action: 'manage', subject: 'all' }],
@@ -269,7 +269,23 @@ describe('RulesService', () => {
 
     changesSubject.next({ seq: '1', id: updatedPermission._id! });
 
-    expect(service.configVersion).toBe(initialVersion + 1);
+    expect(changed).toHaveBeenCalledTimes(1);
+    jest.useRealTimers();
+  });
+
+  it('should not emit permissionsChanged when the config document was written without changing its content', () => {
+    jest.useFakeTimers();
+    const changed = jest.fn();
+    service.permissionsChanged$.subscribe(changed);
+
+    // same content as the already loaded config, e.g. a re-save of the document
+    jest
+      .spyOn(mockCouchdbService, 'get')
+      .mockReturnValue(of(new Permission({ ...testPermission.data })));
+
+    changesSubject.next({ seq: '1', id: testPermission._id! });
+
+    expect(changed).not.toHaveBeenCalled();
     jest.useRealTimers();
   });
 

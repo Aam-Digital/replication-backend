@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { of } from 'rxjs';
+import { EMPTY, of } from 'rxjs';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { PermissionService } from '../../../permissions/permission/permission.service';
 import { RulesService } from '../../../permissions/rules/rules.service';
@@ -31,6 +31,7 @@ describe('BulkDocumentService', () => {
         { action: 'update', subject: 'Child' },
         { action: 'read', subject: 'School' },
       ],
+      permissionsChanged$: EMPTY,
     } as any;
     mockCouchDBService = {
       post: () => of({}),

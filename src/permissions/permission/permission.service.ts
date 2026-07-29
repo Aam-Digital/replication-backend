@@ -37,13 +37,15 @@ export class PermissionService {
   static readonly ABILITY_CACHE_MAX_ENTRIES = 1000;
 
   private readonly abilityCache = new Map<string, DocumentAbility>();
-  /** config version the currently cached abilities were built from */
-  private cachedConfigVersion?: number;
 
   constructor(
     private rulesService: RulesService,
     private couchdbService: CouchdbService,
-  ) {}
+  ) {
+    this.rulesService.permissionsChanged$.subscribe(() =>
+      this.abilityCache.clear(),
+    );
+  }
 
   /**
    * Creates an ability object containing all rules that are defined for the roles of the given user.
@@ -53,22 +55,15 @@ export class PermissionService {
    * rules (user variable injection) and compiles them with CASL, which is
    * wasteful to repeat on every request.
    *
-   * An ability is a pure function of the permission config and the user, and
-   * both are pinned in the cache (config via RulesService.configVersion, user
-   * via the cache key) — so no time-based expiry is needed: nothing can go
-   * stale without one of the two changing. A config change discards the whole
-   * cache; a changed user simply maps to a different key.
+   * An ability is a pure function of the permission config and the user — so
+   * no time-based expiry is needed: nothing can go stale without one of the
+   * two changing. A config change clears the whole cache (via
+   * RulesService.permissionsChanged$); a changed user maps to a different key.
    *
    * @param user for which the ability object should be created
    * @returns DocumentAbility that allows to check the users permissions on a given document and action
    */
   getAbilityFor(user: UserInfo): DocumentAbility {
-    const configVersion = this.rulesService.configVersion;
-    if (this.cachedConfigVersion !== configVersion) {
-      this.abilityCache.clear();
-      this.cachedConfigVersion = configVersion;
-    }
-
     const key = this.abilityCacheKey(user);
     const cached = this.abilityCache.get(key);
     if (cached) {
