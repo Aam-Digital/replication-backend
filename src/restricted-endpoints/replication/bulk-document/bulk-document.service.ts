@@ -173,7 +173,7 @@ export class BulkDocumentService {
       // client's replication checkpoints past them and never retries:
       // the doc silently stays local-only. Log to make this traceable.
       this.logger.warn(
-        `_bulk_docs: dropped ${deniedIds.length} doc(s) without write permission`,
+        `_bulk_docs: dropped doc(s) without write permission`,
         { user: user?.name, ids: deniedIds },
       );
     }
