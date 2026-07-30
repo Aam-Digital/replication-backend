@@ -99,7 +99,14 @@ export class ChangesController {
         remainingChangesUntilLimit,
       );
       totalFetched += res._totalFetchedFromCouch ?? 0;
-      change.results.push(...res.results);
+      if (params?.include_docs === 'true') {
+        change.results.push(...res.results);
+      } else {
+        // doc content not requested: drop the (potentially large) doc bodies
+        // per iteration instead of accumulating all of them in memory until
+        // the end of the loop
+        change.results.push(...res.results.map((c) => omit(c, 'doc')));
+      }
       if (change.lostPermissions) {
         change.lostPermissions.push(...(res.lostPermissions ?? []));
       }
@@ -116,10 +123,6 @@ export class ChangesController {
         break;
       }
       since = res.last_seq;
-    }
-    if (params?.include_docs !== 'true') {
-      // remove doc content if not requested
-      change.results = change.results.map((c) => omit(c, 'doc'));
     }
 
     const duration = Date.now() - startTime;

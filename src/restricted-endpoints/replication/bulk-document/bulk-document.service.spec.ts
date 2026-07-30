@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
-import { of } from 'rxjs';
+import { EMPTY, of } from 'rxjs';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { PermissionService } from '../../../permissions/permission/permission.service';
 import { RulesService } from '../../../permissions/rules/rules.service';
@@ -31,6 +31,7 @@ describe('BulkDocumentService', () => {
         { action: 'update', subject: 'Child' },
         { action: 'read', subject: 'School' },
       ],
+      permissionsChanged$: EMPTY,
     } as any;
     mockCouchDBService = {
       post: () => of({}),
@@ -98,6 +99,18 @@ describe('BulkDocumentService', () => {
     const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
 
     expect(result).toEqual(createAllDocsResponse(childDoc));
+  });
+
+  it('should pass through error rows (missing keys) in AllDocs without crashing', () => {
+    const allDocsResponse = createAllDocsResponse(schoolDoc);
+    // CouchDB returns rows without an `id` for unknown keys
+    const errorRow = { key: 'School:missing', error: 'not_found' } as any;
+    allDocsResponse.rows.push(errorRow);
+
+    const result = service.filterAllDocsResponse(allDocsResponse, normalUser);
+
+    expect(result.rows).toContain(errorRow);
+    expect(result.rows).toHaveLength(2);
   });
 
   it('should not filter out deleted docs in AllDocs', () => {

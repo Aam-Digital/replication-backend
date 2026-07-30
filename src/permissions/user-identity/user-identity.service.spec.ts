@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { of, Subject, throwError } from 'rxjs';
 import { CouchdbService } from '../../couchdb/couchdb.service';
-import { DocumentChangesService } from '../../couchdb/document-changes.service';
-import { ChangeResult } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/changes.dto';
+import {
+  DocumentChangeEvent,
+  DocumentChangesService,
+} from '../../couchdb/document-changes.service';
 import {
   UserAccount,
   UserInfo,
@@ -15,7 +17,7 @@ describe('UserIdentityService', () => {
   let mockUserAdminService: UserAdminService;
   let mockCouchdbService: CouchdbService;
   let mockDocumentChangesService: Pick<DocumentChangesService, 'getChanges'>;
-  let changesSubject: Subject<ChangeResult>;
+  let changesSubject: Subject<DocumentChangeEvent>;
 
   beforeEach(async () => {
     mockUserAdminService = {
@@ -24,7 +26,7 @@ describe('UserIdentityService', () => {
     mockCouchdbService = {
       get: jest.fn(),
     } as any;
-    changesSubject = new Subject<ChangeResult>();
+    changesSubject = new Subject<DocumentChangeEvent>();
     mockDocumentChangesService = {
       getChanges: jest.fn().mockReturnValue(changesSubject),
     };
@@ -117,11 +119,7 @@ describe('UserIdentityService', () => {
     await service.resolveUser('u1');
 
     // Emit a change for Participant:john via the shared changes feed
-    changesSubject.next({
-      id: 'Participant:john',
-      seq: '1',
-      changes: [{ rev: '2-abc' }],
-    });
+    changesSubject.next({ id: 'Participant:john', seq: '1' });
 
     await service.resolveUser('u1');
 
@@ -142,11 +140,7 @@ describe('UserIdentityService', () => {
     await service.resolveUser('u1');
 
     // Emit a change for an entity that is not a profile entity of any cached user
-    changesSubject.next({
-      id: 'Child:42',
-      seq: '1',
-      changes: [{ rev: '2-abc' }],
-    });
+    changesSubject.next({ id: 'Child:42', seq: '1' });
 
     await service.resolveUser('u1');
 

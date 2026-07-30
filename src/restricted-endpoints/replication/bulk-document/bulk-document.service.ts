@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import {
   BulkGetResponse,
   BulkGetResult,
@@ -29,6 +29,8 @@ import { AuditService } from '../../../audit/audit.service';
  */
 @Injectable()
 export class BulkDocumentService {
+  private readonly logger = new Logger(BulkDocumentService.name);
+
   constructor(
     private readonly permissionService: PermissionService,
     private readonly couchdbService: CouchdbService,
@@ -75,8 +77,13 @@ export class BulkDocumentService {
       offset: response.offset,
       rows: response.rows.filter(
         (row) =>
-          this.documentFilter.isReplicable(row.id) &&
-          (row.doc ? row.doc._deleted || ability.can('read', row.doc) : true),
+          // rows without id are error entries for missing keys
+          // (e.g. {key, error: "not_found"}) and are passed through
+          !row.id ||
+          (this.documentFilter.isReplicable(row.id) &&
+            (row.doc
+              ? row.doc._deleted || ability.can('read', row.doc)
+              : true)),
       ),
     };
   }
@@ -153,14 +160,32 @@ export class BulkDocumentService {
     existingDocs: Map<string, DatabaseDocument>,
   ): BulkDocsRequest {
     const ability = this.permissionService.getAbilityFor(user);
+    const permitted: DatabaseDocument[] = [];
+    const deniedIds: string[] = [];
+    for (const doc of request.docs) {
+      if (!doc._id || !this.documentFilter.isReplicable(doc._id)) {
+        continue;
+      }
+      if (this.hasPermissionsForDoc(doc, existingDocs.get(doc._id), ability)) {
+        permitted.push(doc);
+      } else {
+        deniedIds.push(doc._id);
+      }
+    }
+
+    if (deniedIds.length > 0) {
+      // Dropped docs get no error entry in the _bulk_docs response, so the
+      // client's replication checkpoints past them and never retries:
+      // the doc silently stays local-only. Log to make this traceable.
+      this.logger.warn(`_bulk_docs: dropped doc(s) without write permission`, {
+        user: user?.name,
+        ids: deniedIds,
+      });
+    }
+
     return {
       new_edits: request.new_edits,
-      docs: request.docs.filter(
-        (doc) =>
-          !!doc._id &&
-          this.documentFilter.isReplicable(doc._id) &&
-          this.hasPermissionsForDoc(doc, existingDocs.get(doc._id), ability),
-      ),
+      docs: permitted,
     };
   }
 

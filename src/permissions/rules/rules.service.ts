@@ -8,7 +8,17 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { get, has } from 'lodash';
-import { firstValueFrom } from 'rxjs';
+import {
+  catchError,
+  concatMap,
+  EMPTY,
+  filter,
+  firstValueFrom,
+  retry,
+  Subject,
+  throwError,
+  timer,
+} from 'rxjs';
 import { AdminService } from '../../admin/admin.service';
 import { ExponentialBackoff } from '../../common/exponential-backoff';
 import { isLikelyTransientError } from '../../common/http-error-classification';
@@ -52,6 +62,11 @@ export class RulesService implements OnModuleInit {
   static readonly INIT_MAX_TOTAL_MS = 60_000;
   /** Cap (ms) for the exponentially-growing backoff delay between retries. */
   static readonly INIT_MAX_DELAY_MS = 10_000;
+  /**
+   * Retries for an on-demand permission-document fetch (triggered by the
+   * changes feed) before falling back to the previous in-memory config.
+   */
+  static readonly UPDATE_FETCH_MAX_RETRIES = 3;
 
   /**
    * Synthesised permission config used when the permission document does not
@@ -65,6 +80,22 @@ export class RulesService implements OnModuleInit {
 
   private readonly logger = new Logger(RulesService.name);
   private permission!: RulesConfig;
+  private readonly permissionsChanged = new Subject<void>();
+
+  /**
+   * Emits whenever the in-memory permission config actually changed, so that
+   * consumers (e.g. PermissionService) can discard data derived from it.
+   *
+   * Deliberately not emitted for the initial load during {@link onModuleInit}:
+   * no request has been served at that point, so there is nothing derived to
+   * invalidate yet.
+   */
+  readonly permissionsChanged$ = this.permissionsChanged.asObservable();
+
+  /** single write point for the in-memory config */
+  private setPermission(config: RulesConfig): void {
+    this.permission = config;
+  }
 
   constructor(
     private configService: ConfigService,
@@ -107,7 +138,7 @@ export class RulesService implements OnModuleInit {
 
         // Do not overwrite permissions that may have arrived from the live feed already.
         if (this.permission === undefined) {
-          this.permission = data;
+          this.setPermission(data);
         }
         await this.ensureManagedDefaults(db, permissionDoc);
         return;
@@ -158,7 +189,7 @@ export class RulesService implements OnModuleInit {
    */
   private enterBootstrapMode(db: string): void {
     if (this.permission === undefined) {
-      this.permission = RulesService.bootstrapPermissions();
+      this.setPermission(RulesService.bootstrapPermissions());
     }
     this.logger.warn(
       `[PERMISSIONS_BOOTSTRAP_MODE] BOOTSTRAP MODE: no permission document "${Permission.DOC_ID}" found in "${db}". ` +
@@ -179,50 +210,124 @@ export class RulesService implements OnModuleInit {
   }
 
   private watchPermissionChanges(db = 'app') {
-    this.documentChangesService.getChanges(db).subscribe((change) => {
-      if (change.id !== Permission.DOC_ID) {
-        return;
-      }
-
-      const prevPermissions = this.permission;
-      const newPermissions = change.doc?.data;
-
-      if (!PermissionConfigValidator.isValidRulesConfig(newPermissions)) {
-        this.logger.warn(
-          `Permissions change for ${db} did not contain valid data; keeping previous in-memory permissions.`,
-        );
-        return;
-      }
-
-      this.permission = newPermissions;
-
-      if (
-        prevPermissions !== undefined && // do not clear upon restart of the API
-        JSON.stringify(prevPermissions) !== JSON.stringify(newPermissions)
-      ) {
-        this.userIdentityService.clearCache();
-        setTimeout(
-          () =>
-            this.adminService
-              .clearLocal(db)
-              .then(() => {
-                this.logger.log(
-                  'Permissions changed - triggered clearLocal:' + db,
-                );
-              })
-              .catch((error: unknown) => {
-                this.logger.error(
-                  `Failed to clear local docs after permission update for ${db}`,
+    // The shared changes feed only delivers document IDs (no doc bodies, to
+    // keep the constant background feed lightweight) — fetch the permission
+    // document on demand when its ID shows up. concatMap serializes fetches
+    // so rapid consecutive config updates cannot apply out of order.
+    this.documentChangesService
+      .getChanges(db)
+      .pipe(
+        filter((change) => change.id === Permission.DOC_ID),
+        concatMap((change) => {
+          if (change.deleted) {
+            // the permission document was removed — fail closed to bootstrap
+            // permissions instead of silently keeping the previous (possibly
+            // permissive) in-memory rules
+            this.applyPermissionDeletion(db);
+            return EMPTY;
+          }
+          return this.couchdbService
+            .get<Permission>(db, Permission.DOC_ID)
+            .pipe(
+              // a transient fetch failure must not silently drop the update —
+              // retry with backoff before giving up (non-transient errors are
+              // rethrown immediately and handled by catchError below)
+              retry({
+                count: RulesService.UPDATE_FETCH_MAX_RETRIES,
+                delay: (error: unknown, retryCount: number) => {
+                  if (!isLikelyTransientError(error)) {
+                    return throwError(() => error);
+                  }
+                  const delayMs = Math.min(
+                    1000 * 2 ** (retryCount - 1),
+                    RulesService.INIT_MAX_DELAY_MS,
+                  );
+                  this.logger.log(
+                    `Retrying permission document fetch for ${db} (attempt ${retryCount}).`,
+                    { retryDelayMs: delayMs },
+                  );
+                  return timer(delayMs);
+                },
+              }),
+              catchError((error: unknown) => {
+                this.logger.warn(
+                  `Failed to fetch updated permission document for ${db} after retries; keeping previous in-memory permissions.`,
                   error instanceof Error ? error.stack : String(error),
                 );
+                return EMPTY;
               }),
-          1000,
-          // a pending clearLocal must not keep the process alive on shutdown
-        ).unref();
-      }
+            );
+        }),
+      )
+      .subscribe((permissionDoc) =>
+        this.applyUpdatedPermission(db, permissionDoc),
+      );
+  }
 
-      void this.ensureManagedDefaults(db, change.doc as Permission);
-    });
+  private applyUpdatedPermission(db: string, permissionDoc: Permission): void {
+    const prevPermissions = this.permission;
+    const newPermissions = permissionDoc?.data;
+
+    if (!PermissionConfigValidator.isValidRulesConfig(newPermissions)) {
+      this.logger.warn(
+        `Permissions change for ${db} did not contain valid data; keeping previous in-memory permissions.`,
+      );
+      return;
+    }
+
+    this.setPermission(newPermissions);
+    this.onPermissionsChanged(db, prevPermissions, newPermissions);
+    void this.ensureManagedDefaults(db, permissionDoc);
+  }
+
+  /**
+   * The permission document was deleted — fail closed by switching to the
+   * bootstrap config (admin_app only), so a removed config cannot leave the
+   * previous, more permissive rules in effect.
+   */
+  private applyPermissionDeletion(db: string): void {
+    this.logger.warn(
+      `[PERMISSIONS] Permission document "${Permission.DOC_ID}" was deleted in ${db}; failing closed to bootstrap permissions (admin_app only).`,
+    );
+    const prevPermissions = this.permission;
+    const bootstrap = RulesService.bootstrapPermissions();
+    this.setPermission(bootstrap);
+    this.onPermissionsChanged(db, prevPermissions, bootstrap);
+  }
+
+  /**
+   * Invalidate caches and re-trigger client sync when the in-memory permission
+   * config actually changed (shared by config-update and config-deletion).
+   */
+  private onPermissionsChanged(
+    db: string,
+    prevPermissions: RulesConfig | undefined,
+    newPermissions: RulesConfig,
+  ): void {
+    if (
+      prevPermissions === undefined || // do not clear upon restart of the API
+      JSON.stringify(prevPermissions) === JSON.stringify(newPermissions)
+    ) {
+      return;
+    }
+    this.permissionsChanged.next();
+    this.userIdentityService.clearCache();
+    setTimeout(
+      () =>
+        this.adminService
+          .clearLocal(db)
+          .then(() => {
+            this.logger.log('Permissions changed - triggered clearLocal:' + db);
+          })
+          .catch((error: unknown) => {
+            this.logger.error(
+              `Failed to clear local docs after permission update for ${db}`,
+              error instanceof Error ? error.stack : String(error),
+            );
+          }),
+      1000,
+      // a pending clearLocal must not keep the process alive on shutdown
+    ).unref();
   }
 
   /**
@@ -236,11 +341,7 @@ export class RulesService implements OnModuleInit {
   private async ensureManagedDefaults(db: string, doc: Permission) {
     try {
       for (let attempt = 0; attempt < 3; attempt++) {
-        const outcome = await this.writeManagedDefaults(
-          db,
-          doc,
-          attempt === 2,
-        );
+        const outcome = await this.writeManagedDefaults(db, doc, attempt === 2);
         if (outcome !== 'conflict') {
           return;
         }

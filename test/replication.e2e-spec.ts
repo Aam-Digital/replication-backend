@@ -169,6 +169,19 @@ describe('Replication endpoints (e2e)', () => {
       expect(ids).toEqual(['Child:1', 'Note:1']);
     });
 
+    it('passes through error rows for unknown keys', async () => {
+      const res = await request(ctx.app.getHttpServer())
+        .post('/app/_all_docs?include_docs=true')
+        .set(...basicAuth('user', 'user-pw'))
+        .send({ keys: ['Child:1', 'Child:does-not-exist'] })
+        .expect(201);
+      expect(res.body.rows).toHaveLength(2);
+      expect(res.body.rows[1]).toMatchObject({
+        key: 'Child:does-not-exist',
+        error: 'not_found',
+      });
+    });
+
     // TODO: fix filterAllDocsResponse to apply permission checks even when include_docs is absent,
     // so that unauthorized doc IDs/revs are not leaked as bare metadata rows.
     // After the fix, update the expectation below to exclude 'School:1'.
