@@ -12,8 +12,22 @@ export const ADMIN_APP_ROLE = 'admin_app';
  */
 export const DEFAULT_SECTION_KEY = '_default';
 export const PUBLIC_SECTION_KEY = '_public';
+/** @deprecated use {@link DEFAULT_SECTION_KEY}; only read for migration */
 export const LEGACY_DEFAULT_KEY = 'default';
+/** @deprecated use {@link PUBLIC_SECTION_KEY}; only read for migration */
 export const LEGACY_PUBLIC_KEY = 'public';
+
+/**
+ * Legacy section key -> current section key. A config that still uses a legacy
+ * key is normalized onto the current one when it is loaded, so only migration
+ * code needs to know about the old spellings.
+ *
+ * @deprecated remove together with the legacy keys in the next major version
+ */
+export const LEGACY_SECTION_KEYS: Record<string, string> = {
+  [LEGACY_DEFAULT_KEY]: DEFAULT_SECTION_KEY,
+  [LEGACY_PUBLIC_KEY]: PUBLIC_SECTION_KEY,
+};
 
 /** A user role starting with this prefix is reserved and never resolved. */
 export const RESERVED_ROLE_PREFIX = '_';
@@ -25,8 +39,7 @@ export const RESERVED_ROLE_PREFIX = '_';
 export const RESERVED_RULE_CONFIG_KEYS: string[] = [
   DEFAULT_SECTION_KEY,
   PUBLIC_SECTION_KEY,
-  LEGACY_DEFAULT_KEY,
-  LEGACY_PUBLIC_KEY,
+  ...Object.keys(LEGACY_SECTION_KEYS),
 ];
 
 /**
@@ -38,7 +51,9 @@ export const RESERVED_RULE_CONFIG_KEYS: string[] = [
 export type RulesConfig = {
   _public?: DocumentRule[];
   _default?: DocumentRule[];
+  /** @deprecated use {@link RulesConfig._public} */
   public?: DocumentRule[];
+  /** @deprecated use {@link RulesConfig._default} */
   default?: DocumentRule[];
   [key: string]: DocumentRule[] | undefined;
 };
