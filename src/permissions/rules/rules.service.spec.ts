@@ -11,7 +11,7 @@ import {
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { UserIdentityService } from '../user-identity/user-identity.service';
 import { MANAGED_DEFAULT_RULES } from './default-permissions';
-import { Permission } from './permission';
+import { Permission, RulesConfig } from './permission';
 import { DocumentRule, RulesService } from './rules.service';
 
 describe('RulesService', () => {
@@ -87,6 +87,17 @@ describe('RulesService', () => {
     await service.onModuleInit();
   });
 
+  /**
+   * Load a permission config the way production does (changes feed -> fetch),
+   * so that section keys go through the same normalization as at runtime.
+   */
+  function loadPermissionConfig(data: RulesConfig): void {
+    const doc = new Permission(data);
+    doc._rev = '2-loaded';
+    jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(doc));
+    changesSubject.next({ seq: '9', id: Permission.DOC_ID });
+  }
+
   it('should be defined', () => {
     expect(service).toBeDefined();
   });
@@ -122,15 +133,90 @@ describe('RulesService', () => {
     expect(result).toEqual(userRules);
   });
 
-  it('should prepend the default rules', () => {
+  it('should never resolve a reserved section key as a user role', () => {
     const defaultRule: DocumentRule = { subject: 'Config', action: 'read' };
-    testPermission.data.default = [defaultRule];
+    const publicRule: DocumentRule = {
+      subject: 'SiteSettings',
+      action: 'read',
+    };
+    testPermission.data._default = [defaultRule];
+    testPermission.data._public = [publicRule];
 
-    let result = service.getRulesForUser(normalUser);
+    const result = service.getRulesForUser(
+      new UserInfo('user-reserved', 'reservedUser', [
+        'user_app',
+        'default',
+        'public',
+        '_default',
+        '_public',
+        '_admin',
+      ]),
+    );
+
+    // default rules apply exactly once and public rules are not granted
     expect(result).toEqual([defaultRule].concat(userRules));
+  });
 
-    result = service.getRulesForUser(adminUser);
-    expect(result).toEqual([defaultRule].concat(userRules, adminRules));
+  it('should prepend the _default rules and use _public rules for anonymous access', () => {
+    const defaultRule: DocumentRule = { subject: 'Config', action: 'read' };
+    const publicRule: DocumentRule = {
+      subject: 'SiteSettings',
+      action: 'read',
+    };
+    testPermission.data._default = [defaultRule];
+    testPermission.data._public = [publicRule];
+
+    expect(service.getRulesForUser(normalUser)).toEqual(
+      [defaultRule].concat(userRules),
+    );
+    expect(service.getRulesForUser(adminUser)).toEqual(
+      [defaultRule].concat(userRules, adminRules),
+    );
+    expect(service.getRulesForUser(undefined as unknown as UserInfo)).toEqual([
+      publicRule,
+    ]);
+  });
+
+  it('should normalize a not-yet-migrated legacy default/public section on load', () => {
+    const defaultRule: DocumentRule = { subject: 'Config', action: 'read' };
+    const publicRule: DocumentRule = {
+      subject: 'SiteSettings',
+      action: 'read',
+    };
+    loadPermissionConfig({
+      ...testPermission.data,
+      default: [defaultRule],
+      public: [publicRule],
+    });
+
+    expect(service.getRulesForUser(normalUser)).toEqual(
+      [defaultRule].concat(userRules),
+    );
+    expect(service.getRulesForUser(undefined as unknown as UserInfo)).toEqual([
+      publicRule,
+    ]);
+  });
+
+  it('should prefer the renamed section key when a config still carries both', () => {
+    const newRule: DocumentRule = { subject: 'Config', action: 'read' };
+    const newPublicRule: DocumentRule = {
+      subject: 'SiteSettings',
+      action: 'read',
+    };
+    loadPermissionConfig({
+      ...testPermission.data,
+      _default: [newRule],
+      default: [{ subject: 'Legacy', action: 'read' }],
+      _public: [newPublicRule],
+      public: [{ subject: 'LegacyPublic', action: 'read' }],
+    });
+
+    expect(service.getRulesForUser(normalUser)).toEqual(
+      [newRule].concat(userRules),
+    );
+    expect(service.getRulesForUser(undefined as unknown as UserInfo)).toEqual([
+      newPublicRule,
+    ]);
   });
 
   it('should inject user properties', () => {
@@ -202,17 +288,6 @@ describe('RulesService', () => {
         conditions: { name: RulesService.USER_PROPERTY_UNDEFINED },
       },
     ]);
-  });
-
-  it("should only return 'public' rules if no user object is passed", () => {
-    testPermission.data.default = [{ subject: 'Config', action: 'read' }];
-    const publicRule: DocumentRule = { subject: 'User', action: 'create' };
-    testPermission.data.public = [publicRule];
-
-    const result = service.getRulesForUser(undefined as any);
-
-    expect(result).toEqual([publicRule]);
-    expect(result).not.toContain(testPermission.data.default);
   });
 
   it('should update rules and call clearCache and clearLocal when permission doc changed', () => {
@@ -289,6 +364,18 @@ describe('RulesService', () => {
     jest.useRealTimers();
   });
 
+  it('should not emit permissionsChanged when a legacy section key is migrated to its new name', () => {
+    const rule: DocumentRule = { subject: 'Config', action: 'read' };
+    loadPermissionConfig({ ...testPermission.data, default: [rule] });
+    const changed = jest.fn();
+    service.permissionsChanged$.subscribe(changed);
+
+    // identical rules, only stored under the renamed section key
+    loadPermissionConfig({ ...testPermission.data, _default: [rule] });
+
+    expect(changed).not.toHaveBeenCalled();
+  });
+
   it('should restore managed defaults when a change strips them', async () => {
     jest.useFakeTimers({ doNotFake: ['nextTick'] });
     try {
@@ -310,7 +397,7 @@ describe('RulesService', () => {
         expect.objectContaining({
           _rev: '2-abc',
           data: expect.objectContaining({
-            default: [...MANAGED_DEFAULT_RULES, adminRule],
+            _default: [...MANAGED_DEFAULT_RULES, adminRule],
           }),
         }),
       );
@@ -339,7 +426,7 @@ describe('RulesService', () => {
         expect.objectContaining({
           _rev: '2-abc',
           data: expect.objectContaining({
-            default: MANAGED_DEFAULT_RULES,
+            _default: MANAGED_DEFAULT_RULES,
           }),
         }),
       );
@@ -348,13 +435,40 @@ describe('RulesService', () => {
     }
   });
 
-  it('should not write again when a change already contains the managed defaults', async () => {
+  it('should migrate a legacy default section to the renamed _default key', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick'] });
+    try {
+      (mockCouchdbService.put as jest.Mock).mockClear();
+      const adminRule: DocumentRule = { action: 'read', subject: 'Child' };
+      const legacyDoc = new Permission({
+        ...testPermission.data,
+        default: [...MANAGED_DEFAULT_RULES, adminRule],
+      });
+      legacyDoc._rev = '2-abc';
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(legacyDoc));
+
+      changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
+      await new Promise(process.nextTick);
+      jest.advanceTimersByTime(1500);
+
+      const written = (mockCouchdbService.put as jest.Mock).mock.calls[0][1];
+      expect(written.data._default).toEqual([
+        ...MANAGED_DEFAULT_RULES,
+        adminRule,
+      ]);
+      expect(written.data.default).toBeUndefined();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should not write again when a change already contains the managed defaults under the new key', async () => {
     jest.useFakeTimers({ doNotFake: ['nextTick'] });
     try {
       (mockCouchdbService.put as jest.Mock).mockClear();
       const enrichedDoc = new Permission({
         ...testPermission.data,
-        default: [...MANAGED_DEFAULT_RULES],
+        _default: [...MANAGED_DEFAULT_RULES],
       });
       enrichedDoc._rev = '2-abc';
       jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(enrichedDoc));
@@ -400,7 +514,7 @@ describe('RulesService', () => {
         _id: Permission.DOC_ID,
         data: {
           ...testPermission.data,
-          default: MANAGED_DEFAULT_RULES,
+          _default: MANAGED_DEFAULT_RULES,
         },
       }),
     );
@@ -410,7 +524,7 @@ describe('RulesService', () => {
 
   it('should not write when managed defaults are already present', async () => {
     (mockCouchdbService.put as jest.Mock).mockClear();
-    testPermission.data.default = [...MANAGED_DEFAULT_RULES];
+    testPermission.data._default = [...MANAGED_DEFAULT_RULES];
 
     await service.onModuleInit();
 

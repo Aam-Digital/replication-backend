@@ -31,7 +31,17 @@ import {
   mergeManagedDefaults,
   SYSTEM_DEFAULT_MARKER,
 } from './default-permissions';
-import { Permission, RulesConfig } from './permission';
+import {
+  ADMIN_APP_ROLE,
+  DEFAULT_SECTION_KEY,
+  LEGACY_DEFAULT_KEY,
+  LEGACY_SECTION_KEYS,
+  Permission,
+  PUBLIC_SECTION_KEY,
+  RESERVED_ROLE_PREFIX,
+  RESERVED_RULE_CONFIG_KEYS,
+  RulesConfig,
+} from './permission';
 import { PermissionConfigValidator } from './permission-config.validator';
 
 export type DocumentRule = RawRuleOf<DocumentAbility>;
@@ -65,7 +75,7 @@ export class RulesService implements OnModuleInit {
    * (and anonymous traffic) are denied by default.
    */
   private static bootstrapPermissions(): RulesConfig {
-    return { admin_app: [{ action: 'manage', subject: 'all' }] };
+    return { [ADMIN_APP_ROLE]: [{ action: 'manage', subject: 'all' }] };
   }
 
   private readonly logger = new Logger(RulesService.name);
@@ -82,9 +92,34 @@ export class RulesService implements OnModuleInit {
    */
   readonly permissionsChanged$ = this.permissionsChanged.asObservable();
 
-  /** single write point for the in-memory config */
+  /**
+   * Single write point for the in-memory config. Legacy section keys are
+   * normalized onto their current spelling here, so every read path only has to
+   * know about {@link DEFAULT_SECTION_KEY} and {@link PUBLIC_SECTION_KEY}.
+   */
   private setPermission(config: RulesConfig): void {
-    this.permission = config;
+    this.permission = RulesService.normalizeSectionKeys(config);
+  }
+
+  /**
+   * Move rules stored under a legacy section key onto the current key. The
+   * current key wins if a config carries both, matching the write-back in
+   * {@link writeManagedDefaults} that drops the legacy one.
+   */
+  private static normalizeSectionKeys(config: RulesConfig): RulesConfig {
+    const legacyKeys = Object.keys(LEGACY_SECTION_KEYS).filter(
+      (key) => config[key] !== undefined,
+    );
+    if (legacyKeys.length === 0) {
+      return config;
+    }
+    const normalized = { ...config };
+    for (const legacyKey of legacyKeys) {
+      const currentKey = LEGACY_SECTION_KEYS[legacyKey];
+      normalized[currentKey] = normalized[currentKey] ?? normalized[legacyKey];
+      delete normalized[legacyKey];
+    }
+    return normalized;
   }
 
   constructor(
@@ -266,7 +301,9 @@ export class RulesService implements OnModuleInit {
     }
 
     this.setPermission(newPermissions);
-    this.onPermissionsChanged(db, prevPermissions, newPermissions);
+    // compare the normalized configs: migrating a legacy section key is not a
+    // rule change and must not trigger a cache clear / client re-sync
+    this.onPermissionsChanged(db, prevPermissions, this.permission);
     void this.ensureManagedDefaults(db, permissionDoc);
   }
 
@@ -364,14 +401,17 @@ export class RulesService implements OnModuleInit {
     if (!PermissionConfigValidator.isValidRulesConfig(doc?.data)) {
       return 'done';
     }
-    const { merged, changed, dropped } = mergeManagedDefaults(doc.data.default);
-    if (!changed) {
+    const currentDefault =
+      doc.data[DEFAULT_SECTION_KEY] ?? doc.data[LEGACY_DEFAULT_KEY];
+    const hasLegacyDefault = doc.data[LEGACY_DEFAULT_KEY] !== undefined;
+    const { merged, changed, dropped } = mergeManagedDefaults(currentDefault);
+    // still rewrite when only migrating the legacy key across to the new one
+    if (!changed && !hasLegacyDefault) {
       return 'done';
     }
-    const updatedDoc: Permission = {
-      ...doc,
-      data: { ...doc.data, default: merged },
-    };
+    const newData = { ...doc.data, [DEFAULT_SECTION_KEY]: merged };
+    delete newData[LEGACY_DEFAULT_KEY];
+    const updatedDoc: Permission = { ...doc, data: newData };
     this.logger.debug(
       `Writing managed default permissions to "${db}" (rev ${doc._rev ?? 'none'})`,
     );
@@ -417,18 +457,25 @@ export class RulesService implements OnModuleInit {
    */
   getRulesForUser(user: UserInfo): DocumentRule[] {
     if (!user) {
-      return this.permission?.public ?? [];
+      return this.permission?.[PUBLIC_SECTION_KEY] ?? [];
     }
     if (this.permission) {
       const userRules = user.roles
-        .filter((role) =>
-          PermissionConfigValidator.hasRole(this.permission, role),
+        .filter(
+          // reserved section keys and any underscore-prefixed name carry
+          // special semantics and never resolve as a user role; legacy keys are
+          // already normalized away, they are listed to keep the guard explicit
+          (role) =>
+            !role.startsWith(RESERVED_ROLE_PREFIX) &&
+            !RESERVED_RULE_CONFIG_KEYS.includes(role) &&
+            PermissionConfigValidator.hasRole(this.permission, role),
         )
         .map((role) => this.permission[role])
         .filter((rules): rules is DocumentRule[] => rules !== undefined)
         .flat();
-      if (this.permission.default) {
-        userRules.unshift(...this.permission.default);
+      const defaultRules = this.permission[DEFAULT_SECTION_KEY];
+      if (defaultRules) {
+        userRules.unshift(...defaultRules);
       }
       return this.injectUserVariablesIntoRules(userRules, user);
     } else {
