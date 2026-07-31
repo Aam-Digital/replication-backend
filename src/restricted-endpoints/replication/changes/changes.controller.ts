@@ -114,6 +114,7 @@ class ChangesResponseStream {
       );
       this.written++;
     }
+    this.flush();
   }
 
   /** Append the envelope fields and end the response. */
@@ -145,6 +146,18 @@ class ChangesResponseStream {
     this.res.status(200);
     this.res.setHeader('content-type', 'application/json');
     await this.writeChunk('{"results":[');
+  }
+
+  /**
+   * Hand the buffered bytes to the client right away.
+   *
+   * Without this the compression middleware keeps a batch in its gzip buffer
+   * until enough data has accumulated, so nothing reaches the client until the
+   * response ends and the incremental writing above has no effect for the
+   * (compressing) clients that actually sync.
+   */
+  private flush() {
+    (this.res as Response & { flush?: () => void }).flush?.();
   }
 
   /**
@@ -298,12 +311,10 @@ export class ChangesController {
     deadline: number,
     stream: ChangesResponseStream,
   ): boolean {
-    return (
-      pending === 0 ||
-      (limit !== undefined && stream.resultsWritten >= limit) ||
-      Date.now() >= deadline ||
-      stream.isClosed
-    );
+    const noChangesLeft = pending === 0;
+    const enoughFound = limit !== undefined && stream.resultsWritten >= limit;
+    const outOfTime = Date.now() >= deadline;
+    return noChangesLeft || enoughFound || outOfTime || stream.isClosed;
   }
 
   /**

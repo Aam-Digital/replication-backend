@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
+import { EventEmitter } from 'events';
 import { EMPTY, Observable, of } from 'rxjs';
 import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
@@ -65,14 +66,19 @@ describe('ChangesController', () => {
 
   /**
    * Minimal express Response stand-in capturing the streamed JSON body.
+   * Built on an EventEmitter so the backpressure handling (drain/close) can
+   * be exercised; `blockAfter` makes that write return false, as a socket
+   * whose buffer is full does.
    */
-  function createMockResponse() {
+  function createMockResponse(options: { blockAfter?: number } = {}) {
     const chunks: string[] = [];
-    const res: any = {
+    let writes = 0;
+    const res: any = Object.assign(new EventEmitter(), {
       headersSent: false,
       destroyed: false,
       statusCode: 200,
       setHeader: jest.fn(),
+      flush: jest.fn(),
       status: jest.fn((code: number) => {
         res.statusCode = code;
         return res;
@@ -80,16 +86,22 @@ describe('ChangesController', () => {
       write: jest.fn((chunk: string) => {
         res.headersSent = true;
         chunks.push(String(chunk));
-        return true;
+        writes++;
+        return options.blockAfter !== writes;
       }),
       end: jest.fn(),
       destroy: jest.fn(() => {
         res.destroyed = true;
       }),
-      once: jest.fn(),
-      off: jest.fn(),
-    };
+    });
     return { res, body: () => JSON.parse(chunks.join('')) as ChangesResponse };
+  }
+
+  /** Wait until the controller has written its first chunk. */
+  async function awaitFirstWrite(res: { write: jest.Mock }) {
+    while (res.write.mock.calls.length === 0) {
+      await new Promise(setImmediate);
+    }
   }
 
   /** Run the streamed changes endpoint and return the parsed response body. */
@@ -111,6 +123,37 @@ describe('ChangesController', () => {
     await runChanges('some-db', user);
 
     expect(mockRulesService.getRulesForUser).toHaveBeenCalledWith(user);
+  });
+
+  it('should flush written batches so compression does not withhold them from the client', async () => {
+    const { res } = createMockResponse();
+
+    await controller.changes('some-db', user, undefined, res);
+
+    expect(res.flush).toHaveBeenCalled();
+  });
+
+  it('should continue writing once a back-pressured client drains', async () => {
+    const { res, body } = createMockResponse({ blockAfter: 1 });
+
+    const pending = controller.changes('some-db', user, undefined, res);
+    await awaitFirstWrite(res);
+    res.emit('drain');
+    await pending;
+
+    expect(body().last_seq).toBeDefined();
+    expect(res.destroy).not.toHaveBeenCalled();
+  });
+
+  it('should abort instead of hanging when the client disconnects while back-pressured', async () => {
+    const { res } = createMockResponse({ blockAfter: 1 });
+
+    const pending = controller.changes('some-db', user, undefined, res);
+    await awaitFirstWrite(res);
+    res.emit('close');
+
+    await expect(pending).resolves.toBeUndefined();
+    expect(res.destroy).toHaveBeenCalled();
   });
 
   it('should not throw when user is undefined', async () => {
