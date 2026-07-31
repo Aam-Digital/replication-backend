@@ -1,6 +1,7 @@
 import { HttpService } from '@nestjs/axios';
 import {
   HttpException,
+  HttpStatus,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -17,11 +18,18 @@ import {
   UserInfo,
 } from '../restricted-endpoints/session/user-auth.dto';
 
+/** lowest HTTP status that does not indicate success */
+const FIRST_NON_SUCCESS_STATUS = 300;
+
 @Injectable()
 export class CouchdbService {
   static readonly DATABASE_USER_ENV = 'DATABASE_USER';
   static readonly DATABASE_PASSWORD_ENV = 'DATABASE_PASSWORD';
   static readonly DATABASE_URL_ENV = 'DATABASE_URL';
+
+  /** upper bounds for buffering the body of a failed stream request */
+  private static readonly MAX_ERROR_BODY_BYTES = 64 * 1024;
+  private static readonly ERROR_BODY_TIMEOUT_MS = 5_000;
 
   /**
    * The URL to the CouchDB instance
@@ -55,10 +63,25 @@ export class CouchdbService {
 
   private initMapAxiosErrorsToNestjsExceptions() {
     this.httpService.axiosRef.interceptors.response.use(undefined, (err) => {
-      const resultErr = err.response
-        ? new HttpException(err.response.data, err.response.status)
-        : err;
-      return Promise.reject(resultErr);
+      const status: number | undefined = err.response?.status;
+      if (status === undefined) {
+        return Promise.reject(err);
+      }
+      if (status < FIRST_NON_SUCCESS_STATUS) {
+        // CouchDB answered with a success status but the request still failed,
+        // e.g. the body was cut short. Forwarding that status would present an
+        // incomplete response to the client as a complete one.
+        return Promise.reject(
+          new HttpException(
+            {
+              error: 'bad_gateway',
+              reason: err.message ?? 'incomplete response',
+            },
+            HttpStatus.BAD_GATEWAY,
+          ),
+        );
+      }
+      return Promise.reject(new HttpException(err.response.data, status));
     });
   }
 
@@ -176,7 +199,7 @@ export class CouchdbService {
   }
 
   /**
-   * The axios error interceptor wraps error responses in HttpExceptions —
+   * The axios error interceptor wraps error responses in HttpExceptions,
    * but for stream requests the wrapped body is itself a stream. Read it
    * so callers get the same parsed-JSON HttpException as buffered methods.
    */
@@ -188,11 +211,13 @@ export class CouchdbService {
     if (!(body instanceof Readable)) {
       return error;
     }
-    const chunks: Buffer[] = [];
-    for await (const chunk of body) {
-      chunks.push(Buffer.from(chunk));
+    const text = await this.readBoundedText(body);
+    if (text === undefined) {
+      return new HttpException(
+        { error: 'unreadable_error_body' },
+        error.getStatus(),
+      );
     }
-    const text = Buffer.concat(chunks).toString();
     let parsed: unknown = text;
     try {
       parsed = JSON.parse(text);
@@ -203,6 +228,37 @@ export class CouchdbService {
       parsed as string | Record<string, unknown>,
       error.getStatus(),
     );
+  }
+
+  /**
+   * Read a CouchDB error body as text, giving up once it exceeds
+   * {@link MAX_ERROR_BODY_BYTES} or stalls for {@link ERROR_BODY_TIMEOUT_MS},
+   * so an oversized or hanging body cannot grow memory or block the request.
+   *
+   * @returns the body text, or undefined if it could not be read within those bounds
+   */
+  private async readBoundedText(body: Readable): Promise<string | undefined> {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    const timeout = setTimeout(
+      () => body.destroy(),
+      CouchdbService.ERROR_BODY_TIMEOUT_MS,
+    ).unref();
+    try {
+      for await (const chunk of body) {
+        size += chunk.length;
+        if (size > CouchdbService.MAX_ERROR_BODY_BYTES) {
+          return undefined;
+        }
+        chunks.push(Buffer.from(chunk));
+      }
+    } catch {
+      return undefined;
+    } finally {
+      clearTimeout(timeout);
+      body.destroy();
+    }
+    return Buffer.concat(chunks).toString();
   }
 
   put(dbName: string, document: DatabaseDocument): Observable<DocSuccess> {
