@@ -192,6 +192,23 @@ describe('BulkDocEndpointsController', () => {
     expect(res.destroy).toHaveBeenCalled();
   });
 
+  it('should keep the response usable when the upstream body is not a JSON object', async () => {
+    jest
+      .spyOn(mockCouchDBService, 'postStream')
+      .mockResolvedValue(Readable.from(['[1,2,3]']));
+    jest
+      .spyOn(documentFilter, 'bulkGetResultMapper')
+      .mockReturnValue((result) => result);
+    const { res } = createMockResponse();
+
+    await expect(
+      controller.bulkGetPost('db', {}, { docs: [] }, user, res),
+    ).rejects.toThrow(/JSON object/);
+    // the exception filter can only send a status while the response is alive
+    expect(res.headersSent).toBe(false);
+    expect(res.destroyed).toBe(false);
+  });
+
   it('should rethrow upstream errors that occur before headers are sent', async () => {
     jest
       .spyOn(mockCouchDBService, 'postStream')

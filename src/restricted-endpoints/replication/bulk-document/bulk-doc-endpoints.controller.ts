@@ -220,20 +220,21 @@ export class BulkDocEndpointsController {
   private async streamFiltered(
     source: Readable,
     arrayField: string,
-    mapItem: (item: any) => unknown | undefined,
+    mapItem: (item: any) => unknown,
     res: Response,
   ): Promise<void> {
     res.status(200);
     res.setHeader('content-type', 'application/json');
+    const filtered = new JsonArrayFilterTransform({ arrayField, mapItem });
+    // `res` is deliberately not part of the pipeline: stream.pipeline destroys
+    // every stream it is given on error, which would tear down the response
+    // socket even for a failure on the very first token and leave no way to
+    // send a status.
+    const parsing = pipeline(source, jsonTokenParser(), filtered);
     try {
-      await pipeline(
-        source,
-        jsonTokenParser(),
-        new JsonArrayFilterTransform({ arrayField, mapItem }),
-        res,
-      );
+      await Promise.all([parsing, this.forwardToResponse(filtered, res)]);
     } catch (error) {
-      if (!res.headersSent) {
+      if (!res.headersSent && !res.writableEnded && !res.destroyed) {
         throw error;
       }
       this.logger.warn(
@@ -243,5 +244,44 @@ export class BulkDocEndpointsController {
       );
       res.destroy();
     }
+  }
+
+  /**
+   * Forward the filtered JSON to the client, keeping backpressure but leaving
+   * the response itself untouched on error, so an early failure can still be
+   * turned into a regular error response by the caller.
+   */
+  private forwardToResponse(source: Readable, res: Response): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        source.off('error', onError);
+        res.off('error', onError);
+        res.off('finish', onFinish);
+        res.off('close', onClose);
+      };
+      const onError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      const onFinish = () => {
+        cleanup();
+        resolve();
+      };
+      const onClose = () => {
+        cleanup();
+        if (res.writableFinished) {
+          resolve();
+          return;
+        }
+        // client gone: release the CouchDB response instead of reading it to the end
+        source.destroy();
+        reject(new Error('client disconnected'));
+      };
+      source.once('error', onError);
+      res.once('error', onError);
+      res.once('finish', onFinish);
+      res.once('close', onClose);
+      source.pipe(res);
+    });
   }
 }

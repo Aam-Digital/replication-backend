@@ -26,7 +26,7 @@ export interface JsonArrayFilterOptions {
    * Return the (possibly transformed) item to include it in the output,
    * or `undefined` to drop it.
    */
-  mapItem: (item: any) => unknown | undefined;
+  mapItem: (item: any) => unknown;
 }
 
 /**
