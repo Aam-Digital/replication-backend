@@ -21,6 +21,12 @@ import {
 /** lowest HTTP status that does not indicate success */
 const FIRST_NON_SUCCESS_STATUS = 300;
 
+/** the parts of a rejected axios request this service maps to an exception */
+interface AxiosErrorLike {
+  message?: string;
+  response?: { status: number; data: unknown };
+}
+
 @Injectable()
 export class CouchdbService {
   static readonly DATABASE_USER_ENV = 'DATABASE_USER';
@@ -62,27 +68,33 @@ export class CouchdbService {
   }
 
   private initMapAxiosErrorsToNestjsExceptions() {
-    this.httpService.axiosRef.interceptors.response.use(undefined, (err) => {
-      const status: number | undefined = err.response?.status;
-      if (status === undefined) {
-        return Promise.reject(err);
-      }
-      if (status < FIRST_NON_SUCCESS_STATUS) {
-        // CouchDB answered with a success status but the request still failed,
-        // e.g. the body was cut short. Forwarding that status would present an
-        // incomplete response to the client as a complete one.
-        return Promise.reject(
-          new HttpException(
-            {
-              error: 'bad_gateway',
-              reason: err.message ?? 'incomplete response',
-            },
-            HttpStatus.BAD_GATEWAY,
-          ),
-        );
-      }
-      return Promise.reject(new HttpException(err.response.data, status));
-    });
+    this.httpService.axiosRef.interceptors.response.use(undefined, (err) =>
+      Promise.reject(this.toNestException(err)),
+    );
+  }
+
+  /**
+   * Map an axios error to the exception the client should receive.
+   *
+   * A request that failed even though CouchDB had answered with a success
+   * status (a body cut short, for example) must not keep that status: the
+   * incomplete response would reach the client looking like a complete one.
+   */
+  private toNestException(err: AxiosErrorLike): Error {
+    const response = err.response;
+    if (!response) {
+      return err as Error;
+    }
+    if (response.status < FIRST_NON_SUCCESS_STATUS) {
+      return new HttpException(
+        { error: 'bad_gateway', reason: err.message ?? 'incomplete response' },
+        HttpStatus.BAD_GATEWAY,
+      );
+    }
+    return new HttpException(
+      response.data as string | Record<string, unknown>,
+      response.status,
+    );
   }
 
   head(
