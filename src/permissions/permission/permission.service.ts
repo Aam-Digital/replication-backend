@@ -1,4 +1,9 @@
-import { Ability, AbilityClass, InferSubjects } from '@casl/ability';
+import {
+  CreateAbility,
+  InferSubjects,
+  MongoAbility,
+  createMongoAbility,
+} from '@casl/ability';
 import { Injectable } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import { CouchdbService } from '../../couchdb/couchdb.service';
@@ -16,8 +21,9 @@ const actions = [
 
 export type Action = (typeof actions)[number];
 type Subject = InferSubjects<typeof DatabaseDocument> | string;
-export type DocumentAbility = Ability<[Action, Subject]>;
-export const DocumentAbility = Ability as AbilityClass<DocumentAbility>;
+export type DocumentAbility = MongoAbility<[Action, Subject]>;
+export const createDocumentAbility =
+  createMongoAbility as CreateAbility<DocumentAbility>;
 
 export function detectDocumentType(subject: DatabaseDocument): string {
   if (!subject._id) {
@@ -71,7 +77,7 @@ export class PermissionService {
     }
 
     const rules = this.rulesService.getRulesForUser(user);
-    const ability = new DocumentAbility(rules, {
+    const ability = createDocumentAbility(rules, {
       detectSubjectType: detectDocumentType,
     });
 
