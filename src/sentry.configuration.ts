@@ -173,21 +173,96 @@ function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
     // Set sampling rate for profiling - this is relative to tracesSampleRate
     profilesSampleRate: 1.0,
 
-    beforeSend: (event, hint) => {
-      const error = hint.originalException;
-      if (
-        error instanceof HttpException &&
-        error.getStatus() >= 400 &&
-        error.getStatus() < 500
-      ) {
-        return null;
-      }
-
-      if (event.message) {
-        event.fingerprint = [normalizeLogMessage(event.message)];
-      }
-
-      return event;
-    },
+    beforeSend,
   });
+}
+
+/**
+ * Route for an event when none can be determined, kept as an explicit constant
+ * so grouped events don't silently merge with events that do have a route.
+ */
+const UNKNOWN_ROUTE = '<unknown route>';
+
+/**
+ * Statuses that describe the upstream (CouchDB, or a gateway in front of it)
+ * being unreachable or unhealthy, rather than describing the request that
+ * happened to hit it.
+ *
+ * These are grouped by status alone, without a route. A generic "Bad Gateway"
+ * means the same thing no matter which endpoint observed it, so including the
+ * route would split a single CouchDB outage into as many issues as there are
+ * endpoints in flight — exactly the fragmentation this fingerprinting exists to
+ * prevent. Operation-specific failures (500 and anything else) do differ by
+ * endpoint and keep their route.
+ */
+const UPSTREAM_AVAILABILITY_STATUSES: ReadonlySet<number> = new Set([
+  502, // Bad Gateway
+  503, // Service Unavailable
+  504, // Gateway Timeout
+]);
+
+/**
+ * Decide whether an event is reported, and how it is grouped.
+ *
+ * Exported for testing — the grouping rules here determine whether a Sentry
+ * issue is actionable, so they are worth asserting on directly.
+ */
+export function beforeSend(
+  event: Sentry.ErrorEvent,
+  hint: Sentry.EventHint,
+): Sentry.ErrorEvent | null {
+  const error = hint.originalException;
+  if (
+    error instanceof HttpException &&
+    error.getStatus() >= 400 &&
+    error.getStatus() < 500
+  ) {
+    return null;
+  }
+
+  if (event.message) {
+    event.fingerprint = [normalizeLogMessage(event.message)];
+  }
+
+  // CouchdbService maps every failed axios response to a bare `HttpException`
+  // (see `initMapAxiosErrorsToNestjsExceptions`), whose message renders as the
+  // constant string "Http Exception". Sentry groups on that, so without an
+  // explicit fingerprint every CouchDB fault — any status, any route — merges
+  // into one opaque issue with no status and no route in its title. Fingerprint
+  // on status, and on route where the route is what distinguishes one fault
+  // from another (see {@link UPSTREAM_AVAILABILITY_STATUSES}), so distinct
+  // faults stay distinct and each group is diagnosable on its own.
+  //
+  // This affects grouping only; the `HttpException` propagated to the client is
+  // untouched, so response bodies and status codes are unchanged.
+  if (error instanceof HttpException) {
+    const status = error.getStatus();
+
+    if (error.constructor !== HttpException) {
+      // Purpose-built exceptions (BadGatewayException, InternalServerErrorException,
+      // ...) are a different case from the bare, axios-mapped HttpException above:
+      // their message is chosen by the call site to describe *why* it failed, e.g.
+      // "Upstream identity provider is unavailable" (Keycloak) vs "Failed to load
+      // target entity document" (CouchDB) — two dependencies that can both throw
+      // BadGatewayException from the very same route. Status+route alone would
+      // conflate them into one issue; the message is what actually tells them
+      // apart, so prefer it here. Still normalize it: a call site may interpolate
+      // an id into an otherwise-static message (see normalizeLogMessage above).
+      event.fingerprint = [
+        'HttpException',
+        String(status),
+        normalizeLogMessage(error.message),
+      ];
+    } else if (UPSTREAM_AVAILABILITY_STATUSES.has(status)) {
+      event.fingerprint = ['HttpException', String(status)];
+    } else {
+      event.fingerprint = [
+        'HttpException',
+        String(status),
+        event.transaction ?? UNKNOWN_ROUTE,
+      ];
+    }
+  }
+
+  return event;
 }
