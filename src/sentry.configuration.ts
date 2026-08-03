@@ -121,6 +121,42 @@ class SentryFilter extends BaseExceptionFilter {
   }
 }
 
+/**
+ * Data that varies between occurrences of the same log message and therefore
+ * has to be masked before the message can be used as a grouping key.
+ * Order matters: the more specific patterns have to run before the plain number.
+ */
+const VOLATILE_MESSAGE_PATTERNS: [RegExp, string][] = [
+  [/https?:\/\/\S+/gi, '<url>'],
+  [
+    /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+    '<uuid>',
+  ],
+  [/\b\d{1,3}(?:\.\d{1,3}){3}\b/g, '<ip>'],
+  [/\d+/g, '<n>'],
+];
+
+/**
+ * Build a stable grouping key for a log message.
+ *
+ * Callers are expected to keep message strings constant and pass variable
+ * details as an object parameter (see {@link SentryLogger}), but a message that
+ * still interpolates an id, host or counter must not fragment into one issue
+ * per value - so those are masked here as a safety net.
+ *
+ * Note this replaces an earlier heuristic that used the message prefix up to
+ * the first colon: it silently did nothing for messages without a colon (one
+ * issue per user id), and split on variable data that appeared *before* the
+ * colon (one issue per retry counter).
+ */
+export function normalizeLogMessage(message: string): string {
+  return VOLATILE_MESSAGE_PATTERNS.reduce(
+    (normalized, [pattern, placeholder]) =>
+      normalized.replace(pattern, placeholder),
+    message,
+  );
+}
+
 function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
   Sentry.init({
     release: version,
@@ -147,13 +183,8 @@ function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
         return null;
       }
 
-      // Group log messages by their static prefix (before the first colon)
-      // so dynamic details don't fragment issues.
       if (event.message) {
-        const prefixEnd = event.message.indexOf(':');
-        if (prefixEnd > 0) {
-          event.fingerprint = [event.message.substring(0, prefixEnd)];
-        }
+        event.fingerprint = [normalizeLogMessage(event.message)];
       }
 
       return event;

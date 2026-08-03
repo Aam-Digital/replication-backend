@@ -187,10 +187,11 @@ export class PermissionCheckController {
     }
 
     // Unknown/unexpected error -> log and report per-user
-    this.logger.error(
-      `Failed to evaluate permissions for user ${userId}`,
-      error instanceof Error ? error.stack || error.message : String(error),
-    );
+    this.logger.error('Failed to evaluate permissions for user', {
+      userId,
+      error:
+        error instanceof Error ? error.stack || error.message : String(error),
+    });
     return [userId, { permitted: false, error: 'ERROR' }] as const;
   }
 
@@ -212,10 +213,11 @@ export class PermissionCheckController {
         throw new BadRequestException(`entityDoc not found: ${entityId}`);
       }
 
-      this.logger.error(
-        `Failed to load canonical entity document ${entityId}`,
-        error instanceof Error ? error.stack || error.message : String(error),
-      );
+      this.logger.error('Failed to load canonical entity document', {
+        entityId,
+        error:
+          error instanceof Error ? error.stack || error.message : String(error),
+      });
       throw new BadGatewayException('Failed to load target entity document');
     }
   }
