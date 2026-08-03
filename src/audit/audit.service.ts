@@ -159,10 +159,11 @@ export class DefaultAuditService extends AuditService {
       // best-effort: log but never fail the original write. Normalization must
       // itself never throw (JSON.stringify can throw on circular throwables).
       const reason = this.errorReason(err);
-      this.logger.error(
-        `Failed to write audit records for db '${db}': ${reason}`,
-        err instanceof Error ? err.stack : undefined,
-      );
+      this.logger.error('Failed to write audit records', {
+        db,
+        reason,
+        stack: err instanceof Error ? err.stack : undefined,
+      });
     }
   }
 

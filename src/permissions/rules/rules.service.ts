@@ -197,7 +197,8 @@ export class RulesService implements OnModuleInit {
     }
 
     this.logger.error(
-      `CRITICAL: gave up loading initial permissions from "${db}" after ${RulesService.INIT_MAX_TOTAL_MS}ms. Aborting startup.`,
+      'CRITICAL: gave up loading initial permissions. Aborting startup.',
+      { db, timeoutMs: RulesService.INIT_MAX_TOTAL_MS },
     );
     throw lastError instanceof Error
       ? lastError
@@ -217,12 +218,13 @@ export class RulesService implements OnModuleInit {
       this.setPermission(RulesService.bootstrapPermissions());
     }
     this.logger.warn(
-      `[PERMISSIONS_BOOTSTRAP_MODE] BOOTSTRAP MODE: no permission document "${Permission.DOC_ID}" found in "${db}". ` +
-        `Granting full access to admin_app users only until the real permission config is created. ` +
-        `All other users are denied. ` +
-        `Startup continued with bootstrap permissions. ` +
-        `If this instance is not in first-time setup, treat this as a possible misconfiguration ` +
-        `(check PERMISSION_DB, DATABASE_URL, and reverse proxy routing).`,
+      '[PERMISSIONS_BOOTSTRAP_MODE] BOOTSTRAP MODE: no permission document found. ' +
+        'Granting full access to admin_app users only until the real permission config is created. ' +
+        'All other users are denied. ' +
+        'Startup continued with bootstrap permissions. ' +
+        'If this instance is not in first-time setup, treat this as a possible misconfiguration ' +
+        '(check PERMISSION_DB, DATABASE_URL, and reverse proxy routing).',
+      { db, document: Permission.DOC_ID },
     );
   }
 
@@ -267,17 +269,21 @@ export class RulesService implements OnModuleInit {
                     1000 * 2 ** (retryCount - 1),
                     RulesService.INIT_MAX_DELAY_MS,
                   );
-                  this.logger.log(
-                    `Retrying permission document fetch for ${db} (attempt ${retryCount}).`,
-                    { retryDelayMs: delayMs },
-                  );
+                  this.logger.log('Retrying permission document fetch', {
+                    db,
+                    attempt: retryCount,
+                    retryDelayMs: delayMs,
+                  });
                   return timer(delayMs);
                 },
               }),
               catchError((error: unknown) => {
                 this.logger.warn(
-                  `Failed to fetch updated permission document for ${db} after retries; keeping previous in-memory permissions.`,
-                  error instanceof Error ? error.stack : String(error),
+                  'Failed to fetch updated permission document after retries; keeping previous in-memory permissions.',
+                  {
+                    db,
+                    error: error instanceof Error ? error.stack : String(error),
+                  },
                 );
                 return EMPTY;
               }),
@@ -295,7 +301,8 @@ export class RulesService implements OnModuleInit {
 
     if (!PermissionConfigValidator.isValidRulesConfig(newPermissions)) {
       this.logger.warn(
-        `Permissions change for ${db} did not contain valid data; keeping previous in-memory permissions.`,
+        'Permissions change did not contain valid data; keeping previous in-memory permissions.',
+        { db },
       );
       return;
     }
@@ -314,7 +321,8 @@ export class RulesService implements OnModuleInit {
    */
   private applyPermissionDeletion(db: string): void {
     this.logger.warn(
-      `[PERMISSIONS] Permission document "${Permission.DOC_ID}" was deleted in ${db}; failing closed to bootstrap permissions (admin_app only).`,
+      '[PERMISSIONS] Permission document was deleted; failing closed to bootstrap permissions (admin_app only).',
+      { db, document: Permission.DOC_ID },
     );
     const prevPermissions = this.permission;
     const bootstrap = RulesService.bootstrapPermissions();
@@ -348,8 +356,11 @@ export class RulesService implements OnModuleInit {
           })
           .catch((error: unknown) => {
             this.logger.error(
-              `Failed to clear local docs after permission update for ${db}`,
-              error instanceof Error ? error.stack : String(error),
+              'Failed to clear local docs after permission update',
+              {
+                db,
+                error: error instanceof Error ? error.stack : String(error),
+              },
             );
           }),
       1000,
@@ -380,10 +391,10 @@ export class RulesService implements OnModuleInit {
       // Belt-and-braces: this method must never throw, even if the merge
       // logic or the conflict re-fetch misbehaves; the next change event
       // triggers another attempt (self-healing).
-      this.logger.error(
-        `Failed to write managed default permissions to "${db}"`,
-        error instanceof Error ? error.stack : String(error),
-      );
+      this.logger.error('Failed to write managed default permissions', {
+        db,
+        error: error instanceof Error ? error.stack : String(error),
+      });
     }
   }
 
@@ -421,7 +432,8 @@ export class RulesService implements OnModuleInit {
         // warn only after the write persisted, so a failed or conflicting
         // attempt does not falsely claim rules were replaced
         this.logger.warn(
-          `Customized rule(s) carrying the "${SYSTEM_DEFAULT_MARKER}" marker were replaced in "${db}": ${JSON.stringify(dropped)}`,
+          'Customized rule(s) carrying the system-default marker were replaced',
+          { db, marker: SYSTEM_DEFAULT_MARKER, dropped },
         );
       }
       this.logger.log(
@@ -505,7 +517,9 @@ export class RulesService implements OnModuleInit {
 
       if (!has({ user }, name)) {
         // log instead of silent failure
-        this.logger.warn(`Variable ${name} is not defined for user ${user.id}`);
+        this.logger.warn('Rule variable is not defined for user', {
+          variable: name,
+        });
         return RulesService.USER_PROPERTY_UNDEFINED;
       }
 

@@ -89,10 +89,9 @@ export class KeycloakUserAdminService extends UserAdminService {
         }),
       );
     } catch (error) {
-      this.logger.error(
-        `Failed to obtain Keycloak access token`,
-        error instanceof Error ? error.stack : String(error),
-      );
+      this.logger.error('Failed to obtain Keycloak access token', {
+        error: error instanceof Error ? error.stack : String(error),
+      });
       throw error;
     }
 
@@ -130,10 +129,10 @@ export class KeycloakUserAdminService extends UserAdminService {
       );
       return response.data;
     } catch (error) {
-      this.logger.warn(
-        `Failed to fetch Keycloak user ${userId}`,
-        error instanceof Error ? error.stack : String(error),
-      );
+      this.logger.warn('Failed to fetch Keycloak user', {
+        userId,
+        error: error instanceof Error ? error.stack : String(error),
+      });
       throw error;
     }
   }
@@ -155,10 +154,10 @@ export class KeycloakUserAdminService extends UserAdminService {
       );
       return (response.data ?? []).map((role) => role.name).filter(Boolean);
     } catch (error) {
-      this.logger.warn(
-        `Failed to fetch roles for Keycloak user ${userId}`,
-        error instanceof Error ? error.stack : String(error),
-      );
+      this.logger.warn('Failed to fetch roles for Keycloak user', {
+        userId,
+        error: error instanceof Error ? error.stack : String(error),
+      });
       throw error;
     }
   }

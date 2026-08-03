@@ -630,6 +630,7 @@ describe('RulesService', () => {
     expect(freshService.getRulesForUser(undefined as any)).toEqual([]);
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining('[PERMISSIONS_BOOTSTRAP_MODE] BOOTSTRAP MODE'),
+      expect.objectContaining({ db: 'app' }),
     );
 
     warnSpy.mockRestore();
@@ -746,6 +747,7 @@ describe('RulesService', () => {
     expect(error).toBeInstanceOf(HttpException);
     expect(errorSpy).toHaveBeenCalledWith(
       expect.stringContaining('CRITICAL: gave up loading initial permissions'),
+      expect.objectContaining({ db: 'app' }),
     );
     // No permission config was ever loaded — getRulesForUser must deny all.
     expect(freshService.getRulesForUser(normalUser)).toEqual([]);

@@ -129,9 +129,10 @@ export class DocumentChangesService implements OnModuleDestroy {
           }
         },
         error: (err) => {
-          this.logger.error(
-            `Changes feed for "${db}" terminated unexpectedly: ${this.formatError(err)}`,
-          );
+          this.logger.error('Changes feed terminated unexpectedly', {
+            db,
+            error: this.formatError(err),
+          });
         },
       });
 
@@ -178,6 +179,7 @@ export class DocumentChangesService implements OnModuleDestroy {
       backoff.justSaturated ||
       failureCount % DocumentChangesService.SATURATED_LOG_EVERY_N === 0
     ) {
+      // `message` is one of two constants, so this stays a stable grouping key
       this.logger.error(`SUSTAINED OUTAGE: ${message}`, logContext);
     }
   }

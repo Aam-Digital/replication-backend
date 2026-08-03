@@ -42,10 +42,10 @@ export class UserIdentityService {
     const userEntity = await firstValueFrom(
       this.couchdbService.get('app', account.name),
     ).catch((error) => {
-      this.logger.warn(
-        `Failed to fetch projects for user entity ${account.name}`,
-        error?.stack || error,
-      );
+      this.logger.warn('Failed to fetch projects for user entity', {
+        userEntity: account.name,
+        error: error?.stack || String(error),
+      });
       return undefined;
     });
     const projects = Array.isArray(userEntity?.projects)
@@ -93,8 +93,8 @@ export class UserIdentityService {
       },
       error: (err) => {
         this.logger.error(
-          `Entity changes feed terminated unexpectedly; cache invalidation disabled`,
-          err?.stack || String(err),
+          'Entity changes feed terminated unexpectedly; cache invalidation disabled',
+          { error: err?.stack || String(err) },
         );
       },
     });
