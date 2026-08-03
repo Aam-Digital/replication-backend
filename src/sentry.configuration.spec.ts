@@ -1,3 +1,7 @@
+import {
+  BadGatewayException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { HttpException } from '@nestjs/common/exceptions/http.exception';
 import * as Sentry from '@sentry/node';
 import { beforeSend, normalizeLogMessage } from './sentry.configuration';
@@ -184,5 +188,64 @@ describe('beforeSend', () => {
 
     expect(result).not.toBeNull();
     expect(result?.fingerprint).toBeUndefined();
+  });
+
+  describe('purpose-built exceptions on the same route', () => {
+    // PermissionCheckController's single `POST /permissions/check` route can
+    // throw a 502 BadGatewayException for two unrelated dependencies failing:
+    // Keycloak being unreachable, or the canonical entity document failing to
+    // load from CouchDB. Status+route alone can't tell those apart; the message
+    // — chosen by each call site, not by request data — has to.
+    const keycloakDown = () =>
+      new BadGatewayException('Upstream identity provider is unavailable');
+    const couchdbLoadFailed = () =>
+      new BadGatewayException('Failed to load target entity document');
+
+    it('separates unrelated dependency failures that share a status and route', () => {
+      const keycloak = beforeSend(
+        event({ transaction: 'POST /permissions/check' }),
+        hint(keycloakDown()),
+      );
+      const couchdb = beforeSend(
+        event({ transaction: 'POST /permissions/check' }),
+        hint(couchdbLoadFailed()),
+      );
+
+      expect(keycloak?.fingerprint).not.toEqual(couchdb?.fingerprint);
+    });
+
+    it('still groups repeats of the same dependency failure across requests', () => {
+      const first = beforeSend(
+        event({ transaction: 'POST /permissions/check' }),
+        hint(keycloakDown()),
+      );
+      const second = beforeSend(
+        event({ transaction: 'POST /permissions/check' }),
+        hint(keycloakDown()),
+      );
+
+      expect(first?.fingerprint).toEqual(second?.fingerprint);
+    });
+
+    it('normalizes an id interpolated into an otherwise-static message', () => {
+      const userA = beforeSend(
+        event(),
+        hint(
+          new InternalServerErrorException(
+            'Could not resolve entity name for user 5b8c774c-f2a9-4407-ad2e-a5325168b8e9',
+          ),
+        ),
+      );
+      const userB = beforeSend(
+        event(),
+        hint(
+          new InternalServerErrorException(
+            'Could not resolve entity name for user 1a2b3c4d-9999-4eee-8fff-abcdef012345',
+          ),
+        ),
+      );
+
+      expect(userA?.fingerprint).toEqual(userB?.fingerprint);
+    });
   });
 });

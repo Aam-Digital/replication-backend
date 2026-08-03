@@ -237,9 +237,26 @@ export function beforeSend(
   // untouched, so response bodies and status codes are unchanged.
   if (error instanceof HttpException) {
     const status = error.getStatus();
-    event.fingerprint = UPSTREAM_AVAILABILITY_STATUSES.has(status)
-      ? ['HttpException', String(status)]
-      : ['HttpException', String(status), event.transaction ?? UNKNOWN_ROUTE];
+
+    // Purpose-built exceptions (BadGatewayException, InternalServerErrorException,
+    // ...) are a different case from the bare, axios-mapped HttpException above:
+    // their message is chosen by the call site to describe *why* it failed, e.g.
+    // "Upstream identity provider is unavailable" (Keycloak) vs "Failed to load
+    // target entity document" (CouchDB) — two dependencies that can both throw
+    // BadGatewayException from the very same route. Status+route alone would
+    // conflate them into one issue; the message is what actually tells them
+    // apart, so prefer it here. Still normalize it: a call site may interpolate
+    // an id into an otherwise-static message (see normalizeLogMessage above).
+    event.fingerprint =
+      error.constructor === HttpException
+        ? UPSTREAM_AVAILABILITY_STATUSES.has(status)
+          ? ['HttpException', String(status)]
+          : [
+              'HttpException',
+              String(status),
+              event.transaction ?? UNKNOWN_ROUTE,
+            ]
+        : ['HttpException', String(status), normalizeLogMessage(error.message)];
   }
 
   return event;
