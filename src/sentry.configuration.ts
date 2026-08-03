@@ -184,6 +184,24 @@ function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
 const UNKNOWN_ROUTE = '<unknown route>';
 
 /**
+ * Statuses that describe the upstream (CouchDB, or a gateway in front of it)
+ * being unreachable or unhealthy, rather than describing the request that
+ * happened to hit it.
+ *
+ * These are grouped by status alone, without a route. A generic "Bad Gateway"
+ * means the same thing no matter which endpoint observed it, so including the
+ * route would split a single CouchDB outage into as many issues as there are
+ * endpoints in flight — exactly the fragmentation this fingerprinting exists to
+ * prevent. Operation-specific failures (500 and anything else) do differ by
+ * endpoint and keep their route.
+ */
+const UPSTREAM_AVAILABILITY_STATUSES: ReadonlySet<number> = new Set([
+  502, // Bad Gateway
+  503, // Service Unavailable
+  504, // Gateway Timeout
+]);
+
+/**
  * Decide whether an event is reported, and how it is grouped.
  *
  * Exported for testing — the grouping rules here determine whether a Sentry
@@ -211,17 +229,17 @@ export function beforeSend(
   // constant string "Http Exception". Sentry groups on that, so without an
   // explicit fingerprint every CouchDB fault — any status, any route — merges
   // into one opaque issue with no status and no route in its title. Fingerprint
-  // on status and route instead, so distinct faults stay distinct and each
-  // group is diagnosable on its own.
+  // on status, and on route where the route is what distinguishes one fault
+  // from another (see {@link UPSTREAM_AVAILABILITY_STATUSES}), so distinct
+  // faults stay distinct and each group is diagnosable on its own.
   //
   // This affects grouping only; the `HttpException` propagated to the client is
   // untouched, so response bodies and status codes are unchanged.
   if (error instanceof HttpException) {
-    event.fingerprint = [
-      'HttpException',
-      String(error.getStatus()),
-      event.transaction ?? UNKNOWN_ROUTE,
-    ];
+    const status = error.getStatus();
+    event.fingerprint = UPSTREAM_AVAILABILITY_STATUSES.has(status)
+      ? ['HttpException', String(status)]
+      : ['HttpException', String(status), event.transaction ?? UNKNOWN_ROUTE];
   }
 
   return event;

@@ -73,17 +73,51 @@ describe('beforeSend', () => {
     expect(result).not.toBeNull();
   });
 
-  it('fingerprints HttpExceptions by status and route so unrelated CouchDB faults do not merge', () => {
+  it('fingerprints operation-specific failures by status and route so unrelated CouchDB faults do not merge', () => {
     const result = beforeSend(
       event({ transaction: 'POST /:db/_bulk_docs' }),
-      hint(new HttpException('boom', 502)),
+      hint(new HttpException('boom', 500)),
     );
 
     expect(result?.fingerprint).toEqual([
       'HttpException',
-      '502',
+      '500',
       'POST /:db/_bulk_docs',
     ]);
+  });
+
+  it.each([
+    ['Bad Gateway', 502],
+    ['Service Unavailable', 503],
+    ['Gateway Timeout', 504],
+  ])(
+    'groups a generic %s by status alone, so one outage is not split per route',
+    (_name, status) => {
+      const bulkDocs = beforeSend(
+        event({ transaction: 'POST /:db/_bulk_docs' }),
+        hint(new HttpException('boom', status)),
+      );
+      const allDocs = beforeSend(
+        event({ transaction: 'GET /:db/_all_docs' }),
+        hint(new HttpException('boom', status)),
+      );
+
+      expect(bulkDocs?.fingerprint).toEqual(['HttpException', String(status)]);
+      expect(bulkDocs?.fingerprint).toEqual(allDocs?.fingerprint);
+    },
+  );
+
+  it('still separates different upstream-availability statuses from each other', () => {
+    const badGateway = beforeSend(
+      event({ transaction: 'POST /:db/_bulk_docs' }),
+      hint(new HttpException('boom', 502)),
+    );
+    const unavailable = beforeSend(
+      event({ transaction: 'POST /:db/_bulk_docs' }),
+      hint(new HttpException('boom', 503)),
+    );
+
+    expect(badGateway?.fingerprint).not.toEqual(unavailable?.fingerprint);
   });
 
   it('separates the same status on different routes', () => {
@@ -99,7 +133,7 @@ describe('beforeSend', () => {
     expect(bulkDocs?.fingerprint).not.toEqual(allDocs?.fingerprint);
   });
 
-  it('separates different statuses on the same route', () => {
+  it('never merges an operation-specific failure with an upstream outage on the same route', () => {
     const serverError = beforeSend(
       event({ transaction: 'POST /:db/_bulk_docs' }),
       hint(new HttpException('boom', 500)),
@@ -135,12 +169,12 @@ describe('beforeSend', () => {
         message: 'Request failed: something dynamic',
         transaction: 'GET /:db/_changes',
       }),
-      hint(new HttpException('boom', 503)),
+      hint(new HttpException('boom', 500)),
     );
 
     expect(result?.fingerprint).toEqual([
       'HttpException',
-      '503',
+      '500',
       'GET /:db/_changes',
     ]);
   });
