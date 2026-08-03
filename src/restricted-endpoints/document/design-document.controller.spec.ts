@@ -5,7 +5,7 @@ import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import {
   detectDocumentType,
-  DocumentAbility,
+  createDocumentAbility,
   PermissionService,
 } from '../../permissions/permission/permission.service';
 import { DocSuccess } from '../replication/bulk-document/couchdb-dtos/bulk-docs.dto';
@@ -103,7 +103,7 @@ describe('DesignDocumentController', () => {
   });
 
   describe('putDesignDoc', () => {
-    const adminAbility = new DocumentAbility(
+    const adminAbility = createDocumentAbility(
       [{ action: 'manage', subject: '_design' }],
       { detectSubjectType: detectDocumentType },
     );
@@ -143,7 +143,7 @@ describe('DesignDocumentController', () => {
     });
 
     it('should reject if user lacks manage permission on _design', async () => {
-      const readOnlyAbility = new DocumentAbility(
+      const readOnlyAbility = createDocumentAbility(
         [{ action: 'read', subject: 'all' }],
         { detectSubjectType: detectDocumentType },
       );
@@ -181,7 +181,7 @@ describe('DesignDocumentController', () => {
     });
 
     it('should filter rows based on user permissions when include_docs is true', async () => {
-      const ability = new DocumentAbility(
+      const ability = createDocumentAbility(
         [{ action: 'read', subject: 'Child', conditions: { _id: 'Child:1' } }],
         { detectSubjectType: detectDocumentType },
       );
@@ -220,7 +220,7 @@ describe('DesignDocumentController', () => {
     });
 
     it('should return all rows when user has full read access', async () => {
-      const ability = new DocumentAbility([
+      const ability = createDocumentAbility([
         { action: 'manage', subject: 'all' },
       ]);
       mockPermissionService.getAbilityFor = jest.fn(() => ability);
@@ -240,7 +240,7 @@ describe('DesignDocumentController', () => {
     });
 
     it('should filter rows when include_docs is boolean true', async () => {
-      const ability = new DocumentAbility(
+      const ability = createDocumentAbility(
         [{ action: 'read', subject: 'Child', conditions: { _id: 'Child:1' } }],
         { detectSubjectType: detectDocumentType },
       );
@@ -263,7 +263,7 @@ describe('DesignDocumentController', () => {
     });
 
     it('should keep deletion rows without doc and drop ambiguous rows without doc', async () => {
-      const ability = new DocumentAbility(
+      const ability = createDocumentAbility(
         [{ action: 'read', subject: 'Child', conditions: { _id: 'Child:1' } }],
         { detectSubjectType: detectDocumentType },
       );

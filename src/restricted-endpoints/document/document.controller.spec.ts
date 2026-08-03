@@ -7,7 +7,7 @@ import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import {
   detectDocumentType,
-  DocumentAbility,
+  createDocumentAbility,
   PermissionService,
 } from '../../permissions/permission/permission.service';
 import { DocumentWriteService } from './document-write.service';
@@ -411,7 +411,7 @@ describe('DocumentController', () => {
     jest
       .spyOn(mockPermissionService, 'getAbilityFor')
       .mockReturnValue(
-        new DocumentAbility(rules, { detectSubjectType: detectDocumentType }),
+        createDocumentAbility(rules, { detectSubjectType: detectDocumentType }),
       );
   }
 });

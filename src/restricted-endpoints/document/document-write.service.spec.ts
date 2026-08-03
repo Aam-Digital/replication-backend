@@ -4,6 +4,7 @@ import { UserInfo } from '../session/user-auth.dto';
 import {
   detectDocumentType,
   DocumentAbility,
+  createDocumentAbility,
 } from '../../permissions/permission/permission.service';
 
 const user = new UserInfo('user-id', 'User:1', ['admin']);
@@ -24,7 +25,7 @@ function makeService(opts?: { existingDoc?: any; ability?: DocumentAbility }) {
     isAllowedTo: jest.fn(async () => true),
     getAbilityFor: () =>
       opts?.ability ??
-      new DocumentAbility([{ subject: 'all', action: 'manage' }], {
+      createDocumentAbility([{ subject: 'all', action: 'manage' }], {
         detectSubjectType: detectDocumentType,
       }),
   };
@@ -52,7 +53,7 @@ it('records a create when the document does not exist yet', async () => {
 });
 
 it('records an update with the deep-cloned before-state (pre-mutation)', async () => {
-  const ability = new DocumentAbility(
+  const ability = createDocumentAbility(
     [{ subject: 'Child', action: ['read', 'update'], fields: ['name'] }],
     { detectSubjectType: detectDocumentType },
   );
