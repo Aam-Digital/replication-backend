@@ -47,6 +47,9 @@
     "rxjs": "^7.8.2",
     "stream-json": "^1.9.1"
   },
+  "overrides": {
+    "axios": "1.18.0"
+  },
   "devDependencies": {
     "@nestjs/schematics": "^11.1.0",
     "@nestjs/testing": "^11.1.28",
