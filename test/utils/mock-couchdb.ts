@@ -44,6 +44,42 @@ export class MockCouchDb {
     headers: Record<string, string | string[] | undefined>;
   }[] = [];
 
+  /**
+   * When set, the next _all_docs request receives a truncated JSON body and
+   * an aborted connection, simulating CouchDB failing mid-response.
+   */
+  truncateNextAllDocs = false;
+
+  /**
+   * When set, the next _all_docs request receives a complete but unusable
+   * body: a success status whose payload is not a JSON object.
+   */
+  malformNextAllDocs = false;
+
+  /**
+   * When set, the next _changes request receives a truncated JSON body and an
+   * aborted connection.
+   */
+  truncateNextChanges = false;
+
+  /** timers of pending connection aborts, cleared by {@link stop} */
+  private readonly pendingDestroys: NodeJS.Timeout[] = [];
+
+  /**
+   * Cut the connection shortly after the partial body was flushed, tracking
+   * the timer so it cannot fire after the server was stopped.
+   */
+  private destroyLater(res: express.Response) {
+    const timer = setTimeout(() => {
+      const idx = this.pendingDestroys.indexOf(timer);
+      if (idx >= 0) {
+        this.pendingDestroys.splice(idx, 1);
+      }
+      res.destroy();
+    }, 50);
+    this.pendingDestroys.push(timer);
+  }
+
   get url(): string {
     return `http://127.0.0.1:${(this.server!.address() as AddressInfo).port}`;
   }
@@ -64,6 +100,10 @@ export class MockCouchDb {
       clearTimeout(lp.timer);
     }
     this.longpolls.length = 0;
+    for (const timer of this.pendingDestroys) {
+      clearTimeout(timer);
+    }
+    this.pendingDestroys.length = 0;
     await new Promise<void>((resolve) => {
       if (!this.server) return resolve();
       this.server.close(() => resolve());
@@ -268,6 +308,13 @@ export class MockCouchDb {
     this.app.get('/:db/_changes', (req, res) => {
       const db = req.params.db;
       this.getDb(db);
+      if (this.truncateNextChanges) {
+        this.truncateNextChanges = false;
+        res.setHeader('content-type', 'application/json');
+        res.write('{"results":[{"id":"Child:1","seq":"1-mock"');
+        this.destroyLater(res);
+        return;
+      }
       const since = this.parseSince(req.query.since, db);
       const includeDocs = req.query.include_docs === 'true';
       const limit = req.query.limit
@@ -314,6 +361,26 @@ export class MockCouchDb {
       req: express.Request<{ db: string }>,
       res: express.Response,
     ) => {
+      if (this.truncateNextAllDocs) {
+        this.truncateNextAllDocs = false;
+        res.setHeader('content-type', 'application/json');
+        // flush a valid-looking first part of the response so the proxy
+        // starts forwarding it, then cut the connection mid-body
+        const rows = Array.from(
+          { length: 50 },
+          (_, i) =>
+            `{"id":"Child:${i}","key":"Child:${i}","value":{"rev":"1-mock"}}`,
+        );
+        res.write('{"total_rows":99,"offset":0,"rows":[' + rows.join(','));
+        this.destroyLater(res);
+        return;
+      }
+      if (this.malformNextAllDocs) {
+        this.malformNextAllDocs = false;
+        res.setHeader('content-type', 'application/json');
+        res.end('[1,2,3]');
+        return;
+      }
       const db = req.params.db;
       const docs = this.getDb(db);
       const includeDocs = req.query.include_docs === 'true';

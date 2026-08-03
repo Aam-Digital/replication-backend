@@ -2,25 +2,33 @@ import {
   Body,
   Controller,
   Get,
+  Logger,
   Param,
   Post,
   Query,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation } from '@nestjs/swagger';
-import { from, map, Observable, of, switchMap } from 'rxjs';
+import { Response } from 'express';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
+import { from, Observable } from 'rxjs';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../../auth/user.decorator';
+import {
+  JsonArrayFilterTransform,
+  jsonTokenParser,
+} from '../../../common/json-array-filter';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { UserInfo } from '../../session/user-auth.dto';
 import { BulkDocumentService } from './bulk-document.service';
-import { AllDocsRequest, AllDocsResponse } from './couchdb-dtos/all-docs.dto';
+import { AllDocsRequest } from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
   BulkDocsResponse,
-  FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
-import { BulkGetRequest, BulkGetResponse } from './couchdb-dtos/bulk-get.dto';
+import { BulkGetRequest } from './couchdb-dtos/bulk-get.dto';
 import { OnlyAuthenticated } from '../../../auth/only-authenticated.decorator';
 
 /**
@@ -29,10 +37,16 @@ import { OnlyAuthenticated } from '../../../auth/only-authenticated.decorator';
  *
  * Enforces permissions of the current user, filtering requests and responses
  * between the connected CouchDB server and the client.
+ *
+ * Large read responses (_all_docs, _bulk_get, _find) are *streamed*:
+ * the CouchDB response is parsed and permission-filtered incrementally and
+ * forwarded to the client without buffering the whole payload (#109).
  */
 @UseGuards(CombinedAuthGuard)
 @Controller()
 export class BulkDocEndpointsController {
+  private readonly logger = new Logger(BulkDocEndpointsController.name);
+
   constructor(
     private readonly couchdbService: CouchdbService,
     private readonly bulkDocumentService: BulkDocumentService,
@@ -64,26 +78,31 @@ export class BulkDocEndpointsController {
 
   /**
    * Find documents using a declarative JSON querying syntax.
+   * The response is permission-filtered and streamed.
    * See {@link https://docs.couchdb.org/en/stable/api/database/find.html#post--db-_find}
    *
-   * @param db name of the database to which the documents should be uploaded
+   * @param db name of the database to query
    * @param body search query object
    * @param user logged in user
-   * @returns BulkDocsResponse list of documents matching search query
+   * @param res
    */
   @Post('/:db/_find')
   @ApiOperation({
     description: `Find documents using a declarative JSON querying syntax.`,
   })
-  find(
+  async find(
     @Param('db') db: string,
     @Body() body: object,
     @User() user: UserInfo,
-  ): Observable<FindResponse> {
-    return from(this.couchdbService.post<FindResponse>(db, '_find', body)).pipe(
-      switchMap((response) => {
-        return of(this.bulkDocumentService.filterFindResponse(response, user));
-      }),
+    @Res() res: Response,
+  ): Promise<void> {
+    const source = await this.couchdbService.postStream(db, '_find', body);
+    const isPermitted = this.bulkDocumentService.findDocFilter(user);
+    await this.streamFiltered(
+      source,
+      'docs',
+      (doc) => (isPermitted(doc) ? doc : undefined),
+      res,
     );
   }
 
@@ -105,68 +124,164 @@ export class BulkDocEndpointsController {
 
   /**
    * Retrieve multiple documents from database.
+   * The response is permission-filtered and streamed.
    * See {@link https://docs.couchdb.org/en/stable/api/database/bulk-api.html?highlight=bulk_get#post--db-_bulk_get}
    *
    * @param db name of the database from which the documents are fetched
    * @param queryParams
    * @param body list of document IDs which should be fetched from the remote database
    * @param user logged in user
-   * @returns BulkGetResponse list of documents or error messages
+   * @param res
    */
   @Post('/:db/_bulk_get')
-  bulkGetPost(
+  async bulkGetPost(
     @Param('db') db: string,
     @Query() queryParams: Record<string, string>,
     @Body() body: BulkGetRequest,
     @User() user: UserInfo,
-  ): Observable<BulkGetResponse> {
-    return this.couchdbService
-      .post<BulkGetResponse>(db, '_bulk_get', body, queryParams)
-      .pipe(
-        map((response) =>
-          this.bulkDocumentService.filterBulkGetResponse(response, user),
-        ),
-      );
+    @Res() res: Response,
+  ): Promise<void> {
+    const source = await this.couchdbService.postStream(
+      db,
+      '_bulk_get',
+      body,
+      queryParams,
+    );
+    await this.streamFiltered(
+      source,
+      'results',
+      this.bulkDocumentService.bulkGetResultMapper(user),
+      res,
+    );
   }
 
   /**
    * Fetch a bulk of documents specified by the ID's in the body.
+   * The response is permission-filtered and streamed.
    * See {@link https://docs.couchdb.org/en/stable/api/database/bulk-api.html?highlight=all_docs#post--db-_all_docs}
    *
    * @param db name of the database from which the documents are fetched
    * @param queryParams
    * @param user logged in user
    * @param body a object containing document ID's to be fetched
-   * @returns list of documents
+   * @param res
    */
   @Post('/:db/_all_docs')
-  allDocs(
+  async allDocs(
     @Param('db') db: string,
     @Query() queryParams: Record<string, string>,
     @User() user: UserInfo,
     @Body() body: AllDocsRequest,
-  ): Observable<AllDocsResponse> {
-    return this.couchdbService
-      .post<AllDocsResponse>(db, '_all_docs', body, queryParams)
-      .pipe(
-        map((response) =>
-          this.bulkDocumentService.filterAllDocsResponse(response, user),
-        ),
-      );
+    @Res() res: Response,
+  ): Promise<void> {
+    const source = await this.couchdbService.postStream(
+      db,
+      '_all_docs',
+      body,
+      queryParams,
+    );
+    await this.streamAllDocs(source, user, res);
   }
 
   @Get('/:db/_all_docs')
-  allDocsGet(
+  async allDocsGet(
     @Param('db') db: string,
     @Query() queryParams: Record<string, string>,
     @User() user: UserInfo,
-  ) {
-    return this.couchdbService
-      .get<AllDocsResponse>(db, '_all_docs', queryParams)
-      .pipe(
-        map((response) =>
-          this.bulkDocumentService.filterAllDocsResponse(response, user),
-        ),
+    @Res() res: Response,
+  ): Promise<void> {
+    const source = await this.couchdbService.getStream(
+      db,
+      '_all_docs',
+      queryParams,
+    );
+    await this.streamAllDocs(source, user, res);
+  }
+
+  private async streamAllDocs(source: Readable, user: UserInfo, res: Response) {
+    const isPermitted = this.bulkDocumentService.allDocsRowFilter(user);
+    await this.streamFiltered(
+      source,
+      'rows',
+      (row) => (isPermitted(row) ? row : undefined),
+      res,
+    );
+  }
+
+  /**
+   * Incrementally parse the CouchDB response stream, filter/transform the
+   * items of `arrayField` and forward the re-serialized JSON to the client.
+   *
+   * Errors that occur *before* the first byte was sent result in a regular
+   * error response. Errors after that abort the connection so the client
+   * sees a truncated response (and e.g. PouchDB retries) instead of
+   * mistaking a partial payload for a complete one.
+   */
+  private async streamFiltered(
+    source: Readable,
+    arrayField: string,
+    mapItem: (item: any) => unknown,
+    res: Response,
+  ): Promise<void> {
+    res.status(200);
+    res.setHeader('content-type', 'application/json');
+    const filtered = new JsonArrayFilterTransform({ arrayField, mapItem });
+    // `res` is deliberately not part of the pipeline: stream.pipeline destroys
+    // every stream it is given on error, which would tear down the response
+    // socket even for a failure on the very first token and leave no way to
+    // send a status.
+    const parsing = pipeline(source, jsonTokenParser(), filtered);
+    try {
+      await Promise.all([parsing, this.forwardToResponse(filtered, res)]);
+    } catch (error) {
+      if (!res.headersSent && !res.writableEnded && !res.destroyed) {
+        throw error;
+      }
+      this.logger.warn(
+        `aborting streamed response after error: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
       );
+      res.destroy();
+    }
+  }
+
+  /**
+   * Forward the filtered JSON to the client, keeping backpressure but leaving
+   * the response itself untouched on error, so an early failure can still be
+   * turned into a regular error response by the caller.
+   */
+  private forwardToResponse(source: Readable, res: Response): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const cleanup = () => {
+        source.off('error', onError);
+        res.off('error', onError);
+        res.off('finish', onFinish);
+        res.off('close', onClose);
+      };
+      const onError = (error: Error) => {
+        cleanup();
+        reject(error);
+      };
+      const onFinish = () => {
+        cleanup();
+        resolve();
+      };
+      const onClose = () => {
+        cleanup();
+        if (res.writableFinished) {
+          resolve();
+          return;
+        }
+        // client gone: release the CouchDB response instead of reading it to the end
+        source.destroy();
+        reject(new Error('client disconnected'));
+      };
+      source.once('error', onError);
+      res.once('error', onError);
+      res.once('finish', onFinish);
+      res.once('close', onClose);
+      source.pipe(res);
+    });
   }
 }

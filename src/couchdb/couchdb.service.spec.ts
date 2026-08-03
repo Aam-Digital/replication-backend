@@ -1,9 +1,14 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { CouchdbService } from './couchdb.service';
 import { firstValueFrom, of, throwError } from 'rxjs';
-import { HttpException, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
+import { Readable } from 'stream';
 
 describe('CouchdbService', () => {
   let service: CouchdbService;
@@ -78,6 +83,44 @@ describe('CouchdbService', () => {
     expect(result).toBeInstanceOf(HttpException);
     expect(result.getStatus()).toBe(404);
     expect(result.getResponse()).toBe(axiosError.response.data);
+  });
+
+  it('should map a failed request that carries a success status to Bad Gateway', async () => {
+    // a body cut short after CouchDB already answered 200 must not reach the
+    // client as a 200, or a truncated response looks like a complete one
+    const axiosError = {
+      message: 'aborted',
+      response: { data: '', status: 200 },
+    };
+
+    const result = await responseInterceptor(axiosError).catch(
+      (err: HttpException) => err,
+    );
+
+    expect(result).toBeInstanceOf(HttpException);
+    expect(result.getStatus()).toBe(HttpStatus.BAD_GATEWAY);
+  });
+
+  it('should not buffer an oversized error body of a stream request', async () => {
+    const hugeBody = Readable.from(
+      (function* () {
+        for (let i = 0; i < 512; i++) {
+          yield 'x'.repeat(1024);
+        }
+      })(),
+    );
+    (mockHttpService.axiosRef as any).request = jest
+      .fn()
+      .mockRejectedValue(new HttpException(hugeBody as any, 500));
+
+    const error: HttpException = await service
+      .getStream('db', '_all_docs')
+      .catch((err) => err);
+
+    expect(error).toBeInstanceOf(HttpException);
+    expect(error.getStatus()).toBe(500);
+    expect(JSON.stringify(error.getResponse()).length).toBeLessThan(1024);
+    expect(hugeBody.destroyed).toBe(true);
   });
 
   it('should return the user after receiving success response', async () => {

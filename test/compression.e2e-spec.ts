@@ -73,7 +73,7 @@ describe('Response compression (e2e)', () => {
       .set(...basicAuth('admin', 'admin-pw'))
       .set('Accept-Encoding', 'gzip')
       .send({ docs: [{ id: 'Child:big' }, { id: 'Child:small' }] })
-      .expect(201);
+      .expect(200);
 
     expect(res.headers['content-encoding']).toBe('gzip');
     const ids = res.body.results.map((r: { id: string }) => r.id);

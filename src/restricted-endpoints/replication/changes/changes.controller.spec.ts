@@ -1,5 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
+import { EventEmitter } from 'events';
 import { EMPTY, Observable, of } from 'rxjs';
 import { authGuardMockProviders } from '../../../auth/auth-guard-mock.providers';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
@@ -63,25 +64,107 @@ describe('ChangesController', () => {
     controller = module.get<ChangesController>(ChangesController);
   });
 
+  /**
+   * Minimal express Response stand-in capturing the streamed JSON body.
+   * Built on an EventEmitter so the backpressure handling (drain/close) can
+   * be exercised; `blockAfter` makes that write return false, as a socket
+   * whose buffer is full does.
+   */
+  function createMockResponse(options: { blockAfter?: number } = {}) {
+    const chunks: string[] = [];
+    let writes = 0;
+    const res: any = Object.assign(new EventEmitter(), {
+      headersSent: false,
+      destroyed: false,
+      statusCode: 200,
+      setHeader: jest.fn(),
+      flush: jest.fn(),
+      status: jest.fn((code: number) => {
+        res.statusCode = code;
+        return res;
+      }),
+      write: jest.fn((chunk: string) => {
+        res.headersSent = true;
+        chunks.push(String(chunk));
+        writes++;
+        return options.blockAfter !== writes;
+      }),
+      end: jest.fn(),
+      destroy: jest.fn(() => {
+        res.destroyed = true;
+      }),
+    });
+    return { res, body: () => JSON.parse(chunks.join('')) as ChangesResponse };
+  }
+
+  /** Wait until the controller has written its first chunk. */
+  async function awaitFirstWrite(res: { write: jest.Mock }) {
+    while (res.write.mock.calls.length === 0) {
+      await new Promise(setImmediate);
+    }
+  }
+
+  /** Run the streamed changes endpoint and return the parsed response body. */
+  async function runChanges(
+    db: string,
+    requestingUser: UserInfo,
+    params?: Parameters<ChangesController['changes']>[2],
+  ): Promise<ChangesResponse> {
+    const { res, body } = createMockResponse();
+    await controller.changes(db, requestingUser, params, res);
+    return body();
+  }
+
   it('should be defined', () => {
     expect(controller).toBeDefined();
   });
 
-  it('should use the rules of the requesting user', () => {
-    controller.changes('some-db', user);
+  it('should use the rules of the requesting user', async () => {
+    await runChanges('some-db', user);
 
     expect(mockRulesService.getRulesForUser).toHaveBeenCalledWith(user);
   });
 
+  it('should flush written batches so compression does not withhold them from the client', async () => {
+    const { res } = createMockResponse();
+
+    await controller.changes('some-db', user, undefined, res);
+
+    expect(res.flush).toHaveBeenCalled();
+  });
+
+  it('should continue writing once a back-pressured client drains', async () => {
+    const { res, body } = createMockResponse({ blockAfter: 1 });
+
+    const pending = controller.changes('some-db', user, undefined, res);
+    await awaitFirstWrite(res);
+    res.emit('drain');
+    await pending;
+
+    expect(body().last_seq).toBeDefined();
+    expect(res.destroy).not.toHaveBeenCalled();
+  });
+
+  it('should abort instead of hanging when the client disconnects while back-pressured', async () => {
+    const { res } = createMockResponse({ blockAfter: 1 });
+
+    const pending = controller.changes('some-db', user, undefined, res);
+    await awaitFirstWrite(res);
+    res.emit('close');
+
+    await expect(pending).resolves.toBeUndefined();
+    expect(res.destroy).toHaveBeenCalled();
+  });
+
   it('should not throw when user is undefined', async () => {
     await expect(
-      controller.changes('some-db', undefined as unknown as UserInfo),
+      runChanges('some-db', undefined as unknown as UserInfo),
     ).resolves.toBeDefined();
   });
 
-  it('should forward params', () => {
+  it('should forward params', async () => {
     const params = { since: 'now', feed: 'continuous', limit: 500 };
-    controller.changes('some-db', user, params);
+    await runChanges('some-db', user, params);
 
     expect(mockCouchdbService.get).toHaveBeenCalledWith('some-db', '_changes', {
       ...params,
@@ -93,7 +176,7 @@ describe('ChangesController', () => {
   it('should return all changes if user is allowed to read everything', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'all', action: 'manage' }]);
 
-    const res = await controller.changes('some-db', user);
+    const res = await runChanges('some-db', user);
 
     expect(res.results.map((r) => r.id)).toEqual([
       schoolDoc._id,
@@ -109,7 +192,7 @@ describe('ChangesController', () => {
       { subject: 'Child', action: 'manage' },
     ]);
 
-    const res = await controller.changes('some-db', user);
+    const res = await runChanges('some-db', user);
 
     expect(res.results.map((r) => r.id)).toEqual([
       privateSchoolDoc._id,
@@ -123,7 +206,7 @@ describe('ChangesController', () => {
     // No permissions at all
     getRulesSpy.mockReturnValue([]);
 
-    const res = await controller.changes('some-db', user);
+    const res = await runChanges('some-db', user);
 
     expect(res.lostPermissions).toEqual([
       schoolDoc._id,
@@ -135,7 +218,7 @@ describe('ChangesController', () => {
   it('should not include clean deletion tombstones in lostPermissions (they are forwarded via permitted changes)', async () => {
     getRulesSpy.mockReturnValue([]);
 
-    const res = await controller.changes('some-db', user);
+    const res = await runChanges('some-db', user);
 
     // Clean tombstones (_id, _rev, _deleted only) go into permitted results so
     // PouchDB handles the deletion natively - no need to also purge via lostPermissions.
@@ -153,7 +236,7 @@ describe('ChangesController', () => {
     // No read permission for School
     getRulesSpy.mockReturnValue([]);
 
-    const res = await controller.changes('some-db', user);
+    const res = await runChanges('some-db', user);
 
     // Not forwarded as a permitted change (has extra props, no read permission)
     expect(res.results.map((r) => r.id)).not.toContain(deletedWithProps._id);
@@ -172,7 +255,7 @@ describe('ChangesController', () => {
     getSpy.mockReturnValue(createChanges([docCurrentlyReadable]));
     getRulesSpy.mockReturnValue([{ subject: 'School', action: 'read' }]);
 
-    const res = await controller.changes('some-db', user);
+    const res = await runChanges('some-db', user);
 
     expect(res.results.map((r) => r.id)).toContain(docCurrentlyReadable._id);
     expect(res.lostPermissions).not.toContain(docCurrentlyReadable._id);
@@ -184,7 +267,7 @@ describe('ChangesController', () => {
       .mockReturnValueOnce(createChanges([schoolDoc, privateSchoolDoc], 2))
       .mockReturnValueOnce(createChanges([childDoc, deletedChildDoc]));
 
-    const res = await controller.changes('some-db', user, { limit: 2 });
+    const res = await runChanges('some-db', user, { limit: 2 });
 
     expect(res.lostPermissions).toEqual([schoolDoc._id, privateSchoolDoc._id]);
   });
@@ -192,7 +275,7 @@ describe('ChangesController', () => {
   it('should always return deleted docs', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'School', action: 'read' }]);
 
-    const res = await controller.changes('some-db', user);
+    const res = await runChanges('some-db', user);
 
     expect(res.results.map((r) => r.id)).toEqual([
       schoolDoc._id,
@@ -204,7 +287,7 @@ describe('ChangesController', () => {
   it('should not return the document content on default', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'School', action: 'read' }]);
 
-    const res = await controller.changes('some-db', user);
+    const res = await runChanges('some-db', user);
 
     res.results.forEach((r) => expect(r.doc).toBeUndefined());
   });
@@ -212,7 +295,7 @@ describe('ChangesController', () => {
   it('should return the document content if requested', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'School', action: 'read' }]);
 
-    const res = await controller.changes('some-db', user, {
+    const res = await runChanges('some-db', user, {
       include_docs: 'true',
     });
 
@@ -225,7 +308,7 @@ describe('ChangesController', () => {
       .mockReturnValueOnce(createChanges([schoolDoc, privateSchoolDoc], 2))
       .mockReturnValueOnce(createChanges([childDoc, deletedChildDoc]));
 
-    const res = await controller.changes('some-db', user, { limit: 2 });
+    const res = await runChanges('some-db', user, { limit: 2 });
 
     expect(res.pending).toBe(0);
     expect(res.last_seq).toBe(docToChange(deletedChildDoc).seq);
@@ -241,7 +324,7 @@ describe('ChangesController', () => {
       .mockReturnValueOnce(createChanges([schoolDoc, childDoc, childDoc], 3))
       .mockReturnValueOnce(createChanges([schoolDoc, childDoc, childDoc]));
 
-    const res = await controller.changes('some-db', user, { limit: 3 });
+    const res = await runChanges('some-db', user, { limit: 3 });
 
     expect(res.pending).toBe(1);
     expect(res.last_seq).toBe(docToChange(childDoc).seq);
@@ -261,7 +344,7 @@ describe('ChangesController', () => {
       createChanges([childDoc, childDoc2, schoolDoc, childDoc, schoolDoc2], 0),
     );
 
-    const res = await controller.changes('some-db', user, { limit: 2 });
+    const res = await runChanges('some-db', user, { limit: 2 });
 
     expect(res.results.map((r) => r.id)).toEqual([childDoc._id, childDoc2._id]);
     // schoolDoc comes after the 2nd permitted result but before the overflow,
@@ -282,7 +365,7 @@ describe('ChangesController', () => {
       createChanges([childDoc, schoolDoc, childDoc2, childDoc], 0),
     );
 
-    const res = await controller.changes('some-db', user, { limit: 2 });
+    const res = await runChanges('some-db', user, { limit: 2 });
 
     expect(res.results.map((r) => r.id)).toEqual([childDoc._id, childDoc2._id]);
     // schoolDoc comes BEFORE the 2nd permitted result, so it IS included
@@ -294,7 +377,7 @@ describe('ChangesController', () => {
   it('should only return remaining changes if not enough were found', async () => {
     getRulesSpy.mockReturnValue([{ subject: 'Child', action: 'read' }]);
 
-    const res = await controller.changes('some-db', user, { limit: 3 });
+    const res = await runChanges('some-db', user, { limit: 3 });
 
     expect(res.pending).toBe(0);
     expect(res.last_seq).toBe(docToChange(deletedChildDoc).seq);
@@ -311,7 +394,7 @@ describe('ChangesController', () => {
 
     const lastSeq = docToChange(childDoc).seq;
 
-    const res = await controller.changes('some-db', user, { limit: 3 });
+    const res = await runChanges('some-db', user, { limit: 3 });
 
     expect(res.pending).toBe(0);
     expect(res.last_seq).toBe(lastSeq);
@@ -335,7 +418,7 @@ describe('ChangesController', () => {
       createChanges([deletedWithProps, deletedWithoutProps]),
     );
 
-    const res = await controller.changes('some-db', user, {
+    const res = await runChanges('some-db', user, {
       include_docs: 'true',
     });
 
@@ -347,7 +430,7 @@ describe('ChangesController', () => {
     getRulesSpy.mockReturnValue([{ subject: 'all', action: 'manage' }]);
     getSpy.mockReturnValue(createChanges([schoolDoc, designDoc, childDoc]));
 
-    const res = await controller.changes('some-db', user);
+    const res = await runChanges('some-db', user);
 
     expect(res.results.map((r) => r.id)).toEqual([schoolDoc._id, childDoc._id]);
     expect(res.lostPermissions).toEqual([]);
