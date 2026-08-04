@@ -5,7 +5,7 @@
     "group:allNonMajor",
     ":maintainLockFilesMonthly"
   ],
-  "enabledManagers": ["npm"],
+  "enabledManagers": ["npm", "dockerfile"],
   "timezone": "Etc/UTC",
   "schedule": ["after 00:00 and before 09:00 on Monday"],
   "dependencyDashboard": false,
@@ -31,6 +31,12 @@
       "matchDepTypes": ["dependencies", "devDependencies"],
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "weekly-non-major-updates",
+      "automerge": false
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "docker-base-image",
       "automerge": false
     }
   ]
