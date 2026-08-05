@@ -15,6 +15,13 @@ const LIKELY_TRANSIENT_ERROR_MARKERS = [
   'bad gateway',
   'gateway timeout',
   'temporarily unavailable',
+  // DNS resolution failures. In a cluster these are how a dependency being
+  // restarted, rescheduled or recreated surfaces to us: the service name stops
+  // resolving for a few seconds and then resolves again. That is transient in
+  // exactly the same sense as ECONNREFUSED, and treating it as a hard fault
+  // means every rolling redeployment reports a warning per retry per tenant.
+  'enotfound',
+  'eai_again',
 ];
 
 export function isAuthHttpError(err: unknown): err is HttpException {
