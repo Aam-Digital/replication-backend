@@ -48,7 +48,13 @@
     "stream-json": "^1.9.1"
   },
   "overrides": {
-    "axios": "1.19.0"
+    "axios": "1.19.0",
+    "@nestjs/swagger": {
+      "js-yaml": "5.2.3"
+    },
+    "cosmiconfig": {
+      "js-yaml": "4.3.1"
+    }
   },
   "devDependencies": {
     "@nestjs/schematics": "^11.1.0",
