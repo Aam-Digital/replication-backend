@@ -48,7 +48,7 @@
     "stream-json": "^1.9.1"
   },
   "overrides": {
-    "axios": "1.18.0"
+    "axios": "1.19.0"
   },
   "devDependencies": {
     "@nestjs/schematics": "^11.1.0",
