@@ -14,6 +14,15 @@
     "skipLibCheck": true,
     "resolveJsonModule": true,
     "strict": true,
-    "types": ["jest", "node"]
+    "types": ["jest", "node"],
+    "paths": {
+      // axios ships separate ESM and CommonJS declarations that each declare
+      // their own "unique symbol", so the types from the two files are not
+      // interchangeable. Legacy node resolution hands our sources the ESM
+      // declarations and @nestjs/axios the CommonJS ones, which makes an
+      // axios instance unassignable to HttpService. We emit CommonJS, so
+      // point every consumer at the CommonJS declarations.
+      "axios": ["./node_modules/axios/index.d.cts"]
+    }
   }
 }
