@@ -63,7 +63,6 @@
     "@types/passport-http": "^0.3.11",
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
-    "@types/stream-json": "^1.7.8",
     "@types/supertest": "^7.2.1",
     "@typescript-eslint/eslint-plugin": "^8.65.0",
     "@typescript-eslint/parser": "^8.65.0",
@@ -98,7 +97,7 @@
       ]
     },
     "transformIgnorePatterns": [
-      "node_modules/(?!jsondiffpatch)"
+      "node_modules/(?!(jsondiffpatch|stream-json|stream-chain))"
     ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"

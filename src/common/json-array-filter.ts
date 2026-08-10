@@ -1,6 +1,7 @@
-import { Transform, TransformCallback } from 'stream';
-import { parser } from 'stream-json';
-import Assembler from 'stream-json/Assembler';
+import { Duplex, Transform, TransformCallback } from 'stream';
+import { parserStream } from 'stream-json';
+import Assembler from 'stream-json/assembler.js';
+import type { Token } from 'stream-json/parser.js';
 
 /** token emitted by the stream-json parser (with packed keys/values) */
 interface JsonToken {
@@ -33,13 +34,13 @@ export interface JsonArrayFilterOptions {
  * Creates a stream-json parser configured for {@link JsonArrayFilterTransform}
  * (packed keys/values only).
  */
-export function jsonTokenParser(): Transform {
-  return parser({
+export function jsonTokenParser(): Duplex {
+  return parserStream({
     packValues: true,
     packKeys: true,
     streamValues: false,
     streamKeys: false,
-  }) as unknown as Transform;
+  });
 }
 
 /**
@@ -176,7 +177,7 @@ export class JsonArrayFilterTransform extends Transform {
       this.valueDepth = 0;
     }
 
-    this.assembler.consume(token as { name: string; value?: string });
+    this.assembler.consume(token as Token);
     if (token.name === 'startObject' || token.name === 'startArray') {
       this.valueDepth++;
     } else if (token.name === 'endObject' || token.name === 'endArray') {
