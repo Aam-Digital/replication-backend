@@ -14,5 +14,7 @@
       }
     ]
   },
-  "transformIgnorePatterns": ["node_modules/(?!jsondiffpatch)"]
+  "transformIgnorePatterns": [
+    "node_modules/(?!(jsondiffpatch|stream-json|stream-chain))"
+  ]
 }
