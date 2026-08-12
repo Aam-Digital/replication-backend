@@ -51,6 +51,21 @@ describe('http-error-classification', () => {
       expect(isLikelyTransientError(new Error('socket hang up'))).toBe(true);
     });
 
+    it('treats DNS resolution failures as transient', () => {
+      // a dependency being restarted or rescheduled stops resolving for a few
+      // seconds; this is how that surfaces, and it recovers on its own
+      expect(
+        isLikelyTransientError(
+          new Error('getaddrinfo ENOTFOUND some-tenant-database'),
+        ),
+      ).toBe(true);
+      expect(
+        isLikelyTransientError(
+          new Error('getaddrinfo EAI_AGAIN some-tenant-database'),
+        ),
+      ).toBe(true);
+    });
+
     it('returns false for non-transient errors', () => {
       expect(
         isLikelyTransientError(

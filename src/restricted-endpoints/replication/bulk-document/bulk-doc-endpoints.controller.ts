@@ -16,6 +16,7 @@ import { pipeline } from 'stream/promises';
 import { from, Observable } from 'rxjs';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../../auth/user.decorator';
+import { ClientDisconnectedError } from '../../../common/client-disconnected.error';
 import {
   JsonArrayFilterTransform,
   jsonTokenParser,
@@ -237,13 +238,30 @@ export class BulkDocEndpointsController {
       if (!res.headersSent && !res.writableEnded && !res.destroyed) {
         throw error;
       }
-      this.logger.warn(
-        `aborting streamed response after error: ${
-          error instanceof Error ? error.message : String(error)
-        }`,
-      );
+      this.logAbortedStream(error);
       res.destroy();
     }
+  }
+
+  /**
+   * Report a stream that was abandoned after the response had already started.
+   *
+   * A client that goes away mid-stream is ordinary behaviour rather than a
+   * fault of this service, so it stays at debug level and out of Sentry (see
+   * {@link SentryLogger}, which forwards only `warn` and `error`). Anything
+   * else is a genuine problem and is reported with a constant message, with
+   * the variable detail attached as structured context so Sentry groups all
+   * occurrences into one issue instead of one issue per error text.
+   */
+  private logAbortedStream(error: unknown): void {
+    if (error instanceof ClientDisconnectedError) {
+      this.logger.debug('aborting streamed response: client disconnected');
+      return;
+    }
+
+    this.logger.warn('aborting streamed response after stream error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   /**
@@ -275,7 +293,7 @@ export class BulkDocEndpointsController {
         }
         // client gone: release the CouchDB response instead of reading it to the end
         source.destroy();
-        reject(new Error('client disconnected'));
+        reject(new ClientDisconnectedError());
       };
       source.once('error', onError);
       res.once('error', onError);
