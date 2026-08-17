@@ -13,7 +13,8 @@ import { ApiOperation } from '@nestjs/swagger';
 import { Response } from 'express';
 import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
-import { from, Observable } from 'rxjs';
+import { firstValueFrom, from, Observable } from 'rxjs';
+import { JsonArrayResponseStream } from '../../../common/json-array-response-stream';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../../auth/user.decorator';
 import { ClientDisconnectedError } from '../../../common/client-disconnected.error';
@@ -28,9 +29,41 @@ import { AllDocsRequest } from './couchdb-dtos/all-docs.dto';
 import {
   BulkDocsRequest,
   BulkDocsResponse,
+  DatabaseDocument,
+  FindResponse,
 } from './couchdb-dtos/bulk-docs.dto';
 import { BulkGetRequest } from './couchdb-dtos/bulk-get.dto';
 import { OnlyAuthenticated } from '../../../auth/only-authenticated.decorator';
+import {
+  INTERNAL_LIMIT_MULTIPLIER,
+  MAX_INTERNAL_LIMIT,
+} from '../changes/changes.controller';
+
+/**
+ * Streams a `_find` response to the client as JSON: permitted docs are sent as
+ * soon as each internal CouchDB batch is filtered, instead of accumulating
+ * everything in memory first. The `bookmark` envelope field is appended once the
+ * iteration finishes.
+ *
+ * The envelope is opened lazily — after the first CouchDB batch succeeds — so
+ * that upstream errors (e.g. unknown database) still yield a proper HTTP error
+ * status rather than a truncated stream.
+ */
+class FindResponseStream extends JsonArrayResponseStream {
+  constructor(res: Response) {
+    super(res, '{"docs":[');
+  }
+
+  /** Write one batch of permitted docs, opening the envelope if needed. */
+  async writeDocs(docs: DatabaseDocument[]): Promise<void> {
+    await this.writeItems(docs, (doc) => doc);
+  }
+
+  /** Append the bookmark envelope field and end the response. */
+  async finish(bookmark: string): Promise<void> {
+    await this.closeWith(`],"bookmark":${JSON.stringify(bookmark)}}`);
+  }
+}
 
 /**
  * Handle endpoints for the CouchDB replication process and bulk actions
@@ -97,14 +130,78 @@ export class BulkDocEndpointsController {
     @User() user: UserInfo,
     @Res() res: Response,
   ): Promise<void> {
-    const source = await this.couchdbService.postStream(db, '_find', body);
     const isPermitted = this.bulkDocumentService.findDocFilter(user);
-    await this.streamFiltered(
-      source,
-      'docs',
-      (doc) => (isPermitted(doc) ? doc : undefined),
-      res,
-    );
+    const findBody = body as { limit?: number; [key: string]: unknown };
+
+    if (findBody.limit === undefined) {
+      const source = await this.couchdbService.postStream(db, '_find', body);
+      await this.streamFiltered(
+        source,
+        'docs',
+        (doc) => (isPermitted(doc) ? doc : undefined),
+        res,
+      );
+      return;
+    }
+
+    const stream = new FindResponseStream(res);
+    try {
+      const bookmark = await this.streamPermittedFindDocs(
+        db,
+        findBody,
+        findBody.limit,
+        isPermitted,
+        stream,
+      );
+      await stream.finish(bookmark);
+    } catch (error) {
+      if (!res.headersSent) throw error;
+      this.logger.warn('aborting streamed _find response after error', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      res.destroy();
+    }
+  }
+
+  /**
+   * Iteratively fetch from `_find` with an inflated limit, filter by permission,
+   * and stream each permitted batch to the client. Uses the CouchDB `bookmark`
+   * to continue between rounds. Returns the final bookmark for the envelope.
+   */
+  private async streamPermittedFindDocs(
+    db: string,
+    body: { limit?: number; bookmark?: string; [key: string]: unknown },
+    requestedLimit: number,
+    isPermitted: (doc: DatabaseDocument) => boolean,
+    stream: FindResponseStream,
+  ): Promise<string> {
+    let bookmark: string | undefined = body.bookmark;
+
+    while (stream.docsWritten < requestedLimit && !stream.isClosed) {
+      const remaining = requestedLimit - stream.docsWritten;
+      const internalLimit = Math.min(
+        remaining * INTERNAL_LIMIT_MULTIPLIER,
+        MAX_INTERNAL_LIMIT,
+      );
+
+      const response = await firstValueFrom(
+        this.couchdbService.post<FindResponse>(db, '_find', {
+          ...body,
+          limit: internalLimit,
+          bookmark,
+        }),
+      );
+
+      const permitted = response.docs.filter(isPermitted).slice(0, remaining);
+      await stream.writeDocs(permitted);
+
+      bookmark = response.bookmark;
+
+      if (response.docs.length < internalLimit) break;
+      if (!response.bookmark) break;
+    }
+
+    return bookmark ?? '';
   }
 
   /**

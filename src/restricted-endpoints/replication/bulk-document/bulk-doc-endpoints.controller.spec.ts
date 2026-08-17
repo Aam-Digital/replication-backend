@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { Readable, Writable } from 'stream';
 import { BulkDocEndpointsController } from './bulk-doc-endpoints.controller';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, of } from 'rxjs';
 import { BulkDocumentService } from './bulk-document.service';
 import { BulkGetResponse, BulkGetResult } from './couchdb-dtos/bulk-get.dto';
 import { AllDocsResponse } from './couchdb-dtos/all-docs.dto';
@@ -172,6 +172,77 @@ describe('BulkDocEndpointsController', () => {
       request,
     );
     expect(body()).toEqual({ docs: [{ _id: 'Report:1' }], bookmark: 'abc' });
+  });
+
+  it('should use the buffered path and filter docs when _find body has a limit', async () => {
+    jest.spyOn(mockCouchDBService, 'post').mockReturnValue(
+      of({
+        docs: [{ _id: 'Report:1' }, { _id: 'Secret:1' }],
+        bookmark: 'bm1',
+      }),
+    );
+    jest
+      .spyOn(documentFilter, 'findDocFilter')
+      .mockReturnValue((doc) => doc._id === 'Report:1');
+    const { res, body } = createMockResponse();
+
+    await controller.find('db', { selector: {}, limit: 10 }, user, res);
+
+    expect(mockCouchDBService.post).toHaveBeenCalledWith(
+      'db',
+      '_find',
+      expect.objectContaining({ limit: 50 }), // 10 * FIND_LIMIT_MULTIPLIER
+    );
+    expect(body()).toEqual({ docs: [{ _id: 'Report:1' }], bookmark: 'bm1' });
+  });
+
+  it('should iterate _find with bookmark when filtered results are below the limit', async () => {
+    // limit=5 → internalLimit = 5*5 = 25
+    // batch1: exactly 25 forbidden docs → loop continues (25 >= 25) with bookmark
+    // batch2: 5 permitted docs, fewer than 25 → loop stops
+    const batch1 = {
+      docs: Array.from({ length: 25 }, (_, i) => ({ _id: `Forbidden:${i}` })),
+      bookmark: 'bm1',
+    };
+    const batch2 = {
+      docs: Array.from({ length: 5 }, (_, i) => ({ _id: `Permitted:${i}` })),
+      bookmark: 'bm2',
+    };
+    jest
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValueOnce(of(batch1))
+      .mockReturnValueOnce(of(batch2));
+    jest
+      .spyOn(documentFilter, 'findDocFilter')
+      .mockReturnValue((doc) => !!doc._id?.startsWith('Permitted'));
+    const { res, body } = createMockResponse();
+
+    await controller.find('db', { selector: {}, limit: 5 }, user, res);
+
+    expect(mockCouchDBService.post).toHaveBeenCalledTimes(2);
+    expect(mockCouchDBService.post).toHaveBeenNthCalledWith(
+      2,
+      'db',
+      '_find',
+      expect.objectContaining({ bookmark: 'bm1' }),
+    );
+    const result = body();
+    expect(result.docs).toHaveLength(5);
+    expect(result.bookmark).toBe('bm2');
+  });
+
+  it('should stop iterating _find when CouchDB returns fewer docs than requested', async () => {
+    jest.spyOn(mockCouchDBService, 'post').mockReturnValue(
+      of({ docs: [{ _id: 'Report:1' }], bookmark: 'bm1' }),
+    );
+    jest.spyOn(documentFilter, 'findDocFilter').mockReturnValue(() => false);
+    const { res, body } = createMockResponse();
+
+    await controller.find('db', { selector: {}, limit: 10 }, user, res);
+
+    // Only one call — CouchDB returned 1 < 50 (internal limit), so no more pages
+    expect(mockCouchDBService.post).toHaveBeenCalledTimes(1);
+    expect(body()).toEqual({ docs: [], bookmark: 'bm1' });
   });
 
   it('should abort the response if the upstream stream fails mid-transfer', async () => {
