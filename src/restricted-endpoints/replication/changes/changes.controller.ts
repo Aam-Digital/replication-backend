@@ -49,9 +49,15 @@ const MAX_PROCESSING_TIME_MS = 8000;
  */
 const MAX_INTERNAL_LIMIT = 1000;
 
-/** Requests exceeding one of these thresholds are logged as a warning. */
+/**
+ * Requests taking longer than this are logged as a warning.
+ *
+ * Deliberately based on duration only: a high number of CouchDB round-trips is
+ * normal for users whose permissions filter out most changes, and says nothing
+ * about how long the request actually took. Those requests are still logged
+ * (with their `iterations` count) on the debug level below.
+ */
 const SLOW_REQUEST_DURATION_MS = 2000;
-const SLOW_REQUEST_ITERATIONS = 2;
 
 /**
  * A "clean" deletion tombstone holds nothing but `_id`, `_rev` and `_deleted`.
@@ -353,10 +359,7 @@ export class ChangesController {
       limit: params?.limit ?? 'none',
       pending: summary.pending,
     };
-    if (
-      duration > SLOW_REQUEST_DURATION_MS ||
-      summary.iterations > SLOW_REQUEST_ITERATIONS
-    ) {
+    if (duration > SLOW_REQUEST_DURATION_MS) {
       this.logger.warn('_changes request slow', details);
     } else {
       this.logger.debug('_changes request completed', details);
