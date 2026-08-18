@@ -7,7 +7,7 @@
   ],
   "enabledManagers": ["npm", "dockerfile", "github-actions"],
   "timezone": "Etc/UTC",
-  "schedule": ["after 00:00 and before 09:00 on Monday"],
+  "schedule": ["* * * * 0"],
   "dependencyDashboard": false,
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
