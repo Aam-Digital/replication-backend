@@ -193,7 +193,7 @@ describe('BulkDocEndpointsController', () => {
       '_find',
       expect.objectContaining({ limit: 50 }), // 10 * FIND_LIMIT_MULTIPLIER
     );
-    expect(body()).toEqual({ docs: [{ _id: 'Report:1' }], bookmark: 'bm1' });
+    expect(body()).toEqual({ docs: [{ _id: 'Report:1' }] });
   });
 
   it('should iterate _find with bookmark when filtered results are below the limit', async () => {
@@ -228,13 +228,12 @@ describe('BulkDocEndpointsController', () => {
     );
     const result = body();
     expect(result.docs).toHaveLength(5);
-    expect(result.bookmark).toBe('bm2');
   });
 
   it('should stop iterating _find when CouchDB returns fewer docs than requested', async () => {
-    jest.spyOn(mockCouchDBService, 'post').mockReturnValue(
-      of({ docs: [{ _id: 'Report:1' }], bookmark: 'bm1' }),
-    );
+    jest
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValue(of({ docs: [{ _id: 'Report:1' }], bookmark: 'bm1' }));
     jest.spyOn(documentFilter, 'findDocFilter').mockReturnValue(() => false);
     const { res, body } = createMockResponse();
 
@@ -242,7 +241,7 @@ describe('BulkDocEndpointsController', () => {
 
     // Only one call — CouchDB returned 1 < 50 (internal limit), so no more pages
     expect(mockCouchDBService.post).toHaveBeenCalledTimes(1);
-    expect(body()).toEqual({ docs: [], bookmark: 'bm1' });
+    expect(body()).toEqual({ docs: [] });
   });
 
   it('should abort the response if the upstream stream fails mid-transfer', async () => {

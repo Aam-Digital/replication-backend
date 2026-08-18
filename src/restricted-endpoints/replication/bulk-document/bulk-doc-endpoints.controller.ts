@@ -60,8 +60,8 @@ class FindResponseStream extends JsonArrayResponseStream {
   }
 
   /** Append the bookmark envelope field and end the response. */
-  async finish(bookmark: string): Promise<void> {
-    await this.closeWith(`],"bookmark":${JSON.stringify(bookmark)}}`);
+  async finish(): Promise<void> {
+    await this.closeWith(`]}`);
   }
 }
 
@@ -146,14 +146,14 @@ export class BulkDocEndpointsController {
 
     const stream = new FindResponseStream(res);
     try {
-      const bookmark = await this.streamPermittedFindDocs(
+      await this.streamPermittedFindDocs(
         db,
         findBody,
         findBody.limit,
         isPermitted,
         stream,
       );
-      await stream.finish(bookmark);
+      await stream.finish();
     } catch (error) {
       if (!res.headersSent) throw error;
       this.logger.warn('aborting streamed _find response after error', {
@@ -174,7 +174,7 @@ export class BulkDocEndpointsController {
     requestedLimit: number,
     isPermitted: (doc: DatabaseDocument) => boolean,
     stream: FindResponseStream,
-  ): Promise<string> {
+  ): Promise<void> {
     let bookmark: string | undefined = body.bookmark;
 
     while (stream.docsWritten < requestedLimit && !stream.isClosed) {
@@ -200,8 +200,6 @@ export class BulkDocEndpointsController {
       if (response.docs.length < internalLimit) break;
       if (!response.bookmark) break;
     }
-
-    return bookmark ?? '';
   }
 
   /**
