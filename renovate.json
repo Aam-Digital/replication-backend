@@ -5,13 +5,19 @@
     "group:allNonMajor",
     ":maintainLockFilesMonthly"
   ],
-  "enabledManagers": ["npm", "dockerfile"],
+  "enabledManagers": ["npm", "dockerfile", "github-actions"],
   "timezone": "Etc/UTC",
   "schedule": ["after 00:00 and before 09:00 on Monday"],
   "dependencyDashboard": false,
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
   "labels": ["dependencies"],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "schedule": ["at any time"],
+    "labels": ["dependencies", "security"]
+  },
+  "osvVulnerabilityAlerts": true,
   "reviewers": ["sleidig", "Abhinegi2"],
   "rangeStrategy": "bump",
   "constraints": {
@@ -37,6 +43,12 @@
       "matchManagers": ["dockerfile"],
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "docker-base-image",
+      "automerge": false
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "github-actions",
       "automerge": false
     }
   ]
