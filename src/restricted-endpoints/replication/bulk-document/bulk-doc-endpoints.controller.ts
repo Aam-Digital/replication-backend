@@ -42,8 +42,7 @@ import {
 /**
  * Streams a `_find` response to the client as JSON: permitted docs are sent as
  * soon as each internal CouchDB batch is filtered, instead of accumulating
- * everything in memory first. The `bookmark` envelope field is appended once the
- * iteration finishes.
+ * everything in memory first.
  *
  * The envelope is opened lazily — after the first CouchDB batch succeeds — so
  * that upstream errors (e.g. unknown database) still yield a proper HTTP error
@@ -59,7 +58,7 @@ class FindResponseStream extends JsonArrayResponseStream {
     await this.writeItems(docs, (doc) => doc);
   }
 
-  /** Append the bookmark envelope field and end the response. */
+  /** End the response. */
   async finish(): Promise<void> {
     await this.closeWith(`]}`);
   }
@@ -166,7 +165,7 @@ export class BulkDocEndpointsController {
   /**
    * Iteratively fetch from `_find` with an inflated limit, filter by permission,
    * and stream each permitted batch to the client. Uses the CouchDB `bookmark`
-   * to continue between rounds. Returns the final bookmark for the envelope.
+   * to continue between rounds.
    */
   private async streamPermittedFindDocs(
     db: string,
