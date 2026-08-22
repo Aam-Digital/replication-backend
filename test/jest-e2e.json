@@ -1,11 +1,11 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": ["js", "mjs", "json", "ts"],
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "testTimeout": 15000,
   "transform": {
-    "^.+\\.(t|j)s$": [
+    "^.+\\.m?(t|j)s$": [
       "ts-jest",
       {
         "tsconfig": {
@@ -15,6 +15,6 @@
     ]
   },
   "transformIgnorePatterns": [
-    "node_modules/(?!(jsondiffpatch|stream-json|stream-chain))"
+    "node_modules/(?!(jsondiffpatch|stream-json|stream-chain|http-proxy-middleware|httpxy|is-plain-obj))"
   ]
 }
