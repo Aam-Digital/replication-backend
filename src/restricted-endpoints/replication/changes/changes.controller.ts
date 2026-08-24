@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { omit } from 'lodash';
+import { JsonArrayResponseStream } from '../../../common/json-array-response-stream';
 import { firstValueFrom, map } from 'rxjs';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../../auth/user.decorator';
@@ -32,7 +33,7 @@ import { DocumentFilterService } from '../document-filter/document-filter.servic
  * CouchDB round-trip reduces the number of iterations needed to fill the
  * client's requested limit.
  */
-const INTERNAL_LIMIT_MULTIPLIER = 5;
+export const INTERNAL_LIMIT_MULTIPLIER = 5;
 
 /**
  * Maximum time (ms) to spend iterating through CouchDB changes before
@@ -47,7 +48,7 @@ const MAX_PROCESSING_TIME_MS = 8000;
  * Hard upper cap on the number of changes requested from CouchDB in a single
  * round-trip. Protects the backend from very large client-supplied limits.
  */
-const MAX_INTERNAL_LIMIT = 1000;
+export const MAX_INTERNAL_LIMIT = 1000;
 
 /**
  * Requests taking longer than this are logged as a warning.
@@ -91,36 +92,19 @@ type ChangesProgress = Omit<ChangesSummary, 'resultsWritten'>;
  * everything in memory first (#109). The envelope fields (last_seq, pending,
  * lostPermissions) are appended once the iteration finishes.
  */
-class ChangesResponseStream {
-  private written = 0;
-  private opened = false;
-
+class ChangesResponseStream extends JsonArrayResponseStream {
   constructor(
-    private readonly res: Response,
+    res: Response,
     private readonly includeDocs: boolean,
-  ) {}
-
-  /** number of results written to the response so far */
-  get resultsWritten(): number {
-    return this.written;
-  }
-
-  /** whether the client has disconnected */
-  get isClosed(): boolean {
-    return this.res.destroyed;
+  ) {
+    super(res, '{"results":[');
   }
 
   /** Write one batch of permitted changes, opening the envelope if needed. */
   async writeResults(results: ChangeResult[]): Promise<void> {
-    await this.open();
-    for (const result of results) {
-      const item = this.includeDocs ? result : omit(result, 'doc');
-      await this.writeChunk(
-        (this.written > 0 ? ',' : '') + JSON.stringify(item),
-      );
-      this.written++;
-    }
-    this.flush();
+    await this.writeItems(results, (result) =>
+      this.includeDocs ? result : omit(result, 'doc'),
+    );
   }
 
   /** Append the envelope fields and end the response. */
@@ -129,79 +113,10 @@ class ChangesResponseStream {
     pending: number,
     lostPermissions: string[],
   ): Promise<void> {
-    await this.open();
-    await this.writeChunk(
+    await this.closeWith(
       `],"last_seq":${JSON.stringify(lastSeq)},"pending":${pending}` +
         `,"lostPermissions":${JSON.stringify(lostPermissions)}}`,
     );
-    this.res.end();
-  }
-
-  /**
-   * Send the response headers and open the JSON envelope (idempotent).
-   *
-   * This is deliberately only called after the first CouchDB batch has been
-   * fetched, so that upstream errors (e.g. unknown db) still yield a proper
-   * error status instead of a truncated stream.
-   */
-  private async open(): Promise<void> {
-    if (this.opened) {
-      return;
-    }
-    this.opened = true;
-    this.res.status(200);
-    this.res.setHeader('content-type', 'application/json');
-    await this.writeChunk('{"results":[');
-  }
-
-  /**
-   * Hand the buffered bytes to the client right away.
-   *
-   * Without this the compression middleware keeps a batch in its gzip buffer
-   * until enough data has accumulated, so nothing reaches the client until the
-   * response ends and the incremental writing above has no effect for the
-   * (compressing) clients that actually sync.
-   */
-  private flush() {
-    (this.res as Response & { flush?: () => void }).flush?.();
-  }
-
-  /**
-   * Write a chunk to the response, awaiting the drain event when the
-   * client cannot keep up (backpressure).
-   */
-  private writeChunk(chunk: string): Promise<void> {
-    const res = this.res;
-    return new Promise((resolve, reject) => {
-      if (res.destroyed) {
-        reject(new Error('client disconnected'));
-        return;
-      }
-      if (res.write(chunk)) {
-        resolve();
-        return;
-      }
-      const cleanup = () => {
-        res.off('drain', onDrain);
-        res.off('close', onFailure);
-        res.off('error', onFailure);
-      };
-      const onDrain = () => {
-        cleanup();
-        resolve();
-      };
-      // socket error or close while back-pressured: settle the promise so the
-      // request handler never hangs (which would leak a CouchDB keep-alive
-      // socket). 'error' is required — without it a socket error that does not
-      // also emit 'close' would leave this promise pending forever.
-      const onFailure = () => {
-        cleanup();
-        reject(new Error('client disconnected'));
-      };
-      res.once('drain', onDrain);
-      res.once('close', onFailure);
-      res.once('error', onFailure);
-    });
   }
 }
 
@@ -285,7 +200,7 @@ export class ChangesController {
         db,
         { ...params, since },
         ability,
-        (params?.limit ?? Infinity) - stream.resultsWritten,
+        (params?.limit ?? Infinity) - stream.docsWritten,
       );
       await stream.writeResults(batch.results);
 
@@ -304,7 +219,7 @@ export class ChangesController {
       )
     );
 
-    return { ...progress, resultsWritten: stream.resultsWritten };
+    return { ...progress, resultsWritten: stream.docsWritten };
   }
 
   /**
@@ -318,7 +233,7 @@ export class ChangesController {
     stream: ChangesResponseStream,
   ): boolean {
     const noChangesLeft = pending === 0;
-    const enoughFound = limit !== undefined && stream.resultsWritten >= limit;
+    const enoughFound = limit !== undefined && stream.docsWritten >= limit;
     const outOfTime = Date.now() >= deadline;
     return noChangesLeft || enoughFound || outOfTime || stream.isClosed;
   }
