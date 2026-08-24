@@ -11,7 +11,7 @@ jobs:
       packages: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Inject PR version into package.json
         run: npm version "0.0.0-pr.${{ github.event.number }}" --no-git-tag-version --allow-same-version
