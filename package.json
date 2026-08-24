@@ -6,7 +6,7 @@
   "private": true,
   "license": "GPL-3.0",
   "engines": {
-    "node": ">=22.15"
+    "node": "^22.15.0 || ^24.0.0 || >=26.0.0"
   },
   "scripts": {
     "prebuild": "rimraf dist *.tsbuildinfo",
