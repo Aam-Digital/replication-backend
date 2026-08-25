@@ -60,8 +60,13 @@ describe('mergeManagedPublic', () => {
   const adminRule: DocumentRule = { action: 'create', subject: 'Child' };
 
   /** merge an existing section (only a missing section returns undefined) */
-  const mergeSection = (section: DocumentRule[]) =>
-    mergeManagedPublic(section) as ManagedRulesMerge;
+  function mergeSection(section: DocumentRule[]): ManagedRulesMerge {
+    const result = mergeManagedPublic(section);
+    if (!result) {
+      throw new Error('expected a result for an existing _public section');
+    }
+    return result;
+  }
 
   it('should not create a _public section for instances without public forms', () => {
     expect(mergeManagedPublic(undefined)).toBeUndefined();

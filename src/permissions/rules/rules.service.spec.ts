@@ -486,82 +486,64 @@ describe('RulesService', () => {
     }
   });
 
-  it('should add the managed public rules to a _public section in use', async () => {
-    jest.useFakeTimers({ doNotFake: ['nextTick'] });
-    try {
+  describe('managed public rules', () => {
+    const publicRule: DocumentRule = { action: 'create', subject: 'Child' };
+
+    beforeEach(() => {
+      jest.useFakeTimers({ doNotFake: ['nextTick'] });
       (mockCouchdbService.put as jest.Mock).mockClear();
-      const publicRule: DocumentRule = { action: 'create', subject: 'Child' };
-      const publicFormDoc = new Permission({
+    });
+
+    afterEach(() => jest.useRealTimers());
+
+    /** let the given doc arrive through the changes feed and run the write-back */
+    async function writeBackFor(data: RulesConfig): Promise<any> {
+      const doc = new Permission(data);
+      doc._rev = '2-abc';
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(doc));
+
+      changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
+      await new Promise(process.nextTick);
+      jest.advanceTimersByTime(1500);
+
+      return (mockCouchdbService.put as jest.Mock).mock.calls[0]?.[1];
+    }
+
+    it('should add the managed public rules to a _public section in use', async () => {
+      const written = await writeBackFor({
         ...testPermission.data,
         _default: [...MANAGED_DEFAULT_RULES],
         _public: [publicRule],
       });
-      publicFormDoc._rev = '2-abc';
-      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(publicFormDoc));
 
-      changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
-      await new Promise(process.nextTick);
-      jest.advanceTimersByTime(1500);
-
-      const written = (mockCouchdbService.put as jest.Mock).mock.calls[0][1];
       expect(written.data._public).toEqual([
         ...MANAGED_PUBLIC_RULES,
         publicRule,
       ]);
-    } finally {
-      jest.useRealTimers();
-    }
-  });
+    });
 
-  it('should not grant anonymous access to instances without public forms', async () => {
-    jest.useFakeTimers({ doNotFake: ['nextTick'] });
-    try {
-      (mockCouchdbService.put as jest.Mock).mockClear();
-      const noPublicFormsDoc = new Permission({
+    it('should not grant anonymous access to instances without public forms', async () => {
+      await writeBackFor({
         ...testPermission.data,
         _default: [...MANAGED_DEFAULT_RULES],
       });
-      noPublicFormsDoc._rev = '2-abc';
-      jest
-        .spyOn(mockCouchdbService, 'get')
-        .mockReturnValue(of(noPublicFormsDoc));
-
-      changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
-      await new Promise(process.nextTick);
-      jest.advanceTimersByTime(1500);
 
       expect(mockCouchdbService.put).not.toHaveBeenCalled();
-    } finally {
-      jest.useRealTimers();
-    }
-  });
+    });
 
-  it('should migrate a legacy public section to the renamed _public key', async () => {
-    jest.useFakeTimers({ doNotFake: ['nextTick'] });
-    try {
-      (mockCouchdbService.put as jest.Mock).mockClear();
-      const publicRule: DocumentRule = { action: 'create', subject: 'Child' };
-      const legacyDoc = new Permission({
+    it('should migrate a legacy public section to the renamed _public key', async () => {
+      const written = await writeBackFor({
         ...testPermission.data,
         _default: [...MANAGED_DEFAULT_RULES],
         public: [publicRule],
       });
-      legacyDoc._rev = '2-abc';
-      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(legacyDoc));
 
-      changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
-      await new Promise(process.nextTick);
-      jest.advanceTimersByTime(1500);
-
-      const written = (mockCouchdbService.put as jest.Mock).mock.calls[0][1];
       expect(written.data._public).toEqual([
         ...MANAGED_PUBLIC_RULES,
         publicRule,
       ]);
       expect(written.data.public).toBeUndefined();
-    } finally {
-      jest.useRealTimers();
-    }
+    });
   });
 
   it('should retry with the current doc when the write-back hits a rev conflict', async () => {
