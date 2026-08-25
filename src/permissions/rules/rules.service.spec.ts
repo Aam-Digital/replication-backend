@@ -10,7 +10,10 @@ import {
 } from '../../couchdb/document-changes.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { UserIdentityService } from '../user-identity/user-identity.service';
-import { MANAGED_DEFAULT_RULES } from './default-permissions';
+import {
+  MANAGED_DEFAULT_RULES,
+  MANAGED_PUBLIC_RULES,
+} from './default-permissions';
 import { Permission, RulesConfig } from './permission';
 import { DocumentRule, RulesService } from './rules.service';
 
@@ -478,6 +481,84 @@ describe('RulesService', () => {
       jest.advanceTimersByTime(1500);
 
       expect(mockCouchdbService.put).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should add the managed public rules to a _public section in use', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick'] });
+    try {
+      (mockCouchdbService.put as jest.Mock).mockClear();
+      const publicRule: DocumentRule = { action: 'create', subject: 'Child' };
+      const publicFormDoc = new Permission({
+        ...testPermission.data,
+        _default: [...MANAGED_DEFAULT_RULES],
+        _public: [publicRule],
+      });
+      publicFormDoc._rev = '2-abc';
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(publicFormDoc));
+
+      changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
+      await new Promise(process.nextTick);
+      jest.advanceTimersByTime(1500);
+
+      const written = (mockCouchdbService.put as jest.Mock).mock.calls[0][1];
+      expect(written.data._public).toEqual([
+        ...MANAGED_PUBLIC_RULES,
+        publicRule,
+      ]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should not grant anonymous access to instances without public forms', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick'] });
+    try {
+      (mockCouchdbService.put as jest.Mock).mockClear();
+      const noPublicFormsDoc = new Permission({
+        ...testPermission.data,
+        _default: [...MANAGED_DEFAULT_RULES],
+      });
+      noPublicFormsDoc._rev = '2-abc';
+      jest
+        .spyOn(mockCouchdbService, 'get')
+        .mockReturnValue(of(noPublicFormsDoc));
+
+      changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
+      await new Promise(process.nextTick);
+      jest.advanceTimersByTime(1500);
+
+      expect(mockCouchdbService.put).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('should migrate a legacy public section to the renamed _public key', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick'] });
+    try {
+      (mockCouchdbService.put as jest.Mock).mockClear();
+      const publicRule: DocumentRule = { action: 'create', subject: 'Child' };
+      const legacyDoc = new Permission({
+        ...testPermission.data,
+        _default: [...MANAGED_DEFAULT_RULES],
+        public: [publicRule],
+      });
+      legacyDoc._rev = '2-abc';
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(legacyDoc));
+
+      changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
+      await new Promise(process.nextTick);
+      jest.advanceTimersByTime(1500);
+
+      const written = (mockCouchdbService.put as jest.Mock).mock.calls[0][1];
+      expect(written.data._public).toEqual([
+        ...MANAGED_PUBLIC_RULES,
+        publicRule,
+      ]);
+      expect(written.data.public).toBeUndefined();
     } finally {
       jest.useRealTimers();
     }

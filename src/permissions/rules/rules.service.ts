@@ -29,12 +29,14 @@ import { DocumentAbility } from '../permission/permission.service';
 import { UserIdentityService } from '../user-identity/user-identity.service';
 import {
   mergeManagedDefaults,
+  mergeManagedPublic,
   SYSTEM_DEFAULT_MARKER,
 } from './default-permissions';
 import {
   ADMIN_APP_ROLE,
   DEFAULT_SECTION_KEY,
   LEGACY_DEFAULT_KEY,
+  LEGACY_PUBLIC_KEY,
   LEGACY_SECTION_KEYS,
   Permission,
   PUBLIC_SECTION_KEY,
@@ -369,8 +371,10 @@ export class RulesService implements OnModuleInit {
   }
 
   /**
-   * Idempotently write the managed system-default rules into the `default`
-   * section of the permission document (see {@link MANAGED_DEFAULT_RULES}).
+   * Idempotently write the managed system rules into the permission document:
+   * {@link MANAGED_DEFAULT_RULES} into the `default` section (for authenticated
+   * accounts) and {@link MANAGED_PUBLIC_RULES} into the `_public` section, but
+   * only where an admin already uses it (see {@link mergeManagedPublic}).
    * Retries on rev conflicts with a freshly fetched doc so that concurrent
    * admin edits or multiple backend instances converge. Never throws: a
    * failed write-back must not break permission loading, and the next change
@@ -399,8 +403,8 @@ export class RulesService implements OnModuleInit {
   }
 
   /**
-   * One write-back attempt: merge the managed defaults into the doc and PUT
-   * it if anything changed. Returns "conflict" when the PUT hit a rev
+   * One write-back attempt: merge the managed rules into the doc's `default`
+   * and `_public` sections and PUT it if anything changed. Returns "conflict" when the PUT hit a rev
    * conflict and retrying with a freshly fetched doc makes sense; rethrows
    * any other error for {@link ensureManagedDefaults} to log.
    */
@@ -415,13 +419,29 @@ export class RulesService implements OnModuleInit {
     const currentDefault =
       doc.data[DEFAULT_SECTION_KEY] ?? doc.data[LEGACY_DEFAULT_KEY];
     const hasLegacyDefault = doc.data[LEGACY_DEFAULT_KEY] !== undefined;
-    const { merged, changed, dropped } = mergeManagedDefaults(currentDefault);
-    // still rewrite when only migrating the legacy key across to the new one
-    if (!changed && !hasLegacyDefault) {
+    const defaults = mergeManagedDefaults(currentDefault);
+
+    const currentPublic =
+      doc.data[PUBLIC_SECTION_KEY] ?? doc.data[LEGACY_PUBLIC_KEY];
+    const hasLegacyPublic = doc.data[LEGACY_PUBLIC_KEY] !== undefined;
+    const publicRules = mergeManagedPublic(currentPublic);
+
+    const dropped = [...defaults.dropped, ...(publicRules?.dropped ?? [])];
+    // still rewrite when only migrating a legacy key across to the new one
+    if (
+      !defaults.changed &&
+      !hasLegacyDefault &&
+      !publicRules?.changed &&
+      !hasLegacyPublic
+    ) {
       return 'done';
     }
-    const newData = { ...doc.data, [DEFAULT_SECTION_KEY]: merged };
+    const newData = { ...doc.data, [DEFAULT_SECTION_KEY]: defaults.merged };
     delete newData[LEGACY_DEFAULT_KEY];
+    if (publicRules) {
+      newData[PUBLIC_SECTION_KEY] = publicRules.merged;
+      delete newData[LEGACY_PUBLIC_KEY];
+    }
     const updatedDoc: Permission = { ...doc, data: newData };
     this.logger.debug(
       `Writing managed default permissions to "${db}" (rev ${doc._rev ?? 'none'})`,
