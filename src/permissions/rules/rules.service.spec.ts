@@ -10,7 +10,10 @@ import {
 } from '../../couchdb/document-changes.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
 import { UserIdentityService } from '../user-identity/user-identity.service';
-import { MANAGED_DEFAULT_RULES } from './default-permissions';
+import {
+  MANAGED_DEFAULT_RULES,
+  MANAGED_PUBLIC_RULES,
+} from './default-permissions';
 import { Permission, RulesConfig } from './permission';
 import { DocumentRule, RulesService } from './rules.service';
 
@@ -481,6 +484,66 @@ describe('RulesService', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  describe('managed public rules', () => {
+    const publicRule: DocumentRule = { action: 'create', subject: 'Child' };
+
+    beforeEach(() => {
+      jest.useFakeTimers({ doNotFake: ['nextTick'] });
+      (mockCouchdbService.put as jest.Mock).mockClear();
+    });
+
+    afterEach(() => jest.useRealTimers());
+
+    /** let the given doc arrive through the changes feed and run the write-back */
+    async function writeBackFor(data: RulesConfig): Promise<any> {
+      const doc = new Permission(data);
+      doc._rev = '2-abc';
+      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(doc));
+
+      changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
+      await new Promise(process.nextTick);
+      jest.advanceTimersByTime(1500);
+
+      return (mockCouchdbService.put as jest.Mock).mock.calls[0]?.[1];
+    }
+
+    it('should add the managed public rules to a _public section in use', async () => {
+      const written = await writeBackFor({
+        ...testPermission.data,
+        _default: [...MANAGED_DEFAULT_RULES],
+        _public: [publicRule],
+      });
+
+      expect(written.data._public).toEqual([
+        ...MANAGED_PUBLIC_RULES,
+        publicRule,
+      ]);
+    });
+
+    it('should not grant anonymous access to instances without public forms', async () => {
+      await writeBackFor({
+        ...testPermission.data,
+        _default: [...MANAGED_DEFAULT_RULES],
+      });
+
+      expect(mockCouchdbService.put).not.toHaveBeenCalled();
+    });
+
+    it('should migrate a legacy public section to the renamed _public key', async () => {
+      const written = await writeBackFor({
+        ...testPermission.data,
+        _default: [...MANAGED_DEFAULT_RULES],
+        public: [publicRule],
+      });
+
+      expect(written.data._public).toEqual([
+        ...MANAGED_PUBLIC_RULES,
+        publicRule,
+      ]);
+      expect(written.data.public).toBeUndefined();
+    });
   });
 
   it('should retry with the current doc when the write-back hits a rev conflict', async () => {

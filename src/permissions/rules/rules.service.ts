@@ -29,12 +29,12 @@ import { DocumentAbility } from '../permission/permission.service';
 import { UserIdentityService } from '../user-identity/user-identity.service';
 import {
   mergeManagedDefaults,
+  mergeManagedPublic,
   SYSTEM_DEFAULT_MARKER,
 } from './default-permissions';
 import {
   ADMIN_APP_ROLE,
   DEFAULT_SECTION_KEY,
-  LEGACY_DEFAULT_KEY,
   LEGACY_SECTION_KEYS,
   Permission,
   PUBLIC_SECTION_KEY,
@@ -369,8 +369,10 @@ export class RulesService implements OnModuleInit {
   }
 
   /**
-   * Idempotently write the managed system-default rules into the `default`
-   * section of the permission document (see {@link MANAGED_DEFAULT_RULES}).
+   * Idempotently write the managed system rules into the permission document:
+   * {@link MANAGED_DEFAULT_RULES} into the `_default` section (for authenticated
+   * accounts) and {@link MANAGED_PUBLIC_RULES} into the `_public` section, but
+   * only where an admin already uses it (see {@link mergeManagedPublic}).
    * Retries on rev conflicts with a freshly fetched doc so that concurrent
    * admin edits or multiple backend instances converge. Never throws: a
    * failed write-back must not break permission loading, and the next change
@@ -399,10 +401,11 @@ export class RulesService implements OnModuleInit {
   }
 
   /**
-   * One write-back attempt: merge the managed defaults into the doc and PUT
-   * it if anything changed. Returns "conflict" when the PUT hit a rev
-   * conflict and retrying with a freshly fetched doc makes sense; rethrows
-   * any other error for {@link ensureManagedDefaults} to log.
+   * One write-back attempt: merge the managed rules into the doc's `_default`
+   * and `_public` sections and PUT it if anything changed. Returns "conflict"
+   * when the PUT hit a rev conflict and retrying with a freshly fetched doc
+   * makes sense; rethrows any other error for {@link ensureManagedDefaults} to
+   * log.
    */
   private async writeManagedDefaults(
     db: string,
@@ -412,16 +415,23 @@ export class RulesService implements OnModuleInit {
     if (!PermissionConfigValidator.isValidRulesConfig(doc?.data)) {
       return 'done';
     }
-    const currentDefault =
-      doc.data[DEFAULT_SECTION_KEY] ?? doc.data[LEGACY_DEFAULT_KEY];
-    const hasLegacyDefault = doc.data[LEGACY_DEFAULT_KEY] !== undefined;
-    const { merged, changed, dropped } = mergeManagedDefaults(currentDefault);
-    // still rewrite when only migrating the legacy key across to the new one
-    if (!changed && !hasLegacyDefault) {
+    // migrating a legacy section key across to the current one is itself a
+    // reason to rewrite, even when no managed rule changed. normalizeSectionKeys
+    // returns the config unchanged when there is nothing to migrate.
+    const data = RulesService.normalizeSectionKeys(doc.data);
+    const hasLegacySectionKeys = data !== doc.data;
+
+    const defaults = mergeManagedDefaults(data[DEFAULT_SECTION_KEY]);
+    const publicRules = mergeManagedPublic(data[PUBLIC_SECTION_KEY]);
+
+    const dropped = [...defaults.dropped, ...(publicRules?.dropped ?? [])];
+    if (!defaults.changed && !publicRules?.changed && !hasLegacySectionKeys) {
       return 'done';
     }
-    const newData = { ...doc.data, [DEFAULT_SECTION_KEY]: merged };
-    delete newData[LEGACY_DEFAULT_KEY];
+    const newData = { ...data, [DEFAULT_SECTION_KEY]: defaults.merged };
+    if (publicRules) {
+      newData[PUBLIC_SECTION_KEY] = publicRules.merged;
+    }
     const updatedDoc: Permission = { ...doc, data: newData };
     this.logger.debug(
       `Writing managed default permissions to "${db}" (rev ${doc._rev ?? 'none'})`,
