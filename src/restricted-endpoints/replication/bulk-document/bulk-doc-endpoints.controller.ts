@@ -58,9 +58,9 @@ class FindResponseStream extends JsonArrayResponseStream {
     await this.writeItems(docs, (doc) => doc);
   }
 
-  /** End the response. */
-  async finish(): Promise<void> {
-    await this.closeWith(`]}`);
+  /** Append the bookmark and end the response. */
+  async finish(bookmark: string): Promise<void> {
+    await this.closeWith(`],"bookmark":${JSON.stringify(bookmark)}}`);
   }
 }
 
@@ -145,14 +145,14 @@ export class BulkDocEndpointsController {
 
     const stream = new FindResponseStream(res);
     try {
-      await this.streamPermittedFindDocs(
+      const bookmark = await this.streamPermittedFindDocs(
         db,
         findBody,
         findBody.limit,
         isPermitted,
         stream,
       );
-      await stream.finish();
+      await stream.finish(bookmark);
     } catch (error) {
       if (!res.headersSent) throw error;
       this.logger.warn('aborting streamed _find response after error', {
@@ -165,16 +165,28 @@ export class BulkDocEndpointsController {
   /**
    * Iteratively fetch from `_find` with an inflated limit, filter by permission,
    * and stream each permitted batch to the client. Uses the CouchDB `bookmark`
-   * to continue between rounds.
+   * to continue between rounds. Returns the bookmark that the client should use
+   * for the next page.
+   *
+   * `skip` is intentionally stripped from the body: CouchDB's `skip` is a
+   * raw-document offset and would overlap with documents already returned when
+   * the backend makes multiple internal fetches. Clients should use the returned
+   * `bookmark` for subsequent pages instead.
+   *
+   * When the last internal batch contains more permitted docs than needed, a
+   * second targeted fetch is made with an exact limit so that the returned
+   * bookmark points precisely to after the last doc written to the client —
+   * preventing those docs from being silently skipped on the next page.
    */
   private async streamPermittedFindDocs(
     db: string,
-    body: { limit?: number; bookmark?: string; [key: string]: unknown },
+    body: { limit?: number; bookmark?: string; skip?: unknown; [key: string]: unknown },
     requestedLimit: number,
     isPermitted: (doc: DatabaseDocument) => boolean,
     stream: FindResponseStream,
-  ): Promise<void> {
-    let bookmark: string | undefined = body.bookmark;
+  ): Promise<string> {
+    const { skip: _skip, ...findBody } = body;
+    let bookmark: string | undefined = findBody.bookmark;
 
     while (stream.docsWritten < requestedLimit && !stream.isClosed) {
       const remaining = requestedLimit - stream.docsWritten;
@@ -183,22 +195,45 @@ export class BulkDocEndpointsController {
         MAX_INTERNAL_LIMIT,
       );
 
+      const batchStartBookmark = bookmark;
       const response = await firstValueFrom(
         this.couchdbService.post<FindResponse>(db, '_find', {
-          ...body,
+          ...findBody,
           limit: internalLimit,
           bookmark,
         }),
       );
 
-      const permitted = response.docs.filter(isPermitted).slice(0, remaining);
-      await stream.writeDocs(permitted);
+      const allPermitted = response.docs.filter(isPermitted);
 
+      if (allPermitted.length > remaining) {
+        // The batch has more permitted docs than needed. Re-fetch with a limit
+        // sized to include exactly the docs we will return, so the resulting
+        // bookmark points to just after the last written doc rather than past
+        // the dropped permitted docs.
+        const lastNeededRawIndex = response.docs.indexOf(
+          allPermitted[remaining - 1],
+        );
+        const exact = await firstValueFrom(
+          this.couchdbService.post<FindResponse>(db, '_find', {
+            ...findBody,
+            limit: lastNeededRawIndex + 1,
+            bookmark: batchStartBookmark,
+          }),
+        );
+        await stream.writeDocs(exact.docs.filter(isPermitted).slice(0, remaining));
+        bookmark = exact.bookmark;
+        break;
+      }
+
+      await stream.writeDocs(allPermitted);
       bookmark = response.bookmark;
 
       if (response.docs.length < internalLimit) break;
       if (!response.bookmark) break;
     }
+
+    return bookmark ?? '';
   }
 
   /**

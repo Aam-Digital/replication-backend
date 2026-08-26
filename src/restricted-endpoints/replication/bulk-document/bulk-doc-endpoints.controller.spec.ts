@@ -174,7 +174,7 @@ describe('BulkDocEndpointsController', () => {
     expect(body()).toEqual({ docs: [{ _id: 'Report:1' }], bookmark: 'abc' });
   });
 
-  it('should use the buffered path and filter docs when _find body has a limit', async () => {
+  it('should use the buffered path, omit skip and filter docs when _find body has a limit', async () => {
     jest.spyOn(mockCouchDBService, 'post').mockReturnValue(
       of({
         docs: [{ _id: 'Report:1' }, { _id: 'Secret:1' }],
@@ -191,9 +191,15 @@ describe('BulkDocEndpointsController', () => {
     expect(mockCouchDBService.post).toHaveBeenCalledWith(
       'db',
       '_find',
-      expect.objectContaining({ limit: 50 }), // 10 * FIND_LIMIT_MULTIPLIER
+      expect.objectContaining({ limit: 50 }), // 10 * INTERNAL_LIMIT_MULTIPLIER
     );
-    expect(body()).toEqual({ docs: [{ _id: 'Report:1' }] });
+    expect(mockCouchDBService.post).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({ skip: expect.anything() }),
+    );
+    expect(body()).toEqual({ docs: [{ _id: 'Report:1' }], bookmark: 'bm1' });
+    
   });
 
   it('should iterate _find with bookmark when filtered results are below the limit', async () => {
@@ -228,6 +234,7 @@ describe('BulkDocEndpointsController', () => {
     );
     const result = body();
     expect(result.docs).toHaveLength(5);
+    expect(result.bookmark).toBe('bm2');
   });
 
   it('should stop iterating _find when CouchDB returns fewer docs than requested', async () => {
@@ -241,7 +248,56 @@ describe('BulkDocEndpointsController', () => {
 
     // Only one call — CouchDB returned 1 < 50 (internal limit), so no more pages
     expect(mockCouchDBService.post).toHaveBeenCalledTimes(1);
-    expect(body()).toEqual({ docs: [] });
+    expect(body()).toEqual({ docs: [], bookmark: 'bm1' });
+  });
+
+  it('should re-fetch with exact limit when a batch has more permitted docs than needed', async () => {
+    // limit=2, internalLimit=10, batch has [P0, F1, P2, F3, P4, F5, P6, F7, P8, F9]
+    // allPermitted=[P0,P2,P4,P6,P8], remaining=2 → overflow
+    // lastNeededRawIndex = index of P2 = 2 → re-fetch with limit=3
+    // re-fetch returns [P0,F1,P2], bookmark='exact-bm'
+    const overflowBatch = {
+      docs: [
+        { _id: 'P:0' },
+        { _id: 'F:1' },
+        { _id: 'P:2' },
+        { _id: 'F:3' },
+        { _id: 'P:4' },
+        { _id: 'F:5' },
+        { _id: 'P:6' },
+        { _id: 'F:7' },
+        { _id: 'P:8' },
+        { _id: 'F:9' },
+      ],
+      bookmark: 'wide-bm',
+    };
+    const exactBatch = {
+      docs: [{ _id: 'P:0' }, { _id: 'F:1' }, { _id: 'P:2' }],
+      bookmark: 'exact-bm',
+    };
+    jest
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValueOnce(of(overflowBatch))
+      .mockReturnValueOnce(of(exactBatch));
+    jest
+      .spyOn(documentFilter, 'findDocFilter')
+      .mockReturnValue((doc) => !!doc._id?.startsWith('P'));
+    const { res, body } = createMockResponse();
+
+    await controller.find('db', { selector: {}, limit: 2 }, user, res);
+
+    // Second call must use the exact limit (index 2 + 1 = 3)
+    expect(mockCouchDBService.post).toHaveBeenCalledTimes(2);
+    expect(mockCouchDBService.post).toHaveBeenNthCalledWith(
+      2,
+      'db',
+      '_find',
+      expect.objectContaining({ limit: 3, bookmark: undefined }),
+    );
+    const result = body();
+    expect(result.docs).toEqual([{ _id: 'P:0' }, { _id: 'P:2' }]);
+    // bookmark comes from the exact re-fetch, not the wide batch
+    expect(result.bookmark).toBe('exact-bm');
   });
 
   it('should abort the response if the upstream stream fails mid-transfer', async () => {
