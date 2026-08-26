@@ -111,7 +111,7 @@ export interface ManagedRulesMerge {
  * treated the same as an empty section instead of throwing, so that a
  * malformed section gets actively healed rather than crashing the caller.
  */
-export function mergeManagedRules(
+function mergeManagedRules(
   currentSection: DocumentRule[] = [],
   managedRules: DocumentRule[] = MANAGED_DEFAULT_RULES,
 ): ManagedRulesMerge {
