@@ -180,7 +180,12 @@ export class BulkDocEndpointsController {
    */
   private async streamPermittedFindDocs(
     db: string,
-    body: { limit?: number; bookmark?: string; skip?: unknown; [key: string]: unknown },
+    body: {
+      limit?: number;
+      bookmark?: string;
+      skip?: unknown;
+      [key: string]: unknown;
+    },
     requestedLimit: number,
     isPermitted: (doc: DatabaseDocument) => boolean,
     stream: FindResponseStream,
@@ -221,7 +226,9 @@ export class BulkDocEndpointsController {
             bookmark: batchStartBookmark,
           }),
         );
-        await stream.writeDocs(exact.docs.filter(isPermitted).slice(0, remaining));
+        await stream.writeDocs(
+          exact.docs.filter(isPermitted).slice(0, remaining),
+        );
         bookmark = exact.bookmark;
         break;
       }
