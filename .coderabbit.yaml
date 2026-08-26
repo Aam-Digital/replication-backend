@@ -1,0 +1,5 @@
+reviews:
+  # CodeRabbit runs on-demand only. Trigger a review by commenting
+  # "@coderabbitai review" on a pull request.
+  auto_review:
+    enabled: false
