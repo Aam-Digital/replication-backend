@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter } from 'events';
@@ -154,6 +155,20 @@ describe('ChangesController', () => {
 
     await expect(pending).resolves.toBeUndefined();
     expect(res.destroy).toHaveBeenCalled();
+  });
+
+  it('should abort silently when the client is already gone before the first chunk', async () => {
+    // no chunk written yet means `headersSent` is still false, so this used to
+    // take the rethrow branch and surface an ordinary client disconnect as a
+    // server fault in Sentry
+    const { res } = createMockResponse();
+    res.destroyed = true;
+    const warn = jest.spyOn(Logger.prototype, 'warn');
+
+    await expect(
+      controller.changes('some-db', user, undefined, res),
+    ).resolves.toBeUndefined();
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('should not throw when user is undefined', async () => {

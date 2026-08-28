@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { BaseExceptionFilter, HttpAdapterHost } from '@nestjs/core';
 import * as Sentry from '@sentry/node';
 import { version } from '../package.json';
+import { ClientDisconnectedError } from './common/client-disconnected.error';
 
 const logger = new Logger('Sentry');
 
@@ -212,6 +213,17 @@ export function beforeSend(
   hint: Sentry.EventHint,
 ): Sentry.ErrorEvent | null {
   const error = hint.originalException;
+
+  // A client that closes the connection mid-response (navigating away,
+  // backgrounding a tab, a mobile network dropping) is ordinary behaviour and
+  // nothing this service can act on. The streaming endpoints already handle it
+  // themselves, but `SentryFilter` captures every exception that reaches Nest
+  // unconditionally, so drop it here too — that way a new streaming call site
+  // cannot silently turn client churn back into a Sentry issue.
+  if (error instanceof ClientDisconnectedError) {
+    return null;
+  }
+
   if (
     error instanceof HttpException &&
     error.getStatus() >= 400 &&

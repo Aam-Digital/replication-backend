@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { omit } from 'lodash';
+import { ClientDisconnectedError } from '../../../common/client-disconnected.error';
 import { JsonArrayResponseStream } from '../../../common/json-array-response-stream';
 import { firstValueFrom, map } from 'rxjs';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
@@ -245,6 +246,19 @@ export class ChangesController {
    * response (and retries) instead of valid-looking JSON.
    */
   private abortStreamOrRethrow(error: unknown, res: Response): void {
+    // Checked before the `headersSent` guard on purpose: a client that goes
+    // away before the envelope was opened leaves `headersSent` false, so
+    // rethrowing would hand the disconnect to Nest's exception filter and
+    // report it to Sentry as a server fault (see {@link SentryFilter}) —
+    // even though there is no longer anyone to send a response to.
+    if (error instanceof ClientDisconnectedError) {
+      this.logger.debug(
+        'aborting streamed _changes response: client disconnected',
+      );
+      res.destroy();
+      return;
+    }
+
     if (!res.headersSent) {
       throw error;
     }

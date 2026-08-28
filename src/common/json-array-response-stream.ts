@@ -1,4 +1,5 @@
 import { Response } from 'express';
+import { ClientDisconnectedError } from './client-disconnected.error';
 
 /**
  * Streams a JSON response whose primary payload is one incrementally-written
@@ -93,7 +94,7 @@ export abstract class JsonArrayResponseStream {
     const res = this.res;
     return new Promise((resolve, reject) => {
       if (res.destroyed) {
-        reject(new Error('client disconnected'));
+        reject(new ClientDisconnectedError());
         return;
       }
       if (res.write(chunk)) {
@@ -115,7 +116,7 @@ export abstract class JsonArrayResponseStream {
       // also emit 'close' would leave this promise pending forever.
       const onFailure = () => {
         cleanup();
-        reject(new Error('client disconnected'));
+        reject(new ClientDisconnectedError());
       };
       res.once('drain', onDrain);
       res.once('close', onFailure);
