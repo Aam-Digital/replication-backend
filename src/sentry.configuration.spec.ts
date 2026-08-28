@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { HttpException } from '@nestjs/common/exceptions/http.exception';
 import * as Sentry from '@sentry/node';
+import { ClientDisconnectedError } from './common/client-disconnected.error';
 import { beforeSend, normalizeLogMessage } from './sentry.configuration';
 
 describe('normalizeLogMessage', () => {
@@ -61,6 +62,12 @@ describe('beforeSend', () => {
   function hint(originalException?: unknown): Sentry.EventHint {
     return { originalException } as Sentry.EventHint;
   }
+
+  it('drops client disconnects, which this service cannot act on', () => {
+    const result = beforeSend(event(), hint(new ClientDisconnectedError()));
+
+    expect(result).toBeNull();
+  });
 
   it('drops 4xx HttpExceptions, which are client errors rather than faults', () => {
     const result = beforeSend(

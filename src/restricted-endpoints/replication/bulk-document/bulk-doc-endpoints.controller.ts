@@ -154,6 +154,15 @@ export class BulkDocEndpointsController {
       );
       await stream.finish();
     } catch (error) {
+      // before the `headersSent` guard on purpose, see
+      // {@link ChangesController.abortStreamOrRethrow}
+      if (error instanceof ClientDisconnectedError) {
+        this.logger.debug(
+          'aborting streamed _find response: client disconnected',
+        );
+        res.destroy();
+        return;
+      }
       if (!res.headersSent) throw error;
       this.logger.warn('aborting streamed _find response after error', {
         error: error instanceof Error ? error.message : String(error),
@@ -332,7 +341,7 @@ export class BulkDocEndpointsController {
       if (!res.headersSent && !res.writableEnded && !res.destroyed) {
         throw error;
       }
-      this.logAbortedStream(error);
+      this.logAbortedStream(error, res);
       res.destroy();
     }
   }
@@ -346,9 +355,16 @@ export class BulkDocEndpointsController {
    * else is a genuine problem and is reported with a constant message, with
    * the variable detail attached as structured context so Sentry groups all
    * occurrences into one issue instead of one issue per error text.
+   *
+   * A destroyed response counts as a disconnect even when the error came from
+   * somewhere else: the CouchDB source and the response socket race here, and
+   * when the client goes away the source often errors ("aborted") before the
+   * response's `close` handler can raise a {@link ClientDisconnectedError}.
+   * Which of the two wins says nothing about the cause, so it must not decide
+   * whether this is reported as a fault.
    */
-  private logAbortedStream(error: unknown): void {
-    if (error instanceof ClientDisconnectedError) {
+  private logAbortedStream(error: unknown, res: Response): void {
+    if (error instanceof ClientDisconnectedError || res.destroyed) {
       this.logger.debug('aborting streamed response: client disconnected');
       return;
     }

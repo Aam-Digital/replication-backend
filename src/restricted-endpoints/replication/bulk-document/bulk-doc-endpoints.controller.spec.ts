@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Readable, Writable } from 'stream';
 import { BulkDocEndpointsController } from './bulk-doc-endpoints.controller';
@@ -260,6 +261,28 @@ describe('BulkDocEndpointsController', () => {
     await controller.bulkGetPost('db', {}, { docs: [] }, user, res);
 
     expect(res.destroy).toHaveBeenCalled();
+  });
+
+  it('should treat a vanished client as a disconnect even when the upstream error wins the race', async () => {
+    // when the client goes away the CouchDB source usually errors ("aborted")
+    // before the response's own `close` handler can raise a
+    // ClientDisconnectedError — which of the two settles first must not decide
+    // whether this is reported to Sentry as a fault
+    const source = new Readable({ read() {} });
+    jest.spyOn(mockCouchDBService, 'postStream').mockResolvedValue(source);
+    jest
+      .spyOn(documentFilter, 'bulkGetResultMapper')
+      .mockReturnValue((result) => result);
+    const { res } = createMockResponse();
+    const warn = jest.spyOn(Logger.prototype, 'warn');
+
+    const pending = controller.bulkGetPost('db', {}, { docs: [] }, user, res);
+    await new Promise(setImmediate);
+    res.destroyed = true;
+    source.destroy(new Error('aborted'));
+    await pending;
+
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it('should keep the response usable when the upstream body is not a JSON object', async () => {
