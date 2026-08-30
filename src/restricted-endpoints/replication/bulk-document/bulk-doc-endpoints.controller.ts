@@ -168,11 +168,7 @@ export class BulkDocEndpointsController {
    */
   private async streamPermittedFindDocs(
     db: string,
-    body: {
-      limit?: number;
-      bookmark?: string;
-      [key: string]: unknown;
-    },
+    body: { bookmark?: string; [key: string]: unknown },
     requestedLimit: number,
     isPermitted: (doc: DatabaseDocument) => boolean,
     stream: FindResponseStream,
