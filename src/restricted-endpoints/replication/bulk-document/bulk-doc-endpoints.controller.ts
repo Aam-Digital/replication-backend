@@ -58,9 +58,9 @@ class FindResponseStream extends JsonArrayResponseStream {
     await this.writeItems(docs, (doc) => doc);
   }
 
-  /** End the response. */
-  async finish(): Promise<void> {
-    await this.closeWith(`]}`);
+  /** Append the bookmark and end the response. */
+  async finish(bookmark: string): Promise<void> {
+    await this.closeWith(`],"bookmark":${JSON.stringify(bookmark)}}`);
   }
 }
 
@@ -113,6 +113,8 @@ export class BulkDocEndpointsController {
    * Find documents using a declarative JSON querying syntax.
    * The response is permission-filtered and streamed.
    * See {@link https://docs.couchdb.org/en/stable/api/database/find.html#post--db-_find}
+   * If `body.limit` is undefined, 25 is used (same as CouchDB).
+   * `body.skip` is discarded, only `body.bookmark` is supported.
    *
    * @param db name of the database to query
    * @param body search query object
@@ -125,34 +127,30 @@ export class BulkDocEndpointsController {
   })
   async find(
     @Param('db') db: string,
-    @Body() body: object,
+    @Body()
+    body: {
+      limit?: number;
+      skip?: number;
+      bookmark?: string;
+      [key: string]: unknown;
+    },
     @User() user: UserInfo,
     @Res() res: Response,
   ): Promise<void> {
     const isPermitted = this.bulkDocumentService.findDocFilter(user);
-    const findBody = body as { limit?: number; [key: string]: unknown };
-
-    if (findBody.limit === undefined) {
-      const source = await this.couchdbService.postStream(db, '_find', body);
-      await this.streamFiltered(
-        source,
-        'docs',
-        (doc) => (isPermitted(doc) ? doc : undefined),
-        res,
-      );
-      return;
-    }
+    body.limit = body.limit ?? 25;
+    delete body.skip;
 
     const stream = new FindResponseStream(res);
     try {
-      await this.streamPermittedFindDocs(
+      const bookmark = await this.streamPermittedFindDocs(
         db,
-        findBody,
-        findBody.limit,
+        body,
+        body.limit,
         isPermitted,
         stream,
       );
-      await stream.finish();
+      await stream.finish(bookmark);
     } catch (error) {
       // before the `headersSent` guard on purpose, see
       // {@link ChangesController.abortStreamOrRethrow}
@@ -174,16 +172,17 @@ export class BulkDocEndpointsController {
   /**
    * Iteratively fetch from `_find` with an inflated limit, filter by permission,
    * and stream each permitted batch to the client. Uses the CouchDB `bookmark`
-   * to continue between rounds.
+   * to continue between rounds. Returns the bookmark that the client should use
+   * for the next page.
    */
   private async streamPermittedFindDocs(
     db: string,
-    body: { limit?: number; bookmark?: string; [key: string]: unknown },
+    body: { bookmark?: string; [key: string]: unknown },
     requestedLimit: number,
     isPermitted: (doc: DatabaseDocument) => boolean,
     stream: FindResponseStream,
-  ): Promise<void> {
-    let bookmark: string | undefined = body.bookmark;
+  ): Promise<string> {
+    let bookmark = body.bookmark;
 
     while (stream.docsWritten < requestedLimit && !stream.isClosed) {
       const remaining = requestedLimit - stream.docsWritten;
@@ -192,6 +191,7 @@ export class BulkDocEndpointsController {
         MAX_INTERNAL_LIMIT,
       );
 
+      const batchStartBookmark = bookmark;
       const response = await firstValueFrom(
         this.couchdbService.post<FindResponse>(db, '_find', {
           ...body,
@@ -200,14 +200,38 @@ export class BulkDocEndpointsController {
         }),
       );
 
-      const permitted = response.docs.filter(isPermitted).slice(0, remaining);
-      await stream.writeDocs(permitted);
+      const allPermitted = response.docs.filter(isPermitted);
 
+      if (allPermitted.length > remaining) {
+        // The batch has more permitted docs than needed. Re-fetch with a limit
+        // sized to include exactly the docs we will return, so the resulting
+        // bookmark points to just after the last written doc rather than past
+        // the dropped permitted docs.
+        const lastNeededRawIndex = response.docs.indexOf(
+          allPermitted[remaining - 1],
+        );
+        const exact = await firstValueFrom(
+          this.couchdbService.post<FindResponse>(db, '_find', {
+            ...body,
+            limit: lastNeededRawIndex + 1,
+            bookmark: batchStartBookmark,
+          }),
+        );
+        await stream.writeDocs(
+          exact.docs.filter(isPermitted).slice(0, remaining),
+        );
+        bookmark = exact.bookmark;
+        break;
+      }
+
+      await stream.writeDocs(allPermitted);
       bookmark = response.bookmark;
 
       if (response.docs.length < internalLimit) break;
       if (!response.bookmark) break;
     }
+
+    return bookmark ?? '';
   }
 
   /**
