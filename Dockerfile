@@ -1,4 +1,4 @@
-FROM node:24.19.0-alpine AS builder
+FROM node:24.20.0-alpine AS builder
 
 USER node
 
@@ -12,7 +12,7 @@ COPY --chown=node:node . .
 
 RUN npm run build
 
-FROM node:24.19.0-alpine AS runtime
+FROM node:24.20.0-alpine AS runtime
 
 USER node
 
