@@ -167,7 +167,7 @@ describe('BulkDocEndpointsController', () => {
     expect(mockCouchDBService.post).toHaveBeenCalledWith(
       'db',
       '_find',
-      expect.objectContaining({ limit: 125 }), // 10 * INTERNAL_LIMIT_MULTIPLIER
+      expect.objectContaining({ limit: 125 }), // Default limit (25) * INTERNAL_LIMIT_MULTIPLIER
     );
     expect(mockCouchDBService.post).not.toHaveBeenCalledWith(
       expect.anything(),
