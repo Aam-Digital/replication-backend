@@ -150,31 +150,7 @@ describe('BulkDocEndpointsController', () => {
     expect(body().rows).toEqual([{ id: 'x' }]);
   });
 
-  it('should stream and filter the _find response per doc', async () => {
-    const findResponse = {
-      docs: [{ _id: 'Report:1' }, { _id: 'Secret:1' }],
-      bookmark: 'abc',
-    };
-    jest
-      .spyOn(mockCouchDBService, 'postStream')
-      .mockResolvedValue(asStream(findResponse));
-    jest
-      .spyOn(documentFilter, 'findDocFilter')
-      .mockReturnValue((doc) => doc._id === 'Report:1');
-    const { res, body } = createMockResponse();
-
-    const request = { selector: { type: 'report' } };
-    await controller.find('db', request, user, res);
-
-    expect(mockCouchDBService.postStream).toHaveBeenCalledWith(
-      'db',
-      '_find',
-      request,
-    );
-    expect(body()).toEqual({ docs: [{ _id: 'Report:1' }], bookmark: 'abc' });
-  });
-
-  it('should use the buffered path, omit skip and filter docs when _find body has a limit', async () => {
+  it('should filter docs based on permissions on _find', async () => {
     jest.spyOn(mockCouchDBService, 'post').mockReturnValue(
       of({
         docs: [{ _id: 'Report:1' }, { _id: 'Secret:1' }],
@@ -186,12 +162,12 @@ describe('BulkDocEndpointsController', () => {
       .mockReturnValue((doc) => doc._id === 'Report:1');
     const { res, body } = createMockResponse();
 
-    await controller.find('db', { selector: {}, limit: 10 }, user, res);
+    await controller.find('db', { selector: {} }, user, res);
 
     expect(mockCouchDBService.post).toHaveBeenCalledWith(
       'db',
       '_find',
-      expect.objectContaining({ limit: 50 }), // 10 * INTERNAL_LIMIT_MULTIPLIER
+      expect.objectContaining({ limit: 125 }), // 10 * INTERNAL_LIMIT_MULTIPLIER
     );
     expect(mockCouchDBService.post).not.toHaveBeenCalledWith(
       expect.anything(),
@@ -199,7 +175,6 @@ describe('BulkDocEndpointsController', () => {
       expect.objectContaining({ skip: expect.anything() }),
     );
     expect(body()).toEqual({ docs: [{ _id: 'Report:1' }], bookmark: 'bm1' });
-    
   });
 
   it('should iterate _find with bookmark when filtered results are below the limit', async () => {

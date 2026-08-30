@@ -113,6 +113,8 @@ export class BulkDocEndpointsController {
    * Find documents using a declarative JSON querying syntax.
    * The response is permission-filtered and streamed.
    * See {@link https://docs.couchdb.org/en/stable/api/database/find.html#post--db-_find}
+   * If `body.limit` is undefined, 25 is used (same as CouchDB).
+   * `body.skip` is discarded, only `body.bookmark` is supported.
    *
    * @param db name of the database to query
    * @param body search query object
@@ -125,30 +127,26 @@ export class BulkDocEndpointsController {
   })
   async find(
     @Param('db') db: string,
-    @Body() body: object,
+    @Body()
+    body: {
+      limit?: number;
+      skip?: number;
+      bookmark?: string;
+      [key: string]: unknown;
+    },
     @User() user: UserInfo,
     @Res() res: Response,
   ): Promise<void> {
     const isPermitted = this.bulkDocumentService.findDocFilter(user);
-    const findBody = body as { limit?: number; [key: string]: unknown };
-
-    if (findBody.limit === undefined) {
-      const source = await this.couchdbService.postStream(db, '_find', body);
-      await this.streamFiltered(
-        source,
-        'docs',
-        (doc) => (isPermitted(doc) ? doc : undefined),
-        res,
-      );
-      return;
-    }
+    body.limit = body.limit ?? 25;
+    delete body.skip;
 
     const stream = new FindResponseStream(res);
     try {
       const bookmark = await this.streamPermittedFindDocs(
         db,
-        findBody,
-        findBody.limit,
+        body,
+        body.limit,
         isPermitted,
         stream,
       );
@@ -167,31 +165,19 @@ export class BulkDocEndpointsController {
    * and stream each permitted batch to the client. Uses the CouchDB `bookmark`
    * to continue between rounds. Returns the bookmark that the client should use
    * for the next page.
-   *
-   * `skip` is intentionally stripped from the body: CouchDB's `skip` is a
-   * raw-document offset and would overlap with documents already returned when
-   * the backend makes multiple internal fetches. Clients should use the returned
-   * `bookmark` for subsequent pages instead.
-   *
-   * When the last internal batch contains more permitted docs than needed, a
-   * second targeted fetch is made with an exact limit so that the returned
-   * bookmark points precisely to after the last doc written to the client —
-   * preventing those docs from being silently skipped on the next page.
    */
   private async streamPermittedFindDocs(
     db: string,
     body: {
       limit?: number;
       bookmark?: string;
-      skip?: unknown;
       [key: string]: unknown;
     },
     requestedLimit: number,
     isPermitted: (doc: DatabaseDocument) => boolean,
     stream: FindResponseStream,
   ): Promise<string> {
-    const { skip: _skip, ...findBody } = body;
-    let bookmark: string | undefined = findBody.bookmark;
+    let bookmark = body.bookmark;
 
     while (stream.docsWritten < requestedLimit && !stream.isClosed) {
       const remaining = requestedLimit - stream.docsWritten;
@@ -203,7 +189,7 @@ export class BulkDocEndpointsController {
       const batchStartBookmark = bookmark;
       const response = await firstValueFrom(
         this.couchdbService.post<FindResponse>(db, '_find', {
-          ...findBody,
+          ...body,
           limit: internalLimit,
           bookmark,
         }),
@@ -221,7 +207,7 @@ export class BulkDocEndpointsController {
         );
         const exact = await firstValueFrom(
           this.couchdbService.post<FindResponse>(db, '_find', {
-            ...findBody,
+            ...body,
             limit: lastNeededRawIndex + 1,
             bookmark: batchStartBookmark,
           }),
