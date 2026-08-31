@@ -50,6 +50,12 @@
       "matchUpdateTypes": ["minor", "patch"],
       "groupName": "github-actions",
       "automerge": false
+    },
+    {
+      "matchManagers": ["dockerfile", "github-actions"],
+      "matchPackageNames": ["node"],
+      "groupName": "node",
+      "automerge": false
     }
   ]
 }
