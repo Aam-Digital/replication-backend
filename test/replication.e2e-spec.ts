@@ -306,6 +306,15 @@ describe('Replication endpoints (e2e)', () => {
         .expect(200);
       expect(denied.body.docs).toEqual([]);
     });
+
+    it('returns only the requested fields when body.fields is set', async () => {
+      const res = await request(ctx.app.getHttpServer())
+        .post('/app/_find')
+        .set(...basicAuth('user', 'user-pw'))
+        .send({ selector: { subject: 'authored' }, fields: ['_id', 'subject'] })
+        .expect(200);
+      expect(res.body.docs).toEqual([{ _id: 'Note:1', subject: 'authored' }]);
+    });
   });
 
   describe('POST /:db/_revs_diff', () => {

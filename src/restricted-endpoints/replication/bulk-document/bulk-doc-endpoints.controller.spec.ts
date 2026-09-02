@@ -276,6 +276,82 @@ describe('BulkDocEndpointsController', () => {
     expect(result.bookmark).toBe('exact-bm');
   });
 
+  it('should project returned docs to body.fields and not forward the selection upstream', async () => {
+    jest.spyOn(mockCouchDBService, 'post').mockReturnValue(
+      of({
+        docs: [
+          { _id: 'Report:1', _rev: '1-a', title: 'A', secret: 'x', size: 3 },
+          { _id: 'Report:2', _rev: '1-b', title: 'B', secret: 'y', size: 7 },
+        ],
+        bookmark: 'bm1',
+      }),
+    );
+    jest.spyOn(documentFilter, 'findDocFilter').mockReturnValue(() => true);
+    const { res, body } = createMockResponse();
+
+    await controller.find(
+      'db',
+      { selector: {}, fields: ['_id', 'title'] },
+      user,
+      res,
+    );
+
+    // fields is stripped from the query forwarded to CouchDB so the
+    // permission filter still sees whole documents
+    expect(mockCouchDBService.post).toHaveBeenCalledWith(
+      'db',
+      '_find',
+      expect.not.objectContaining({ fields: expect.anything() }),
+    );
+    expect(body()).toEqual({
+      docs: [
+        { _id: 'Report:1', title: 'A' },
+        { _id: 'Report:2', title: 'B' },
+      ],
+      bookmark: 'bm1',
+    });
+  });
+
+  it('should support dotted field paths and omit absent fields on _find', async () => {
+    jest.spyOn(mockCouchDBService, 'post').mockReturnValue(
+      of({
+        docs: [{ _id: 'Report:1', meta: { author: 'ada' }, tags: ['t'] }],
+        bookmark: 'bm1',
+      }),
+    );
+    jest.spyOn(documentFilter, 'findDocFilter').mockReturnValue(() => true);
+    const { res, body } = createMockResponse();
+
+    await controller.find(
+      'db',
+      { selector: {}, fields: ['_id', 'meta.author', 'missing'] },
+      user,
+      res,
+    );
+
+    expect(body()).toEqual({
+      docs: [{ _id: 'Report:1', meta: { author: 'ada' } }],
+      bookmark: 'bm1',
+    });
+  });
+
+  it('should ignore an empty body.fields on _find', async () => {
+    jest
+      .spyOn(mockCouchDBService, 'post')
+      .mockReturnValue(
+        of({ docs: [{ _id: 'Report:1', title: 'A' }], bookmark: 'bm1' }),
+      );
+    jest.spyOn(documentFilter, 'findDocFilter').mockReturnValue(() => true);
+    const { res, body } = createMockResponse();
+
+    await controller.find('db', { selector: {}, fields: [] }, user, res);
+
+    expect(body()).toEqual({
+      docs: [{ _id: 'Report:1', title: 'A' }],
+      bookmark: 'bm1',
+    });
+  });
+
   it('should abort the response if the upstream stream fails mid-transfer', async () => {
     const broken = new Readable({
       read() {
