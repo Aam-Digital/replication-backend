@@ -15,6 +15,7 @@ import { Readable } from 'stream';
 import { pipeline } from 'stream/promises';
 import { firstValueFrom, from, Observable } from 'rxjs';
 import { JsonArrayResponseStream } from '../../../common/json-array-response-stream';
+import { projectFields } from '../../../common/project-fields';
 import { CombinedAuthGuard } from '../../../auth/guards/combined-auth/combined-auth.guard';
 import { User } from '../../../auth/user.decorator';
 import { ClientDisconnectedError } from '../../../common/client-disconnected.error';
@@ -49,13 +50,23 @@ import {
  * status rather than a truncated stream.
  */
 class FindResponseStream extends JsonArrayResponseStream {
-  constructor(res: Response) {
+  /**
+   * @param res response to stream into
+   * @param fields optional CouchDB `_find` field selection; when set, every
+   *   written doc is projected down to just these paths to shrink the payload
+   */
+  constructor(
+    res: Response,
+    private readonly fields?: string[],
+  ) {
     super(res, '{"docs":[');
   }
 
   /** Write one batch of permitted docs, opening the envelope if needed. */
   async writeDocs(docs: DatabaseDocument[]): Promise<void> {
-    await this.writeItems(docs, (doc) => doc);
+    await this.writeItems(docs, (doc) =>
+      this.fields ? projectFields(doc, this.fields) : doc,
+    );
   }
 
   /** Append the bookmark and end the response. */
@@ -115,6 +126,8 @@ export class BulkDocEndpointsController {
    * See {@link https://docs.couchdb.org/en/stable/api/database/find.html#post--db-_find}
    * If `body.limit` is undefined, 25 is used (same as CouchDB).
    * `body.skip` is discarded, only `body.bookmark` is supported.
+   * `body.fields` selects which fields of each doc to return (see
+   * {@link extractFieldSelection}).
    *
    * @param db name of the database to query
    * @param body search query object
@@ -132,6 +145,7 @@ export class BulkDocEndpointsController {
       limit?: number;
       skip?: number;
       bookmark?: string;
+      fields?: unknown;
       [key: string]: unknown;
     },
     @User() user: UserInfo,
@@ -140,8 +154,9 @@ export class BulkDocEndpointsController {
     const isPermitted = this.bulkDocumentService.findDocFilter(user);
     body.limit = body.limit ?? 25;
     delete body.skip;
+    const fields = this.extractFieldSelection(body);
 
-    const stream = new FindResponseStream(res);
+    const stream = new FindResponseStream(res, fields);
     try {
       const bookmark = await this.streamPermittedFindDocs(
         db,
@@ -167,6 +182,35 @@ export class BulkDocEndpointsController {
       });
       res.destroy();
     }
+  }
+
+  /**
+   * Take a valid CouchDB `fields` selection out of the request body and return
+   * it for client-side projection.
+   *
+   * The projection is applied here rather than by CouchDB because the
+   * permission filter needs the whole document to decide `read` access. So
+   * `fields` is stripped from the query forwarded upstream (CouchDB returns
+   * full docs) and every permitted doc is projected down to the requested
+   * paths just before it is streamed — same visible result, smaller payload.
+   *
+   * A missing, empty or malformed `fields` is left untouched and forwarded
+   * as-is, matching CouchDB (empty/absent → whole doc, malformed → error).
+   */
+  private extractFieldSelection(body: {
+    fields?: unknown;
+    [key: string]: unknown;
+  }): string[] | undefined {
+    const fields = body.fields;
+    if (
+      !Array.isArray(fields) ||
+      fields.length === 0 ||
+      !fields.every((field) => typeof field === 'string')
+    ) {
+      return undefined;
+    }
+    delete body.fields;
+    return fields;
   }
 
   /**
