@@ -35,7 +35,6 @@ import {
 import {
   ADMIN_APP_ROLE,
   DEFAULT_SECTION_KEY,
-  LEGACY_SECTION_KEYS,
   Permission,
   PUBLIC_SECTION_KEY,
   RESERVED_ROLE_PREFIX,
@@ -92,34 +91,9 @@ export class RulesService implements OnModuleInit {
    */
   readonly permissionsChanged$ = this.permissionsChanged.asObservable();
 
-  /**
-   * Single write point for the in-memory config. Legacy section keys are
-   * normalized onto their current spelling here, so every read path only has to
-   * know about {@link DEFAULT_SECTION_KEY} and {@link PUBLIC_SECTION_KEY}.
-   */
+  /** Single write point for the in-memory config. */
   private setPermission(config: RulesConfig): void {
-    this.permission = RulesService.normalizeSectionKeys(config);
-  }
-
-  /**
-   * Move rules stored under a legacy section key onto the current key. The
-   * current key wins if a config carries both, matching the write-back in
-   * {@link writeManagedDefaults} that drops the legacy one.
-   */
-  private static normalizeSectionKeys(config: RulesConfig): RulesConfig {
-    const legacyKeys = Object.keys(LEGACY_SECTION_KEYS).filter(
-      (key) => config[key] !== undefined,
-    );
-    if (legacyKeys.length === 0) {
-      return config;
-    }
-    const normalized = { ...config };
-    for (const legacyKey of legacyKeys) {
-      const currentKey = LEGACY_SECTION_KEYS[legacyKey];
-      normalized[currentKey] = normalized[currentKey] ?? normalized[legacyKey];
-      delete normalized[legacyKey];
-    }
-    return normalized;
+    this.permission = config;
   }
 
   constructor(
@@ -308,8 +282,6 @@ export class RulesService implements OnModuleInit {
     }
 
     this.setPermission(newPermissions);
-    // compare the normalized configs: migrating a legacy section key is not a
-    // rule change and must not trigger a cache clear / client re-sync
     this.onPermissionsChanged(db, prevPermissions, this.permission);
     void this.ensureManagedDefaults(db, permissionDoc);
   }
@@ -415,17 +387,13 @@ export class RulesService implements OnModuleInit {
     if (!PermissionConfigValidator.isValidRulesConfig(doc?.data)) {
       return 'done';
     }
-    // migrating a legacy section key across to the current one is itself a
-    // reason to rewrite, even when no managed rule changed. normalizeSectionKeys
-    // returns the config unchanged when there is nothing to migrate.
-    const data = RulesService.normalizeSectionKeys(doc.data);
-    const hasLegacySectionKeys = data !== doc.data;
+    const data = doc.data;
 
     const defaults = mergeManagedDefaults(data[DEFAULT_SECTION_KEY]);
     const publicRules = mergeManagedPublic(data[PUBLIC_SECTION_KEY]);
 
     const dropped = [...defaults.dropped, ...(publicRules?.dropped ?? [])];
-    if (!defaults.changed && !publicRules?.changed && !hasLegacySectionKeys) {
+    if (!defaults.changed && !publicRules?.changed) {
       return 'done';
     }
     const newData = { ...data, [DEFAULT_SECTION_KEY]: defaults.merged };
@@ -485,8 +453,7 @@ export class RulesService implements OnModuleInit {
       const userRules = user.roles
         .filter(
           // reserved section keys and any underscore-prefixed name carry
-          // special semantics and never resolve as a user role; legacy keys are
-          // already normalized away, they are listed to keep the guard explicit
+          // special semantics and never resolve as a user role
           (role) =>
             !role.startsWith(RESERVED_ROLE_PREFIX) &&
             !RESERVED_RULE_CONFIG_KEYS.includes(role) &&
