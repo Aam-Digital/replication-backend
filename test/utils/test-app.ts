@@ -13,7 +13,7 @@ import { MockCouchDb } from './mock-couchdb';
  * - anonymous (public): read Aggregate
  */
 export const DEFAULT_TEST_RULES = {
-  public: [{ action: 'read', subject: 'Aggregate' }],
+  _public: [{ action: 'read', subject: 'Aggregate' }],
   admin_app: [{ action: 'manage', subject: 'all' }],
   user_app: [
     { action: 'read', subject: 'Child' },
