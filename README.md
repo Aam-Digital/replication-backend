@@ -95,13 +95,6 @@ deployment tooling writes it) at startup, against the primary db
   accepts read and write the database directly, skipping every permission
   check this service performs entirely.
 
-  **Known upgrade hazard:** nothing clears this `_security` document when a
-  deployment switches from database-only to running this service in front of
-  CouchDB, so this check fails closed for _any_ database that ever ran
-  database-only - not just a currently-misconfigured one. Audit `_security`
-  across a fleet before rolling this out. The fix is a `PUT` of an empty
-  `_security` document (the error message includes the exact command).
-
 - **CouchDB has no `[jwt_keys]` configured.** This is dead config in this
   (permission-checked) deployment mode - every client here uses basic auth -
   and, combined with a realm role literally named `_admin` (Keycloak's
