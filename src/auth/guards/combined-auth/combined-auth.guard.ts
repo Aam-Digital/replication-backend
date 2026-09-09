@@ -20,7 +20,7 @@ import { JwtCookieGuard } from '../jwt-cookie/jwt-cookie.guard';
  * The modes are checked in the following order and processing stops once the first one validates successfully:
  * 1. Basic - using CouchDB
  * 2. Cookie - using the JWT_SECRET env
- * 3. Bearer - using the JWT_PUBLIC_KEY env
+ * 3. Bearer - verified against the issuing Keycloak realm's JWKS (KEYCLOAK_ADMIN_BASE_URL / KEYCLOAK_REALM)
  *
  * On default, the guard always passes, but might set `undefined` as the user object.
  * To change this behavior and return a `401` if a user is not authenticated

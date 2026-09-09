@@ -31,19 +31,18 @@ In both cases the following environment variables should be defined:
 - `DATABASE_MAX_SOCKETS` (optional) maximum number of parallel keep-alive connections to CouchDB (default `50`). Bounds the connection load that request bursts (e.g. many syncing clients) can place on CouchDB.
 - `PERMISSION_DB` the database name where the permissions definition document is stored
 - `JWT_SECRET` a secret to create JWT tokens. They are used in the JWT auth which works similar to CouchDB's `POST /_session` endpoint. This should be changed to prevent others to create fake JWT tokens.
-- `JWT_PUBLIC_KEY` the public key which can be used to validate a JWT in the authorization header (bearer). The structure is the same as and compatible with [CouchDB JWT auth](https://docs.couchdb.org/en/stable/api/server/authn.html#jwt-authentication).
 - `SENTRY_DSN` (optional) the [Sentry DSN](https://docs.sentry.io/product/sentry-basics/dsn-explainer/). If defined, error messages are sent to the sentry.io application monitoring & logging service.
   - `SENTRY_TRACES_SAMPLE_RATE` (optional) decimal value between `0.0` and `1.0` controlling transaction tracing volume in Sentry. Defaults to `0.02` (2%) to limit ingestion costs.
-- `KEYCLOAK_ADMIN_BASE_URL` (optional) the base URL of the Keycloak server (e.g. `https://keycloak.example.com`). Required to enable the `/api/v1/permissions/check` endpoint, which resolves user roles via the Keycloak Admin API. If not set, the endpoint returns a 502 error but all other functionality continues to work.
-- `KEYCLOAK_REALM` (optional, required together with `KEYCLOAK_ADMIN_BASE_URL`) the Keycloak realm name.
-- `KEYCLOAK_ADMIN_CLIENT_ID` (optional, required together with `KEYCLOAK_ADMIN_BASE_URL`) the Keycloak client ID used to authenticate against the Keycloak Admin API.
-- `KEYCLOAK_ADMIN_CLIENT_SECRET` (optional, required together with `KEYCLOAK_ADMIN_BASE_URL`) the client secret for `KEYCLOAK_ADMIN_CLIENT_ID`.
+- `KEYCLOAK_ADMIN_BASE_URL` the base URL of the Keycloak server (e.g. `https://keycloak.example.com`). Required: besides resolving user roles via the Keycloak Admin API for the `/api/v1/permissions/check` endpoint, it is also used to verify bearer JWTs against this realm's JWKS (see "Bearer JWT verification" below) - the process fails to start without it.
+- `KEYCLOAK_REALM` (required together with `KEYCLOAK_ADMIN_BASE_URL`) the Keycloak realm name.
+- `KEYCLOAK_ADMIN_CLIENT_ID` (optional, required together with `KEYCLOAK_ADMIN_BASE_URL` only to enable the `/api/v1/permissions/check` endpoint) the Keycloak client ID used to authenticate against the Keycloak Admin API.
+- `KEYCLOAK_ADMIN_CLIENT_SECRET` (optional, required together with `KEYCLOAK_ADMIN_CLIENT_ID`) the client secret for `KEYCLOAK_ADMIN_CLIENT_ID`.
   When `KEYCLOAK_ADMIN_BASE_URL` uses HTTPS with a self-signed CA (e.g. the local Caddy proxy), set `NODE_EXTRA_CA_CERTS` to the CA cert path before starting Node (see the local dev section below).
 
 In case the backend is run through Docker, the args can be provided like this
 
-```
-> docker run -e DATABASE_URL=https://test.com/couchdb -e DATABASE_USER=replicator -e DATABASE_PASSWORD=securePassword -e JWT_SECRET=myJWTSecret -e JWT_PUBLIC_KEY="-----BEGIN PUBLIC KEY-----\nSomePublicKey\n-----END PUBLIC KEY-----" aamdigital/replication-ms:latest
+```bash
+> docker run -e DATABASE_URL=https://test.com/couchdb -e DATABASE_USER=replicator -e DATABASE_PASSWORD=securePassword -e JWT_SECRET=myJWTSecret -e KEYCLOAK_ADMIN_BASE_URL=https://keycloak.example.com -e KEYCLOAK_REALM=myrealm aamdigital/replication-ms:latest
 ```
 
 In case the backend is run through npm, the `.env` file can be adjusted.
@@ -77,13 +76,49 @@ configured via `PERMISSION_DB` during startup. Its behavior is fail-closed:
   loaded (which should be unreachable given the above), it returns an empty
   rule set and CASL denies every action.
 
+### Startup invariant checks (`CouchdbStartupInvariantsService`)
+
+This service's whole security model relies on it being the *only* door to
+its databases - every client authenticates against it, never against
+CouchDB directly. That assumption lives in CouchDB's own configuration, not
+in this codebase, so `CouchdbStartupInvariantsService` asserts it (and only
+asserts - it never mutates CouchDB's config, which is owned by whatever
+deployment tooling writes it) at startup, against the primary db
+(`PERMISSION_DB`, default `app`) and `app-attachments`:
+
+- **Both databases exist**, creating them if missing (helps a fresh install
+  only; an existing, misconfigured database is caught by the next check).
+- **`_security` is admin-only**, i.e. does not grant a non-admin `members` or
+  `admins` role or name. If it does, startup is **aborted** with a `CRITICAL`
+  log - a permissive `_security` (e.g. the `user_app` role a database-only
+  deployment's `create-couchdb.sh` applies) lets any client CouchDB itself
+  accepts read and write the database directly, skipping every permission
+  check this service performs entirely.
+
+  **Known upgrade hazard:** nothing clears this `_security` document when a
+  deployment switches from database-only to running this service in front of
+  CouchDB, so this check fails closed for *any* database that ever ran
+  database-only - not just a currently-misconfigured one. Audit `_security`
+  across a fleet before rolling this out. The fix is a `PUT` of an empty
+  `_security` document (the error message includes the exact command).
+- **CouchDB has no `[jwt_keys]` configured.** This is dead config in this
+  (permission-checked) deployment mode - every client here uses basic auth -
+  and, combined with a realm role literally named `_admin` (Keycloak's
+  realm-role mapper copies realm roles onto the `_couchdb.roles` claim
+  verbatim, and CouchDB treats that value as a *server admin* grant), it
+  would let such a user bypass `_security` entirely by authenticating via JWT
+  straight against CouchDB. Logs `CRITICAL` but **does not** abort startup -
+  it is a latent risk while `_security` is admin-only, not a live bypass.
+  This check needs CouchDB *server* admin (not just database
+  member/admin) - against a managed CouchDB where that is unavailable, it
+  logs a "could not verify" warning instead of failing or blocking startup.
+
 ## Operation
 
 Besides the CouchDB endpoints, the backend also provides some additional endpoints that are necessary to be used at times.
 A swagger / OpenAPI interface can be visited at `/api/` which shows all endpoints that are available.
 
 - `/admin/clear_local/{db}` needs to be executed whenever a rule or a permission change might give a user more permission than the user previously had. This will restart the synchronization process for each client which makes them fetch all the documents for which they now have gained permissions.
-- The endpoints of the _real_ CouchDB are available through a reverse proxy at `/couchdb/`. This can be used to visit the developer interface at `/couchdb/_utils/`.
 
 Additionally, a separate check on the client side is necessary that cleans up the local database whenever a client looses read permissions for a document.
 A example for how this could look can be found [here](https://github.com/Aam-Digital/ndb-core/blob/master/src/app/core/permissions/permission-enforcer/permission-enforcer.service.ts).
@@ -172,7 +207,7 @@ Run this service locally while the rest of the stack runs in Docker:
    <https://github.com/Aam-Digital/aam-services/tree/main/docs/developer>
 2. Configure local env in this repo:
    - `cp .env.template .env`
-   - Set `JWT_PUBLIC_KEY` from `https://keycloak.localhost/realms/dummy-realm`
+   - `KEYCLOAK_ADMIN_BASE_URL` / `KEYCLOAK_REALM` already point at the dummy dev realm by default
    - Set `KEYCLOAK_ADMIN_CLIENT_SECRET` from the Keycloak client credentials
 3. Trust the Caddy self-signed CA for HTTPS calls to `keycloak.localhost`:
 
