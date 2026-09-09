@@ -32,10 +32,24 @@ export class JwtBearerStrategy extends PassportStrategy(
     configService: ConfigService,
     private couchdbService: CouchdbService,
   ) {
-    const keycloakBaseUrl = JwtBearerStrategy.readRequiredConfig(
+    const configuredKeycloakBaseUrl = JwtBearerStrategy.readRequiredConfig(
       configService,
       KeycloakUserAdminService.ENV_KEYCLOAK_ADMIN_BASE_URL,
-    ).replace(/\/$/, '');
+    );
+    let parsedKeycloakBaseUrl: URL;
+    try {
+      parsedKeycloakBaseUrl = new URL(configuredKeycloakBaseUrl);
+    } catch {
+      throw new Error(
+        `Invalid config "${KeycloakUserAdminService.ENV_KEYCLOAK_ADMIN_BASE_URL}": must be an absolute HTTPS URL`,
+      );
+    }
+    if (parsedKeycloakBaseUrl.protocol !== 'https:') {
+      throw new Error(
+        `Invalid config "${KeycloakUserAdminService.ENV_KEYCLOAK_ADMIN_BASE_URL}": must use HTTPS`,
+      );
+    }
+    const keycloakBaseUrl = configuredKeycloakBaseUrl.replace(/\/$/, '');
     const realm = JwtBearerStrategy.readRequiredConfig(
       configService,
       KeycloakUserAdminService.ENV_KEYCLOAK_REALM,

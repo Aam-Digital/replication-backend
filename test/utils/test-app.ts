@@ -63,7 +63,7 @@ export async function startTestApp(
   // than pointing at MockCouchDb or some other reachable host: if that
   // assumption ever stops holding, tests should hang/fail loudly here
   // instead of silently depending on a fetch nobody set up a fixture for.
-  process.env.KEYCLOAK_ADMIN_BASE_URL = 'http://127.0.0.1:1';
+  process.env.KEYCLOAK_ADMIN_BASE_URL = 'https://127.0.0.1:1';
   process.env.KEYCLOAK_REALM = 'e2e-test-realm';
 
   let app: INestApplication | undefined;

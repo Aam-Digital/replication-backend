@@ -1,6 +1,6 @@
 import { ConfigService } from '@nestjs/config';
 import { generateKeyPairSync, KeyObject } from 'crypto';
-import * as http from 'http';
+import * as https from 'https';
 import * as jwt from 'jsonwebtoken';
 import { AddressInfo } from 'net';
 import { of } from 'rxjs';
@@ -8,8 +8,27 @@ import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { KeycloakUserAdminService } from '../../../permissions/user-identity/keycloak-user-admin.service';
 import { JwtBearerStrategy } from './jwt-bearer.strategy';
 
+// Test-only self-signed certificate for the loopback JWKS server. The suite
+// trusts only this public certificate and does not disable TLS verification.
+const TLS_PRIVATE_KEY = `-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgwhHpfha/RpBSsecl
+rhQB7I8yHNI/xSIt5dVd2nw2WlChRANCAATblJIW/XHqeQhFRu8uPd0oI7zgZdBn
+6Sx881KmomyEcMBC+lDqHNRAOBzHvIJSQsr9UksQ5iynkXi4XTZ6gmdL
+-----END PRIVATE KEY-----`;
+const TLS_CERTIFICATE = `-----BEGIN CERTIFICATE-----
+MIIBjTCCATSgAwIBAgIUPAQFsQOhLU/+B2yd6niJCd547hgwCgYIKoZIzj0EAwIw
+FDESMBAGA1UEAwwJMTI3LjAuMC4xMB4XDTI2MDkwOTEzNTYzMFoXDTM2MDkwNjEz
+NTYzMFowFDESMBAGA1UEAwwJMTI3LjAuMC4xMFkwEwYHKoZIzj0CAQYIKoZIzj0D
+AQcDQgAE25SSFv1x6nkIRUbvLj3dKCO84GXQZ+ksfPNSpqJshHDAQvpQ6hzUQDgc
+x7yCUkLK/VJLEOYsp5F4uF02eoJnS6NkMGIwHQYDVR0OBBYEFJTNIQSvcu7Yg3Cy
+4YGXc81uoTrwMB8GA1UdIwQYMBaAFJTNIQSvcu7Yg3Cy4YGXc81uoTrwMA8GA1Ud
+EQQIMAaHBH8AAAEwDwYDVR0TAQH/BAUwAwEB/zAKBggqhkjOPQQDAgNHADBEAiBm
+ZkvuS2UBOnWw8Dy3G/qmna8+ucd2tlGyDR3+ZKXMKQIgU8vcjkQ4VthEE66Wlo5v
+xJ+uAwkw/OD/PQ5Met2swNA=
+-----END CERTIFICATE-----`;
+
 /**
- * These tests spin up a real HTTP server serving a JWKS document and sign
+ * These tests spin up a real HTTPS server serving a JWKS document and sign
  * real RS256 tokens against it, then drive the strategy's `authenticate()`
  * (not just `validate()`, which only runs after passport-jwt already
  * verified the signature) - this is the only way to actually exercise the
@@ -20,10 +39,11 @@ describe('JwtBearerStrategy', () => {
   const REALM = 'testrealm';
   const KID = 'test-kid-1';
 
-  let jwksServer: http.Server;
+  let jwksServer: https.Server;
   let jwksBaseUrl: string;
   let privateKey: string;
   let jwksResponse: { keys: unknown[] };
+  let originalTrustedCa: typeof https.globalAgent.options.ca;
 
   beforeAll(async () => {
     const { publicKey, privateKey: privKey } = generateKeyPairSync('rsa', {
@@ -36,23 +56,30 @@ describe('JwtBearerStrategy', () => {
     >;
     jwksResponse = { keys: [{ ...jwk, kid: KID, use: 'sig', alg: 'RS256' }] };
 
-    jwksServer = http.createServer((req, res) => {
-      if (req.url === `/realms/${REALM}/protocol/openid-connect/certs`) {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(jwksResponse));
-        return;
-      }
-      res.writeHead(404).end();
-    });
+    originalTrustedCa = https.globalAgent.options.ca;
+    https.globalAgent.options.ca = TLS_CERTIFICATE;
+
+    jwksServer = https.createServer(
+      { key: TLS_PRIVATE_KEY, cert: TLS_CERTIFICATE },
+      (req, res) => {
+        if (req.url === `/realms/${REALM}/protocol/openid-connect/certs`) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(jwksResponse));
+          return;
+        }
+        res.writeHead(404).end();
+      },
+    );
     await new Promise<void>((resolve) =>
       jwksServer.listen(0, '127.0.0.1', () => resolve()),
     );
     const { port } = jwksServer.address() as AddressInfo;
-    jwksBaseUrl = `http://127.0.0.1:${port}`;
+    jwksBaseUrl = `https://127.0.0.1:${port}`;
   });
 
   afterAll(async () => {
     await new Promise((resolve) => jwksServer.close(resolve));
+    https.globalAgent.options.ca = originalTrustedCa;
   });
 
   function configServiceStub(
@@ -118,6 +145,15 @@ describe('JwtBearerStrategy', () => {
         [KeycloakUserAdminService.ENV_KEYCLOAK_ADMIN_BASE_URL]: undefined,
       }),
     ).toThrow(/KEYCLOAK_ADMIN_BASE_URL/);
+  });
+
+  it('throws when KEYCLOAK_ADMIN_BASE_URL does not use HTTPS', () => {
+    expect(() =>
+      buildStrategy({
+        [KeycloakUserAdminService.ENV_KEYCLOAK_ADMIN_BASE_URL]:
+          'http://keycloak.example.com',
+      }),
+    ).toThrow(/KEYCLOAK_ADMIN_BASE_URL.*HTTPS/);
   });
 
   it('throws when KEYCLOAK_REALM is missing', () => {

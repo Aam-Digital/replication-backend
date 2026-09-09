@@ -87,9 +87,25 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
    */
   private async assertSecurityIsAdminOnly(primaryDb: string): Promise<void> {
     for (const db of [primaryDb, ATTACHMENTS_DB]) {
-      const security = await firstValueFrom(
-        this.couchdbService.get<CouchdbSecurityDoc>(db, '_security'),
-      );
+      let security: CouchdbSecurityDoc;
+      try {
+        security = await firstValueFrom(
+          this.couchdbService.get<CouchdbSecurityDoc>(db, '_security'),
+        );
+      } catch (error) {
+        this.logger.error(
+          'CRITICAL: Could not verify whether CouchDB database has an ' +
+            'admin-only _security document. The response was unreadable, so ' +
+            'this check is inconclusive. Continuing startup.',
+          {
+            db,
+            error: error instanceof Error ? error.message : String(error),
+            status:
+              error instanceof HttpException ? error.getStatus() : undefined,
+          },
+        );
+        return;
+      }
       if (CouchdbStartupInvariantsService.isAdminOnly(security)) {
         continue;
       }

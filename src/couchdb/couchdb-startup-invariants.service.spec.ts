@@ -133,6 +133,33 @@ describe('CouchdbStartupInvariantsService', () => {
     );
   });
 
+  it('does not throw and logs CRITICAL when a _security document is unreadable', async () => {
+    couchdbService.get.mockImplementation((db?: string, docId?: string) => {
+      if (docId === '_security' && db === 'app') {
+        return throwError(() => new Error('unreadable response')) as any;
+      }
+      if (docId === '_security') {
+        return of(emptySecurity) as any;
+      }
+      return throwError(() => fakeHttpException(404)) as any;
+    });
+    const service = buildService();
+    const errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+
+    await expect(service.onModuleInit()).resolves.toBeUndefined();
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringMatching(/CRITICAL.*Could not verify/),
+      expect.objectContaining({ db: 'app', error: 'unreadable response' }),
+    );
+    expect(couchdbService.get).toHaveBeenCalledWith(
+      '_node/_local/_config',
+      'jwt_keys',
+    );
+  });
+
   it('does not throw and logs CRITICAL when jwt_keys is configured', async () => {
     couchdbService.get.mockImplementation((db?: string, docId?: string) => {
       if (docId === '_security') {
