@@ -106,9 +106,9 @@ describe('JwtBearerStrategy', () => {
       (strategy as unknown as { error: (err: unknown) => void }).error = (
         err,
       ) => reject(err instanceof Error ? err : new Error(String(err)));
-      (strategy as unknown as { authenticate: (req: unknown) => void }).authenticate(
-        req,
-      );
+      (
+        strategy as unknown as { authenticate: (req: unknown) => void }
+      ).authenticate(req);
     });
   }
 

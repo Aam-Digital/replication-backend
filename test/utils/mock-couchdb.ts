@@ -26,7 +26,10 @@ export class MockCouchDb {
   /** db name -> _security doc; unset reads back as {}, matching real CouchDB */
   private readonly security = new Map<
     string,
-    { admins?: { names?: string[]; roles?: string[] }; members?: { names?: string[]; roles?: string[] } }
+    {
+      admins?: { names?: string[]; roles?: string[] };
+      members?: { names?: string[]; roles?: string[] };
+    }
   >();
   /**
    * Simulates CouchDB's [jwt_keys] config section: undefined = not configured

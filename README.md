@@ -78,7 +78,7 @@ configured via `PERMISSION_DB` during startup. Its behavior is fail-closed:
 
 ### Startup invariant checks (`CouchdbStartupInvariantsService`)
 
-This service's whole security model relies on it being the *only* door to
+This service's whole security model relies on it being the _only_ door to
 its databases - every client authenticates against it, never against
 CouchDB directly. That assumption lives in CouchDB's own configuration, not
 in this codebase, so `CouchdbStartupInvariantsService` asserts it (and only
@@ -97,19 +97,20 @@ deployment tooling writes it) at startup, against the primary db
 
   **Known upgrade hazard:** nothing clears this `_security` document when a
   deployment switches from database-only to running this service in front of
-  CouchDB, so this check fails closed for *any* database that ever ran
+  CouchDB, so this check fails closed for _any_ database that ever ran
   database-only - not just a currently-misconfigured one. Audit `_security`
   across a fleet before rolling this out. The fix is a `PUT` of an empty
   `_security` document (the error message includes the exact command).
+
 - **CouchDB has no `[jwt_keys]` configured.** This is dead config in this
   (permission-checked) deployment mode - every client here uses basic auth -
   and, combined with a realm role literally named `_admin` (Keycloak's
   realm-role mapper copies realm roles onto the `_couchdb.roles` claim
-  verbatim, and CouchDB treats that value as a *server admin* grant), it
+  verbatim, and CouchDB treats that value as a _server admin_ grant), it
   would let such a user bypass `_security` entirely by authenticating via JWT
   straight against CouchDB. Logs `CRITICAL` but **does not** abort startup -
   it is a latent risk while `_security` is admin-only, not a live bypass.
-  This check needs CouchDB *server* admin (not just database
+  This check needs CouchDB _server_ admin (not just database
   member/admin) - against a managed CouchDB where that is unavailable, it
   logs a "could not verify" warning instead of failing or blocking startup.
 

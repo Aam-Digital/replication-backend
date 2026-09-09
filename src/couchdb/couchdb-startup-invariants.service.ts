@@ -50,7 +50,9 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
   }
 
   private getPrimaryDbName(): string {
-    return this.configService.get<string>(RulesService.ENV_PERMISSION_DB) ?? 'app';
+    return (
+      this.configService.get<string>(RulesService.ENV_PERMISSION_DB) ?? 'app'
+    );
   }
 
   /**
@@ -111,7 +113,9 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
     }
   }
 
-  private static isAdminOnly(security: CouchdbSecurityDoc | undefined): boolean {
+  private static isAdminOnly(
+    security: CouchdbSecurityDoc | undefined,
+  ): boolean {
     const isEmpty = (arr: string[] | undefined) => !arr || arr.length === 0;
     return (
       isEmpty(security?.admins?.names) &&
@@ -151,7 +155,10 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
         ),
       );
     } catch (error) {
-      if (error instanceof HttpException && error.getStatus() === HttpStatus.NOT_FOUND) {
+      if (
+        error instanceof HttpException &&
+        error.getStatus() === HttpStatus.NOT_FOUND
+      ) {
         return; // confirmed: no jwt_keys section configured
       }
       // GET /_node/_local/_config/jwt_keys requires CouchDB *server* admin,
