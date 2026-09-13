@@ -44,7 +44,7 @@ jobs:
       - name: Run Tests with coverage
         run: npm run test:cov
 
-      - uses: qltysh/qlty-action/coverage@v1
+      - uses: qltysh/qlty-action/coverage@v2
         with:
           oidc: true
           files: coverage/lcov.info
