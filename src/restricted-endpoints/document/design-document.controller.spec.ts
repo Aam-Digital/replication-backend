@@ -331,6 +331,39 @@ describe('DesignDocumentController', () => {
       // (Child:1 readable, Child:2 and Child:3 denied)
       expect(body().rows).toHaveLength(1);
     });
+
+    it('should treat limit=0 as no limit (below the minimum of 1) and fall back to a single unmodified call', async () => {
+      const ability = createDocumentAbility(
+        [{ action: 'read', subject: 'Child', conditions: { _id: 'Child:1' } }],
+        { detectSubjectType: detectDocumentType },
+      );
+      mockPermissionService.getAbilityFor = jest.fn(() => ability);
+      jest
+        .spyOn(mockCouchDBService, 'get')
+        .mockReturnValue(of(JSON.parse(JSON.stringify(viewResult))));
+      const { res, body } = createMockResponse();
+
+      await controller.queryView(
+        databaseName,
+        'search_index',
+        'by_name',
+        requestingUser,
+        { limit: '0', include_docs: 'true' },
+        res,
+      );
+
+      // limit=0 fails the positive-limit check, so the pagination loop is
+      // never entered; the value is forwarded to CouchDB unmodified
+      expect(mockCouchDBService.get).toHaveBeenCalledTimes(1);
+      expect(mockCouchDBService.get).toHaveBeenCalledWith(
+        databaseName,
+        '_design/search_index/_view/by_name',
+        { limit: '0', include_docs: 'true' },
+      );
+      // include_docs filtering still applies to the buffered result
+      // (Child:1 readable, Child:2 and Child:3 denied)
+      expect(body().rows).toHaveLength(1);
+    });
   });
 
   describe('queryView (paginated, limit + include_docs=true)', () => {

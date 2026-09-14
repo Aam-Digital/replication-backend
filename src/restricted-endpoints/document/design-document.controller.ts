@@ -131,8 +131,9 @@ export class DesignDocumentController {
    *
    * When a valid `limit` is given together with `include_docs=true`, the backend
    * might request more docs than `limit` in order to find `limit` permitted docs.
-   * To query further pages the frontend should then use the returned `offset` as
-   * `skip` (absolute) and omit `startkey` in order to fetch the next page of docs.
+   * To query further pages the frontend should then use the returned `offset`,
+   * set `skip = offset + limit` and omit `startkey` in order to fetch the next 
+   * page of docs.
    *
    * @param db database name
    * @param designName design document name (without `_design/` prefix)
@@ -153,7 +154,7 @@ export class DesignDocumentController {
   ): Promise<void> {
     const viewPath = `_design/${designName}/_view/${viewName}`;
     const includeDocs = queryParams.include_docs === 'true' || queryParams.include_docs === true;
-    const limit = this.parseNonNegativeInt(queryParams.limit);
+    const limit = this.parseInt(queryParams.limit, 1);
     const rowFilter = this.viewRowFilter(user)
 
     if (!includeDocs || limit === undefined) {
@@ -167,7 +168,7 @@ export class DesignDocumentController {
       return;
     }
 
-    const skip = this.parseNonNegativeInt(queryParams.skip) ?? 0;
+    const skip = this.parseInt(queryParams.skip) ?? 0;
     const stream = new ViewResponseStream(res);
     try {
       const { total_rows, offset } = await this.streamPermittedViewRows(
@@ -286,19 +287,14 @@ export class DesignDocumentController {
     };
   }
 
-  /**
-   * Per-row permission filter for view responses: rows without a doc are
-   * kept only when they represent a deletion (nothing to check permissions
-   * against); otherwise the row is kept when its doc is readable.
-   */
   private viewRowFilter(user: UserInfo): (row: ViewResponseRow) => boolean {
     const ability = this.permissionService.getAbilityFor(user);
     return (row) => !!row?.doc && ability.can('read', row.doc);
   }
 
-  private parseNonNegativeInt(value: unknown): number | undefined {
+  private parseInt(value: unknown, min = 0): number | undefined {
     if (typeof value !== 'string') return undefined;
     const parsed = Number(value);
-    return Number.isInteger(parsed) && parsed >= 0 ? parsed : undefined;
+    return Number.isInteger(parsed) && parsed >= min ? parsed : undefined;
   }
 }
