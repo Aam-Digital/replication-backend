@@ -367,24 +367,24 @@ describe('DesignDocumentController', () => {
   });
 
   describe('queryView (paginated, limit + include_docs=true)', () => {
-      const ability = createDocumentAbility(
-        [
-          {
-            action: 'read',
-            subject: 'Child',
-            conditions: { readable: true },
-          },
-        ],
-        { detectSubjectType: detectDocumentType },
-      );
+    const ability = createDocumentAbility(
+      [
+        {
+          action: 'read',
+          subject: 'Child',
+          conditions: { readable: true },
+        },
+      ],
+      { detectSubjectType: detectDocumentType },
+    );
 
     function row(id: string, readable: boolean) {
       return { id, key: id, value: null, doc: { _id: id, readable } };
     }
 
     beforeEach(() => {
-        mockPermissionService.getAbilityFor = jest.fn(() => ability);
-    })
+      mockPermissionService.getAbilityFor = jest.fn(() => ability);
+    });
 
     it('passes offset through unmodified when nothing gets filtered', async () => {
       // simulate a non-trivial CouchDB-reported offset (e.g. from a startkey
@@ -460,15 +460,12 @@ describe('DesignDocumentController', () => {
       const deniedBatch = {
         total_rows: 20,
         offset: 0,
-        rows: Array.from({ length: 10 }, (_, i) => row(`Child:${i}`, false))
+        rows: Array.from({ length: 10 }, (_, i) => row(`Child:${i}`, false)),
       };
       const permittedBatch = {
         total_rows: 20,
         offset: 10,
-        rows: [
-          row('Child:10', true),
-          row('Child:11', true)
-        ],
+        rows: [row('Child:10', true), row('Child:11', true)],
       };
       jest
         .spyOn(mockCouchDBService, 'get')
@@ -499,7 +496,10 @@ describe('DesignDocumentController', () => {
         { include_docs: 'true', skip: 10, limit: 10 },
       );
       const result = body();
-      expect(result.rows.map((r: any) => r.id)).toEqual(['Child:10', 'Child:11']);
+      expect(result.rows.map((r: any) => r.id)).toEqual([
+        'Child:10',
+        'Child:11',
+      ]);
       // raw examined = 10 (denied batch) + 2 (permitted batch) = 12
       // offset = firstBatchOffset(0) + 12 - 2 = 10
       expect(result.offset).toBe(10);

@@ -132,7 +132,7 @@ export class DesignDocumentController {
    * When a valid `limit` is given together with `include_docs=true`, the backend
    * might request more docs than `limit` in order to find `limit` permitted docs.
    * To query further pages the frontend should then use the returned `offset`,
-   * set `skip = offset + limit` and omit `startkey` in order to fetch the next 
+   * set `skip = offset + limit` and omit `startkey` in order to fetch the next
    * page of docs.
    *
    * @param db database name
@@ -153,9 +153,10 @@ export class DesignDocumentController {
     @Res() res: Response,
   ): Promise<void> {
     const viewPath = `_design/${designName}/_view/${viewName}`;
-    const includeDocs = queryParams.include_docs === 'true' || queryParams.include_docs === true;
+    const includeDocs =
+      queryParams.include_docs === 'true' || queryParams.include_docs === true;
     const limit = this.parseInt(queryParams.limit, 1);
-    const rowFilter = this.viewRowFilter(user)
+    const rowFilter = this.viewRowFilter(user);
 
     if (!includeDocs || limit === undefined) {
       const result = await firstValueFrom(
@@ -218,7 +219,7 @@ export class DesignDocumentController {
     limit: number,
     isPermitted: (row: ViewResponseRow) => boolean,
     stream: ViewResponseStream,
-  ): Promise<{ total_rows: number, offset: number}> {
+  ): Promise<{ total_rows: number; offset: number }> {
     const baseParams: ViewQueryParams = { ...queryParams };
     delete baseParams.skip;
     delete baseParams.limit;
