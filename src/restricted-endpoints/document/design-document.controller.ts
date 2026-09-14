@@ -149,7 +149,7 @@ export class DesignDocumentController {
     @Param('designName') designName: string,
     @Param('viewName') viewName: string,
     @User() user: UserInfo,
-    @Query() queryParams: ViewQueryParams = {},
+    @Query() queryParams: ViewQueryParams,
     @Res() res: Response,
   ): Promise<void> {
     const viewPath = `_design/${designName}/_view/${viewName}`;
