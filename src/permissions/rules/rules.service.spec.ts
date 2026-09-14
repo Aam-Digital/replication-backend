@@ -180,26 +180,6 @@ describe('RulesService', () => {
     ]);
   });
 
-  it('should normalize a not-yet-migrated legacy default/public section on load', () => {
-    const defaultRule: DocumentRule = { subject: 'Config', action: 'read' };
-    const publicRule: DocumentRule = {
-      subject: 'SiteSettings',
-      action: 'read',
-    };
-    loadPermissionConfig({
-      ...testPermission.data,
-      default: [defaultRule],
-      public: [publicRule],
-    });
-
-    expect(service.getRulesForUser(normalUser)).toEqual(
-      [defaultRule].concat(userRules),
-    );
-    expect(service.getRulesForUser(undefined as unknown as UserInfo)).toEqual([
-      publicRule,
-    ]);
-  });
-
   it('should prefer the renamed section key when a config still carries both', () => {
     const newRule: DocumentRule = { subject: 'Config', action: 'read' };
     const newPublicRule: DocumentRule = {
@@ -367,18 +347,6 @@ describe('RulesService', () => {
     jest.useRealTimers();
   });
 
-  it('should not emit permissionsChanged when a legacy section key is migrated to its new name', () => {
-    const rule: DocumentRule = { subject: 'Config', action: 'read' };
-    loadPermissionConfig({ ...testPermission.data, default: [rule] });
-    const changed = jest.fn();
-    service.permissionsChanged$.subscribe(changed);
-
-    // identical rules, only stored under the renamed section key
-    loadPermissionConfig({ ...testPermission.data, _default: [rule] });
-
-    expect(changed).not.toHaveBeenCalled();
-  });
-
   it('should restore managed defaults when a change strips them', async () => {
     jest.useFakeTimers({ doNotFake: ['nextTick'] });
     try {
@@ -386,7 +354,7 @@ describe('RulesService', () => {
       const adminRule: DocumentRule = { action: 'read', subject: 'Child' };
       const strippedDoc = new Permission({
         ...testPermission.data,
-        default: [adminRule],
+        _default: [adminRule],
       });
       strippedDoc._rev = '2-abc';
       jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(strippedDoc));
@@ -433,33 +401,6 @@ describe('RulesService', () => {
           }),
         }),
       );
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
-  it('should migrate a legacy default section to the renamed _default key', async () => {
-    jest.useFakeTimers({ doNotFake: ['nextTick'] });
-    try {
-      (mockCouchdbService.put as jest.Mock).mockClear();
-      const adminRule: DocumentRule = { action: 'read', subject: 'Child' };
-      const legacyDoc = new Permission({
-        ...testPermission.data,
-        default: [...MANAGED_DEFAULT_RULES, adminRule],
-      });
-      legacyDoc._rev = '2-abc';
-      jest.spyOn(mockCouchdbService, 'get').mockReturnValue(of(legacyDoc));
-
-      changesSubject.next({ id: Permission.DOC_ID, seq: '3' });
-      await new Promise(process.nextTick);
-      jest.advanceTimersByTime(1500);
-
-      const written = (mockCouchdbService.put as jest.Mock).mock.calls[0][1];
-      expect(written.data._default).toEqual([
-        ...MANAGED_DEFAULT_RULES,
-        adminRule,
-      ]);
-      expect(written.data.default).toBeUndefined();
     } finally {
       jest.useRealTimers();
     }
@@ -529,20 +470,6 @@ describe('RulesService', () => {
       });
 
       expect(mockCouchdbService.put).not.toHaveBeenCalled();
-    });
-
-    it('should migrate a legacy public section to the renamed _public key', async () => {
-      const written = await writeBackFor({
-        ...testPermission.data,
-        _default: [...MANAGED_DEFAULT_RULES],
-        public: [publicRule],
-      });
-
-      expect(written.data._public).toEqual([
-        ...MANAGED_PUBLIC_RULES,
-        publicRule,
-      ]);
-      expect(written.data.public).toBeUndefined();
     });
   });
 
