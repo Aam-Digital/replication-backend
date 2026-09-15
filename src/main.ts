@@ -3,7 +3,6 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import * as dotenv from 'dotenv';
-import { createProxyMiddleware } from 'http-proxy-middleware';
 import { AppModule } from './app.module';
 import { SentryLogger } from './common/sentry-logger.service';
 import { AppConfiguration } from './config/configuration';
@@ -25,20 +24,6 @@ async function bootstrap() {
     bodyParser: false,
     logger: sentryEnabled ? new SentryLogger() : undefined,
   });
-  // Proxy for CouchDB admin view, CouchDB can be directly accessed through this path
-  app.use(
-    '/couchdb',
-    createProxyMiddleware({
-      pathRewrite: { '/couchdb/': '/' },
-      target: process.env.DATABASE_URL,
-      secure: true,
-      changeOrigin: true,
-      followRedirects: false,
-      xfwd: true,
-      autoRewrite: true,
-    }),
-  );
-
   app.getHttpAdapter().getInstance().disable('x-powered-by');
 
   // SwaggerUI setup see https://docs.nestjs.com/openapi/introduction#bootstrap

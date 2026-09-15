@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import { Agent as HttpAgent } from 'http';
 import { Agent as HttpsAgent } from 'https';
 import { CouchdbService } from './couchdb.service';
+import { CouchdbStartupInvariantsService } from './couchdb-startup-invariants.service';
 import { DocumentChangesService } from './document-changes.service';
 
 /**
@@ -71,7 +72,11 @@ export function couchdbHttpOptions(
       useFactory: couchdbHttpOptions,
     }),
   ],
-  providers: [CouchdbService, DocumentChangesService],
+  providers: [
+    CouchdbService,
+    DocumentChangesService,
+    CouchdbStartupInvariantsService,
+  ],
   exports: [CouchdbService, DocumentChangesService],
 })
 export class CouchdbModule {}
