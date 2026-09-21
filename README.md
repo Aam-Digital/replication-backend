@@ -81,31 +81,40 @@ configured via `PERMISSION_DB` during startup. Its behavior is fail-closed:
 This service's whole security model relies on it being the _only_ door to
 its databases - every client authenticates against it, never against
 CouchDB directly. That assumption lives in CouchDB's own configuration, not
-in this codebase, so `CouchdbStartupInvariantsService` asserts it (and only
-asserts - it never mutates CouchDB's config, which is owned by whatever
-deployment tooling writes it) at startup, against the primary db
-(`PERMISSION_DB`, default `app`) and `app-attachments`:
+in this codebase, so `CouchdbStartupInvariantsService` asserts it
+(but doesn't write) at startup, against the primary DBs.
+Insecure settings log `CRITICAL` and continue, so a routine version
+upgrade against an already-misconfigured CouchDB doesn't turn into an
+outage:
 
 - **Both databases exist**, creating them if missing (helps a fresh install
   only; an existing, misconfigured database is caught by the next check).
-- **`_security` is admin-only**, i.e. does not grant a non-admin `members` or
-  `admins` role or name. If it does, startup is **aborted** with a `CRITICAL`
-  log - a permissive `_security` (e.g. the `user_app` role a database-only
-  deployment's `create-couchdb.sh` applies) lets any client CouchDB itself
-  accepts read and write the database directly, skipping every permission
-  check this service performs entirely.
+- **`_security` is locked down to CouchDB's reserved `_admin` role** only.
+  `_admin` is only ever attached to a request CouchDB itself authenticated
+  as a genuine server admin (this stack's `COUCHDB_USER`/`COUCHDB_PASSWORD`,
+  the same account handed to this service as `DATABASE_USER`).
 
-- **CouchDB has no `[jwt_keys]` configured.** This is dead config in this
-  (permission-checked) deployment mode - every client here uses basic auth -
-  and, combined with a realm role literally named `_admin` (Keycloak's
-  realm-role mapper copies realm roles onto the `_couchdb.roles` claim
-  verbatim, and CouchDB treats that value as a _server admin_ grant), it
-  would let such a user bypass `_security` entirely by authenticating via JWT
-  straight against CouchDB. Logs `CRITICAL` but **does not** abort startup -
-  it is a latent risk while `_security` is admin-only, not a live bypass.
-  This check needs CouchDB _server_ admin (not just database
-  member/admin) - against a managed CouchDB where that is unavailable, it
-  logs a "could not verify" warning instead of failing or blocking startup.
+  **Note:** an _empty_ `_security` document (no admins, no members) is
+  **not** a safe/admin-only state - it's the opposite. CouchDB treats an
+  empty `members` list as "no restriction", so it grants access to _any_
+  authenticated CouchDB user (not just server admins), and this check flags
+  it just as loudly as a populated-but-too-broad one.
+
+- **CouchDB has no `[jwt_keys]` configured.** A Keycloak realm role literally
+  named `_admin` would otherwise let a user bypass `_security` entirely by
+  authenticating via JWT straight against CouchDB. Logs `CRITICAL`; needs
+  CouchDB server admin to check, otherwise logs a "could not verify" warning.
+
+- **CouchDB rejects anonymous requests** (`[chttpd] require_valid_user =
+  true`). Some databases in this deployment (`_users`, `report-calculation`,
+  `notification-webhook`) never get a `_security` document at all, so
+  without this they're reachable with no credentials whatsoever. Logs
+  `CRITICAL` if unset - CouchDB's default is "anonymous allowed", so unlike
+  the `jwt_keys` check, absence is not treated as safe. Same server-admin
+  caveat applies.
+
+  **Currently noisy by design:** not set in ndb-setup's CouchDB config yet,
+  so this logs `CRITICAL` on every startup until that's fixed there.
 
 ## Operation
 

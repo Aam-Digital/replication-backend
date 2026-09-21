@@ -5,6 +5,11 @@ import { RulesService } from '../permissions/rules/rules.service';
 import { CouchdbStartupInvariantsService } from './couchdb-startup-invariants.service';
 import { CouchdbService } from './couchdb.service';
 
+type SecurityDoc = {
+  admins?: { names?: string[]; roles?: string[] };
+  members?: { names?: string[]; roles?: string[] };
+};
+
 function fakeHttpException(status: number): HttpException {
   return new HttpException({ error: 'fake' }, status);
 }
@@ -12,8 +17,16 @@ function fakeHttpException(status: number): HttpException {
 describe('CouchdbStartupInvariantsService', () => {
   let couchdbService: jest.Mocked<Pick<CouchdbService, 'createDb' | 'get'>>;
   let configService: ConfigService;
+  let errorSpy: jest.SpyInstance;
+  let warnSpy: jest.SpyInstance;
 
-  const emptySecurity = {
+  /** the canonical document create-couchdb.sh's --with-permissions mode applies */
+  const lockedDownSecurity: SecurityDoc = {
+    admins: { names: [], roles: ['_admin'] },
+    members: { names: [], roles: ['_admin'] },
+  };
+
+  const emptySecurity: SecurityDoc = {
     admins: { names: [], roles: [] },
     members: { names: [], roles: [] },
   };
@@ -24,6 +37,12 @@ describe('CouchdbStartupInvariantsService', () => {
       get: jest.fn(),
     };
     configService = { get: jest.fn().mockReturnValue(undefined) } as any;
+    errorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation(() => undefined);
+    warnSpy = jest
+      .spyOn(Logger.prototype, 'warn')
+      .mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -37,21 +56,48 @@ describe('CouchdbStartupInvariantsService', () => {
     );
   }
 
-  /** default happy-path stub: admin-only security everywhere, no jwt_keys */
-  function stubHappyPath() {
+  /**
+   * Stubs `couchdbService.get` for all four checks at once, defaulting to the
+   * happy path (both dbs locked down, no jwt_keys, anonymous access blocked)
+   * and overriding only what a test cares about.
+   */
+  function stubCouchdb({
+    securityByDb = {},
+    jwtKeys = 'absent',
+    requireValidUser = 'true',
+  }: {
+    securityByDb?: Record<string, SecurityDoc | 'unreadable'>;
+    jwtKeys?: 'absent' | 'forbidden' | Record<string, string>;
+    requireValidUser?: string | boolean | 'unset' | 'forbidden';
+  } = {}) {
     couchdbService.get.mockImplementation((db?: string, docId?: string) => {
       if (docId === '_security') {
-        return of(emptySecurity) as any;
+        const security = securityByDb[db!];
+        if (security === 'unreadable') {
+          return throwError(() => new Error('unreadable response')) as any;
+        }
+        return of(security ?? lockedDownSecurity) as any;
       }
-      if (db === '_node/_local/_config' && docId === 'jwt_keys') {
-        return throwError(() => fakeHttpException(404)) as any;
+      if (docId === 'jwt_keys') {
+        if (jwtKeys === 'absent')
+          return throwError(() => fakeHttpException(404)) as any;
+        if (jwtKeys === 'forbidden')
+          return throwError(() => fakeHttpException(403)) as any;
+        return of(jwtKeys) as any;
+      }
+      if (docId === 'require_valid_user') {
+        if (requireValidUser === 'unset')
+          return throwError(() => fakeHttpException(404)) as any;
+        if (requireValidUser === 'forbidden')
+          return throwError(() => fakeHttpException(403)) as any;
+        return of(requireValidUser) as any;
       }
       return of(undefined) as any;
     });
   }
 
   it('creates the primary and attachments databases (idempotent)', async () => {
-    stubHappyPath();
+    stubCouchdb();
     const service = buildService();
 
     await service.onModuleInit();
@@ -64,7 +110,7 @@ describe('CouchdbStartupInvariantsService', () => {
     (configService.get as jest.Mock).mockImplementation((key: string) =>
       key === RulesService.ENV_PERMISSION_DB ? 'custom-db' : undefined,
     );
-    stubHappyPath();
+    stubCouchdb();
     const service = buildService();
 
     await service.onModuleInit();
@@ -74,147 +120,189 @@ describe('CouchdbStartupInvariantsService', () => {
     expect(couchdbService.get).toHaveBeenCalledWith('custom-db', '_security');
   });
 
-  it('does not throw when _security is empty/admin-only', async () => {
-    stubHappyPath();
+  it('logs nothing on the full happy path (locked-down security, no jwt_keys, anonymous access blocked)', async () => {
+    stubCouchdb();
     const service = buildService();
-
-    await expect(service.onModuleInit()).resolves.toBeUndefined();
-  });
-
-  it('does not throw and logs CRITICAL when the primary db has a permissive _security', async () => {
-    couchdbService.get.mockImplementation((db?: string, docId?: string) => {
-      if (docId === '_security' && db === 'app') {
-        return of({
-          admins: { names: [], roles: [] },
-          members: { names: [], roles: ['user_app'] },
-        }) as any;
-      }
-      if (docId === '_security') {
-        return of(emptySecurity) as any;
-      }
-      return throwError(() => fakeHttpException(404)) as any;
-    });
-    const service = buildService();
-    const errorSpy = jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
-
-    await expect(service.onModuleInit()).resolves.toBeUndefined();
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('non-admin-only'),
-      expect.objectContaining({ db: 'app' }),
-    );
-  });
-
-  it('does not throw and logs CRITICAL when the attachments db has a permissive _security', async () => {
-    couchdbService.get.mockImplementation((db?: string, docId?: string) => {
-      if (docId === '_security' && db === 'app-attachments') {
-        return of({
-          admins: { names: [], roles: [] },
-          members: { names: [], roles: ['user_app'] },
-        }) as any;
-      }
-      if (docId === '_security') {
-        return of(emptySecurity) as any;
-      }
-      return throwError(() => fakeHttpException(404)) as any;
-    });
-    const service = buildService();
-    const errorSpy = jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
-
-    await expect(service.onModuleInit()).resolves.toBeUndefined();
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('non-admin-only'),
-      expect.objectContaining({ db: 'app-attachments' }),
-    );
-  });
-
-  it('does not throw and logs CRITICAL when a _security document is unreadable', async () => {
-    couchdbService.get.mockImplementation((db?: string, docId?: string) => {
-      if (docId === '_security' && db === 'app') {
-        return throwError(() => new Error('unreadable response')) as any;
-      }
-      if (docId === '_security') {
-        return of(emptySecurity) as any;
-      }
-      return throwError(() => fakeHttpException(404)) as any;
-    });
-    const service = buildService();
-    const errorSpy = jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
-
-    await expect(service.onModuleInit()).resolves.toBeUndefined();
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringMatching(/CRITICAL.*Could not verify/),
-      expect.objectContaining({ db: 'app', error: 'unreadable response' }),
-    );
-    expect(couchdbService.get).toHaveBeenCalledWith(
-      '_node/_local/_config',
-      'jwt_keys',
-    );
-  });
-
-  it('does not throw and logs CRITICAL when jwt_keys is configured', async () => {
-    couchdbService.get.mockImplementation((db?: string, docId?: string) => {
-      if (docId === '_security') {
-        return of(emptySecurity) as any;
-      }
-      if (db === '_node/_local/_config' && docId === 'jwt_keys') {
-        return of({ 'rsa:kid1': '-----BEGIN PUBLIC KEY-----...' }) as any;
-      }
-      return of(undefined) as any;
-    });
-    const service = buildService();
-    const errorSpy = jest
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
-
-    await expect(service.onModuleInit()).resolves.toBeUndefined();
-
-    expect(errorSpy).toHaveBeenCalledWith(
-      expect.stringContaining('CRITICAL'),
-      expect.objectContaining({ configuredKeyIds: ['rsa:kid1'] }),
-    );
-  });
-
-  it('does not throw and does not warn when jwt_keys is confirmed absent (404)', async () => {
-    stubHappyPath();
-    const service = buildService();
-    const warnSpy = jest
-      .spyOn(Logger.prototype, 'warn')
-      .mockImplementation(() => undefined);
 
     await service.onModuleInit();
 
+    expect(errorSpy).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
   });
 
-  it('logs "could not verify" instead of failing when the jwt_keys check is forbidden', async () => {
-    couchdbService.get.mockImplementation((db?: string, docId?: string) => {
-      if (docId === '_security') {
-        return of(emptySecurity) as any;
-      }
-      if (db === '_node/_local/_config' && docId === 'jwt_keys') {
-        return throwError(() => fakeHttpException(403)) as any;
-      }
-      return of(undefined) as any;
+  describe('_security', () => {
+    it.each<[string, SecurityDoc]>([
+      ['admins.roles re-asserted as _admin', lockedDownSecurity],
+      [
+        'admins fully empty (no extra grant, no explicit _admin role either)',
+        {
+          admins: { names: [], roles: [] },
+          members: { names: [], roles: ['_admin'] },
+        },
+      ],
+    ])('does not log CRITICAL when %s', async (_label, security) => {
+      stubCouchdb({ securityByDb: { app: security } });
+      const service = buildService();
+
+      await service.onModuleInit();
+
+      expect(errorSpy).not.toHaveBeenCalled();
     });
-    const service = buildService();
-    const warnSpy = jest
-      .spyOn(Logger.prototype, 'warn')
-      .mockImplementation(() => undefined);
 
-    await expect(service.onModuleInit()).resolves.toBeUndefined();
+    it.each<[string, SecurityDoc, RegExp]>([
+      ['is empty', emptySecurity, /empty _security document/],
+      [
+        'grants a permissive member role',
+        {
+          admins: { names: [], roles: [] },
+          members: { names: [], roles: ['user_app'] },
+        },
+        /non-admin-only/,
+      ],
+      [
+        'grants an extra db admin name',
+        {
+          admins: { names: ['some-other-user'], roles: [] },
+          members: { names: [], roles: ['_admin'] },
+        },
+        /non-admin-only/,
+      ],
+      [
+        'grants the _admin role plus another member role',
+        {
+          admins: { names: [], roles: ['_admin'] },
+          members: { names: [], roles: ['_admin', 'user_app'] },
+        },
+        /non-admin-only/,
+      ],
+    ])(
+      "logs CRITICAL when the primary db's _security %s",
+      async (_label, security, messagePattern) => {
+        stubCouchdb({ securityByDb: { app: security } });
+        const service = buildService();
 
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Could not verify'),
-      expect.anything(),
+        await service.onModuleInit();
+
+        expect(errorSpy).toHaveBeenCalledWith(
+          expect.stringMatching(messagePattern),
+          expect.objectContaining({ db: 'app' }),
+        );
+      },
     );
+
+    it('logs CRITICAL for the attachments db too (both dbs are checked independently)', async () => {
+      stubCouchdb({
+        securityByDb: {
+          'app-attachments': {
+            admins: { names: [], roles: [] },
+            members: { names: [], roles: ['user_app'] },
+          },
+        },
+      });
+      const service = buildService();
+
+      await service.onModuleInit();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('non-admin-only'),
+        expect.objectContaining({ db: 'app-attachments' }),
+      );
+    });
+
+    it('logs CRITICAL but still checks the other db when a _security document is unreadable', async () => {
+      stubCouchdb({ securityByDb: { app: 'unreadable' } });
+      const service = buildService();
+
+      await expect(service.onModuleInit()).resolves.toBeUndefined();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/CRITICAL.*Could not verify/),
+        expect.objectContaining({ db: 'app', error: 'unreadable response' }),
+      );
+      expect(couchdbService.get).toHaveBeenCalledWith(
+        'app-attachments',
+        '_security',
+      );
+      expect(couchdbService.get).toHaveBeenCalledWith(
+        '_node/_local/_config',
+        'jwt_keys',
+      );
+    });
+  });
+
+  describe('jwt_keys', () => {
+    it('logs CRITICAL when jwt_keys is configured', async () => {
+      stubCouchdb({ jwtKeys: { 'rsa:kid1': '-----BEGIN PUBLIC KEY-----...' } });
+      const service = buildService();
+
+      await service.onModuleInit();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('CRITICAL'),
+        expect.objectContaining({ configuredKeyIds: ['rsa:kid1'] }),
+      );
+    });
+
+    it('logs "could not verify" instead of failing when the check is forbidden', async () => {
+      stubCouchdb({ jwtKeys: 'forbidden' });
+      const service = buildService();
+
+      await service.onModuleInit();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('Could not verify'),
+        expect.anything(),
+      );
+    });
+  });
+
+  describe('require_valid_user', () => {
+    it('logs CRITICAL when confirmed false', async () => {
+      stubCouchdb({ requireValidUser: 'false' });
+      const service = buildService();
+
+      await service.onModuleInit();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('require_valid_user'),
+        expect.objectContaining({ requireValidUser: 'false' }),
+      );
+    });
+
+    it('logs CRITICAL when unset (404) - unlike jwt_keys, absence is not safe here', async () => {
+      stubCouchdb({ requireValidUser: 'unset' });
+      const service = buildService();
+
+      await service.onModuleInit();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('require_valid_user'),
+        expect.objectContaining({ requireValidUser: 'false' }),
+      );
+    });
+
+    it('accepts a JSON boolean true, not just the string "true"', async () => {
+      stubCouchdb({ requireValidUser: true });
+      const service = buildService();
+
+      await service.onModuleInit();
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('logs "could not verify" instead of failing when the check is forbidden', async () => {
+      stubCouchdb({ requireValidUser: 'forbidden' });
+      const service = buildService();
+
+      await service.onModuleInit();
+
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'Could not verify whether CouchDB allows anonymous requests',
+        ),
+        expect.anything(),
+      );
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
   });
 });
