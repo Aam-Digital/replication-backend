@@ -15,6 +15,6 @@
     ]
   },
   "transformIgnorePatterns": [
-    "node_modules/(?!(jsondiffpatch|stream-json|stream-chain|http-proxy-middleware|httpxy|is-plain-obj))"
+    "node_modules/(?!(jsondiffpatch|stream-json|stream-chain|http-proxy-middleware|httpxy|is-plain-obj|@nestjs/jwt))"
   ]
 }
