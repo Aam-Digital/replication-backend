@@ -10,7 +10,7 @@ export class BodyAuthGuard extends AuthGuard('local') {
   // NestJS v12 no longer inherits @Optional() through subclassing, so this
   // constructor has to redeclare it to keep AuthModuleOptions optional.
   constructor(
-    private cookieService: CookieService,
+    private readonly cookieService: CookieService,
     @Optional() options?: AuthModuleOptions,
   ) {
     super(options);
