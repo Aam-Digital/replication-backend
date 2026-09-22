@@ -6,8 +6,6 @@ import { ExecutionContext, Injectable, Optional } from '@nestjs/common';
  */
 @Injectable()
 export class JwtBearerGuard extends AuthGuard('jwt-bearer') {
-  // NestJS v12 no longer inherits @Optional() through subclassing, so this
-  // constructor has to redeclare it to keep AuthModuleOptions optional.
   constructor(@Optional() options?: AuthModuleOptions) {
     super(options);
   }

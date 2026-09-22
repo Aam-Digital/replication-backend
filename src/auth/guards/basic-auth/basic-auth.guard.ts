@@ -6,8 +6,6 @@ import { AuthGuard, AuthModuleOptions } from '@nestjs/passport';
  */
 @Injectable()
 export class BasicAuthGuard extends AuthGuard('basic') {
-  // NestJS v12 no longer inherits @Optional() through subclassing, so this
-  // constructor has to redeclare it to keep AuthModuleOptions optional.
   constructor(@Optional() options?: AuthModuleOptions) {
     super(options);
   }

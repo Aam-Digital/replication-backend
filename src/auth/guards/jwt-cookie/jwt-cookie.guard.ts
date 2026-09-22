@@ -7,8 +7,6 @@ import { CookieService } from '../../cookie/cookie.service';
  */
 @Injectable()
 export class JwtCookieGuard extends AuthGuard('jwt-cookie') {
-  // NestJS v12 no longer inherits @Optional() through subclassing, so this
-  // constructor has to redeclare it to keep AuthModuleOptions optional.
   constructor(
     private readonly cookieService: CookieService,
     @Optional() options?: AuthModuleOptions,
