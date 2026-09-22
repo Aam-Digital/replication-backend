@@ -36,7 +36,7 @@ boilerplate, not just the test count:
 - **Collapse near-identical cases into `it.each` tables** when several tests differ only in
   the input and the expected message/value (e.g. four variants of "a permissive `_security`
   document logs CRITICAL"). Keep a case as its own dedicated `it` only when it exercises a
-  genuinely distinct code path (e.g. proving a loop checks *both* dbs, not just the first).
+  genuinely distinct code path (e.g. proving a loop checks _both_ dbs, not just the first).
 - **Group related checks under `describe` blocks** so the suite's structure mirrors the
   service's structure.
 - **Don't assert what the test runner already asserts.** `await service.onModuleInit()`

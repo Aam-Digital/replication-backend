@@ -106,7 +106,7 @@ outage:
   CouchDB server admin to check, otherwise logs a "could not verify" warning.
 
 - **CouchDB rejects anonymous requests** (`[chttpd] require_valid_user =
-  true`). Some databases in this deployment (`_users`, `report-calculation`,
+true`). Some databases in this deployment (`_users`, `report-calculation`,
   `notification-webhook`) never get a `_security` document at all, so
   without this they're reachable with no credentials whatsoever. Logs
   `CRITICAL` if unset - CouchDB's default is "anonymous allowed", so unlike

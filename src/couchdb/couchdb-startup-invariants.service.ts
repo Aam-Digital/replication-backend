@@ -98,20 +98,18 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
         continue;
       }
       const isOpenToAnyone =
-        CouchdbStartupInvariantsService.isEmptyList(
-          security?.members?.names,
-        ) &&
+        CouchdbStartupInvariantsService.isEmptyList(security?.members?.names) &&
         CouchdbStartupInvariantsService.isEmptyList(security?.members?.roles);
       this.logger.error(
         isOpenToAnyone
           ? 'CRITICAL: CouchDB database has an empty _security document, ' +
               'which CouchDB treats as open to any client it accepts - not ' +
-              "admin-only. Fix: PUT a _security document that restricts " +
+              'admin-only. Fix: PUT a _security document that restricts ' +
               "members to CouchDB's reserved `_admin` role. Continuing " +
               'startup.'
           : 'CRITICAL: CouchDB database has a non-admin-only _security ' +
               'document - any client CouchDB itself accepts can bypass ' +
-              "every permission check this service performs. Fix: PUT a " +
+              'every permission check this service performs. Fix: PUT a ' +
               "_security document that restricts members to CouchDB's " +
               'reserved `_admin` role. Continuing startup.',
         {
