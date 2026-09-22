@@ -56,8 +56,15 @@ export async function startTestApp(
   process.env.DATABASE_PASSWORD = 'internal-admin-pw';
   process.env.PERMISSION_DB = 'app';
   process.env.JWT_SECRET = 'e2e-test-jwt-secret';
-  process.env.JWT_PUBLIC_KEY =
-    '-----BEGIN PUBLIC KEY-----\ne2e-test\n-----END PUBLIC KEY-----';
+  // JwtBearerStrategy resolves its verification key from this realm's JWKS
+  // rather than a static key, but no e2e test sends a bearer JWT, so the
+  // JWKS endpoint is never actually fetched (jwks-rsa's secretOrKeyProvider
+  // is only invoked while verifying a token). Deliberately unroutable rather
+  // than pointing at MockCouchDb or some other reachable host: if that
+  // assumption ever stops holding, tests should hang/fail loudly here
+  // instead of silently depending on a fetch nobody set up a fixture for.
+  process.env.KEYCLOAK_ADMIN_BASE_URL = 'https://127.0.0.1:1';
+  process.env.KEYCLOAK_REALM = 'e2e-test-realm';
 
   let app: INestApplication | undefined;
   try {

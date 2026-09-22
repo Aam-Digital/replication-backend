@@ -40,6 +40,7 @@
     "http-proxy-middleware": "^4.2.0",
     "js-yaml": "5.4.2",
     "jsondiffpatch": "^0.7.6",
+    "jwks-rsa": "^4.1.0",
     "lodash": "^4.18.1",
     "passport": "^0.7.0",
     "passport-http": "^0.3.0",
@@ -67,6 +68,7 @@
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/js-yaml": "4.0.9",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/lodash": "^4.17.25",
     "@types/node": "^25.9.8",
     "@types/passport-http": "^0.3.11",
@@ -80,6 +82,7 @@
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.6",
     "jest": "30.5.2",
+    "jsonwebtoken": "^9.0.3",
     "prettier": "^3.9.8",
     "supertest": "^7.2.2",
     "ts-jest": "^29.4.12",
@@ -108,7 +111,7 @@
       ]
     },
     "transformIgnorePatterns": [
-      "node_modules/(?!(jsondiffpatch|stream-json|stream-chain|http-proxy-middleware|httpxy|is-plain-obj))"
+      "node_modules/(?!(jsondiffpatch|stream-json|stream-chain|http-proxy-middleware|httpxy|is-plain-obj|jose))"
     ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
