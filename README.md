@@ -22,22 +22,9 @@ or directly through npm (see below: --> "Development")
 > npm install && npm start
 ```
 
-In both cases the following environment variables should be defined:
-
-- `DATABASE_URL` the URL where the CouchDB instance can be accessed
-- `DATABASE_USER` the name of a user that is a `member` of all databases inside the CouchDB instance. In case the proxy is also used to create new entries in the `_users` database, then this user needs to be `admin` in this database.
-- `DATABASE_PASSWORD` the password for the `DATABASE_USER`
-- `DATABASE_TIMEOUT_MS` (optional) per-request timeout in milliseconds for requests to CouchDB (default `60000`). Requests that exceed this are aborted instead of hanging forever. Must stay above ~`55000`, because the internal changes feed uses 50s longpoll requests that must not be aborted client-side.
-- `DATABASE_MAX_SOCKETS` (optional) maximum number of parallel keep-alive connections to CouchDB (default `50`). Bounds the connection load that request bursts (e.g. many syncing clients) can place on CouchDB.
-- `PERMISSION_DB` the database name where the permissions definition document is stored
-- `JWT_SECRET` a secret to create JWT tokens. They are used in the JWT auth which works similar to CouchDB's `POST /_session` endpoint. This should be changed to prevent others to create fake JWT tokens.
-- `SENTRY_DSN` (optional) the [Sentry DSN](https://docs.sentry.io/product/sentry-basics/dsn-explainer/). If defined, error messages are sent to the sentry.io application monitoring & logging service.
-  - `SENTRY_TRACES_SAMPLE_RATE` (optional) decimal value between `0.0` and `1.0` controlling transaction tracing volume in Sentry. Defaults to `0.02` (2%) to limit ingestion costs.
-- `KEYCLOAK_ADMIN_BASE_URL` the base URL of the Keycloak server (e.g. `https://keycloak.example.com`). Required: besides resolving user roles via the Keycloak Admin API for the `/api/v1/permissions/check` endpoint, it is also used to verify bearer JWTs against this realm's JWKS (see "Bearer JWT verification" below) - the process fails to start without it.
-- `KEYCLOAK_REALM` (required together with `KEYCLOAK_ADMIN_BASE_URL`) the Keycloak realm name.
-- `KEYCLOAK_ADMIN_CLIENT_ID` (optional, required together with `KEYCLOAK_ADMIN_BASE_URL` only to enable the `/api/v1/permissions/check` endpoint) the Keycloak client ID used to authenticate against the Keycloak Admin API.
-- `KEYCLOAK_ADMIN_CLIENT_SECRET` (optional, required together with `KEYCLOAK_ADMIN_CLIENT_ID`) the client secret for `KEYCLOAK_ADMIN_CLIENT_ID`.
-  When `KEYCLOAK_ADMIN_BASE_URL` uses HTTPS with a self-signed CA (e.g. the local Caddy proxy), set `NODE_EXTRA_CA_CERTS` to the CA cert path before starting Node (see the local dev section below).
+In both cases the required and optional environment variables need to be defined.
+See [`.env.template`](.env.template) for the full list of variables with explanations
+of what they do and their default values.
 
 In case the backend is run through Docker, the args can be provided like this
 
