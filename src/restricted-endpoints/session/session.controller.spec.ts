@@ -2,6 +2,8 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { SessionController } from './session.controller';
 import { UserInfo } from './user-auth.dto';
 import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
+import { BodyAuthGuard } from '../../auth/guards/body-auth/body-auth.guard';
+import { CombinedAuthGuard } from '../../auth/guards/combined-auth/combined-auth.guard';
 
 describe('SessionController', () => {
   let controller: SessionController;
@@ -10,7 +12,12 @@ describe('SessionController', () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SessionController],
       providers: [...authGuardMockProviders],
-    }).compile();
+    })
+      .overrideGuard(BodyAuthGuard)
+      .useValue({ canActivate: () => true })
+      .overrideGuard(CombinedAuthGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<SessionController>(SessionController);
   });

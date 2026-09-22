@@ -5,7 +5,7 @@
   "testRegex": ".e2e-spec.ts$",
   "testTimeout": 15000,
   "transform": {
-    "^.+\\.m?(t|j)s$": [
+    "^.+\\.ts$": [
       "ts-jest",
       {
         "tsconfig": {
@@ -15,6 +15,6 @@
     ]
   },
   "transformIgnorePatterns": [
-    "node_modules/(?!(jsondiffpatch|stream-json|stream-chain|http-proxy-middleware|httpxy|is-plain-obj|jose|@nestjs/axios|@nestjs/jwt))"
+    "node_modules/(?!(jsondiffpatch|stream-json|stream-chain|http-proxy-middleware|httpxy|is-plain-obj|jose))"
   ]
 }

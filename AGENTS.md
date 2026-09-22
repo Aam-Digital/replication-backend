@@ -13,6 +13,12 @@ ndb-setup's setup scripts, a Helm chart) — this repo's code and docs should
 stand on their own, and details owned elsewhere go stale here without anyone
 noticing.
 
+Comments should describe the code as it is, not why it differs from an
+earlier version (e.g. "NestJS v12 no longer does X, so..."). That context
+belongs in the PR description and commit message — it explains a diff, not
+the resulting code, and outlives its usefulness the moment the migration is
+forgotten.
+
 ## Public GitHub Content (PRs, Issues, Comments, Commit Messages)
 
 This repository is public. Never include customer/project-identifying information or other
