@@ -12,6 +12,7 @@ import {
 } from '../../permissions/permission/permission.service';
 import { DocumentWriteService } from './document-write.service';
 import { AuditService } from '../../audit/audit.service';
+import { AttachmentCleanupService } from '../../couchdb/attachment-cleanup.service';
 import { DocumentRule } from '../../permissions/rules/rules.service';
 import { DocSuccess } from '../replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { COUCHDB_USER_DOC, UserInfo } from '../session/user-auth.dto';
@@ -75,6 +76,10 @@ describe('DocumentController', () => {
         { provide: CouchdbService, useValue: mockCouchDBService },
         { provide: PermissionService, useValue: mockPermissionService },
         { provide: AuditService, useValue: { record: jest.fn() } },
+        {
+          provide: AttachmentCleanupService,
+          useValue: { cleanupForDeletedDocs: jest.fn() },
+        },
       ],
     }).compile();
 
