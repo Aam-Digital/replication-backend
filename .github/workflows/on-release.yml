@@ -31,4 +31,8 @@ jobs:
           platforms: linux/amd64
           context: ./
           push: true
-          tags: ghcr.io/aam-digital/replication-backend:${{ github.event.release.tag_name }},ghcr.io/aam-digital/replication-backend:latest
+          # `stable` alongside `latest`, like ndb-core's; `released` excludes prereleases.
+          tags: |
+            ghcr.io/aam-digital/replication-backend:${{ github.event.release.tag_name }}
+            ghcr.io/aam-digital/replication-backend:stable
+            ghcr.io/aam-digital/replication-backend:latest
