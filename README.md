@@ -13,7 +13,7 @@ This API functions as a proxy layer between a client (PouchDB) and a standard Co
 The backend can either be run as a docker container
 
 ```
-> docker run aamdigital/replication-ms:latest
+> docker run ghcr.io/aam-digital/replication-backend:latest
 ```
 
 or directly through npm (see below: --> "Development")
@@ -29,7 +29,7 @@ of what they do and their default values.
 In case the backend is run through Docker, the args can be provided like this
 
 ```bash
-> docker run -e DATABASE_URL=https://test.com/couchdb -e DATABASE_USER=replicator -e DATABASE_PASSWORD=securePassword -e JWT_SECRET=myJWTSecret -e KEYCLOAK_ADMIN_BASE_URL=https://keycloak.example.com -e KEYCLOAK_REALM=myrealm aamdigital/replication-ms:latest
+> docker run -e DATABASE_URL=https://test.com/couchdb -e DATABASE_USER=replicator -e DATABASE_PASSWORD=securePassword -e JWT_SECRET=myJWTSecret -e KEYCLOAK_ADMIN_BASE_URL=https://keycloak.example.com -e KEYCLOAK_REALM=myrealm ghcr.io/aam-digital/replication-backend:latest
 ```
 
 In case the backend is run through npm, the `.env` file can be adjusted.
