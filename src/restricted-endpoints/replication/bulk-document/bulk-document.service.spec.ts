@@ -14,6 +14,7 @@ import {
 } from './couchdb-dtos/bulk-docs.dto';
 import { BulkGetResponse, BulkGetResult } from './couchdb-dtos/bulk-get.dto';
 import { AuditService } from '../../../audit/audit.service';
+import { AttachmentCleanupService } from '../../../couchdb/attachment-cleanup.service';
 
 describe('BulkDocumentService', () => {
   let service: BulkDocumentService;
@@ -23,9 +24,11 @@ describe('BulkDocumentService', () => {
   let mockRulesService: RulesService;
   let mockCouchDBService: CouchdbService;
   let mockAuditService: { recordBulkWrite: jest.Mock };
+  let mockAttachmentCleanupService: { cleanupForBulkWrite: jest.Mock };
 
   beforeEach(async () => {
     mockAuditService = { recordBulkWrite: jest.fn() };
+    mockAttachmentCleanupService = { cleanupForBulkWrite: jest.fn() };
     mockRulesService = {
       getRulesForUser: () => [
         { action: 'update', subject: 'Child' },
@@ -49,6 +52,10 @@ describe('BulkDocumentService', () => {
         { provide: RulesService, useValue: mockRulesService },
         { provide: CouchdbService, useValue: mockCouchDBService },
         { provide: AuditService, useValue: mockAuditService },
+        {
+          provide: AttachmentCleanupService,
+          useValue: mockAttachmentCleanupService,
+        },
       ],
     }).compile();
 
@@ -349,6 +356,31 @@ describe('BulkDocumentService', () => {
     expect(existingDocs.get('Child:1')).toEqual(existingChild);
     expect(response).toBe(bulkResponse);
     expect(user).toBe(normalUser);
+  });
+
+  it('cleans up attachments for the written docs after handleBulkDocs', async () => {
+    const updatedChild = getChildDoc();
+    updatedChild._rev = '2-new';
+    const request: BulkDocsRequest = {
+      new_edits: false,
+      docs: [updatedChild],
+    };
+    const existingChild = getChildDoc();
+    const bulkResponse: any[] = [];
+    jest.spyOn(mockCouchDBService, 'post').mockImplementation((_db, path) => {
+      if (path === '_all_docs') {
+        return of(createAllDocsResponse(existingChild));
+      }
+      return of(bulkResponse);
+    });
+
+    await service.handleBulkDocs(request, normalUser, 'app');
+
+    expect(mockAttachmentCleanupService.cleanupForBulkWrite).toHaveBeenCalledWith(
+      'app',
+      { new_edits: false, docs: [updatedChild] },
+      bulkResponse,
+    );
   });
 
   it('audits only the permission-filtered docs, not the rejected ones', async () => {

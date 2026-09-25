@@ -6,6 +6,7 @@ import { Agent as HttpsAgent } from 'https';
 import { CouchdbService } from './couchdb.service';
 import { CouchdbStartupInvariantsService } from './couchdb-startup-invariants.service';
 import { DocumentChangesService } from './document-changes.service';
+import { AttachmentCleanupService } from './attachment-cleanup.service';
 
 /**
  * (optional) env var: per-request timeout in ms for requests to CouchDB.
@@ -76,7 +77,8 @@ export function couchdbHttpOptions(
     CouchdbService,
     DocumentChangesService,
     CouchdbStartupInvariantsService,
+    AttachmentCleanupService,
   ],
-  exports: [CouchdbService, DocumentChangesService],
+  exports: [CouchdbService, DocumentChangesService, AttachmentCleanupService],
 })
 export class CouchdbModule {}

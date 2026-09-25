@@ -8,6 +8,7 @@ import {
   PermissionService,
 } from '../../permissions/permission/permission.service';
 import { AuditService } from '../../audit/audit.service';
+import { AttachmentCleanupService } from '../../couchdb/attachment-cleanup.service';
 import { UserInfo } from '../session/user-auth.dto';
 import {
   DatabaseDocument,
@@ -29,6 +30,7 @@ export class DocumentWriteService {
     private readonly couchdbService: CouchdbService,
     private readonly permissionService: PermissionService,
     private readonly auditService: AuditService,
+    private readonly attachmentCleanupService: AttachmentCleanupService,
   ) {}
 
   async putDocument(
@@ -142,6 +144,7 @@ export class DocumentWriteService {
       ],
       user,
     );
+    await this.attachmentCleanupService.cleanupForDeletedDocs(db, [docId]);
     return result;
   }
 
