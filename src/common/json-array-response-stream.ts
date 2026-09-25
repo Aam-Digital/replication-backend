@@ -14,11 +14,18 @@ import { ClientDisconnectedError } from './client-disconnected.error';
 export abstract class JsonArrayResponseStream {
   protected written = 0;
   private opened = false;
+  /** Settles the write currently waiting for the response to drain. */
+  private onDrain?: () => void;
 
   protected constructor(
     private readonly res: Response,
     private readonly openingChunk: string,
-  ) {}
+  ) {
+    // one listener per response rather than per back-pressured write: the
+    // compression middleware moves `drain` listeners onto its compression
+    // stream, out of reach of `res.off()`, so they would pile up there
+    res.on('drain', () => this.onDrain?.());
+  }
 
   /** Whether the client has disconnected. */
   get isClosed(): boolean {
@@ -102,11 +109,11 @@ export abstract class JsonArrayResponseStream {
         return;
       }
       const cleanup = () => {
-        res.off('drain', onDrain);
+        this.onDrain = undefined;
         res.off('close', onFailure);
         res.off('error', onFailure);
       };
-      const onDrain = () => {
+      this.onDrain = () => {
         cleanup();
         resolve();
       };
@@ -118,7 +125,6 @@ export abstract class JsonArrayResponseStream {
         cleanup();
         reject(new ClientDisconnectedError());
       };
-      res.once('drain', onDrain);
       res.once('close', onFailure);
       res.once('error', onFailure);
     });
