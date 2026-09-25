@@ -41,6 +41,4 @@ import { JwtBearerGuard } from './guards/jwt-bearer/jwt-bearer.guard';
 export class AuthModule {
   /** name of the environment variable that defines the JWT secret */
   static readonly JWT_SECRET_ENV = 'JWT_SECRET';
-  /** name of environment variable of JWT public key for bearer auth */
-  static readonly JWT_PUBLIC_KEY = 'JWT_PUBLIC_KEY';
 }

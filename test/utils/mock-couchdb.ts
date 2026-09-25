@@ -7,7 +7,8 @@ import { AddressInfo, Socket } from 'net';
  *
  * Implements the subset of the CouchDB HTTP API used by the replication
  * backend (_session, _changes incl. longpoll, _all_docs, _bulk_get,
- * _bulk_docs, _find, _local_docs and single-document CRUD) backed by
+ * _bulk_docs, _find, _local_docs, database creation, _security,
+ * _node/_local/_config/jwt_keys, and single-document CRUD) backed by
  * simple in-memory maps.
  *
  * All incoming requests are recorded in {@link requests} so tests can make
@@ -22,6 +23,21 @@ export class MockCouchDb {
   readonly users = new Map<string, { password: string; roles: string[] }>();
   /** db name -> docId -> document */
   readonly dbs = new Map<string, Map<string, Record<string, unknown>>>();
+  /** db name -> _security doc; unset reads back as {}, matching real CouchDB */
+  private readonly security = new Map<
+    string,
+    {
+      admins?: { names?: string[]; roles?: string[] };
+      members?: { names?: string[]; roles?: string[] };
+    }
+  >();
+  /**
+   * Simulates CouchDB's [jwt_keys] config section: undefined = not configured
+   * (404, the expected state in a permission-checked deployment), 'forbidden'
+   * = the check requires server admin credentials this instance doesn't have
+   * (403), or a populated key map.
+   */
+  jwtKeysConfig: Record<string, string> | 'forbidden' | undefined = undefined;
   /** db name -> docId -> latest change seq */
   private readonly changeSeqs = new Map<string, Map<string, number>>();
   private readonly seqCounters = new Map<string, number>();
@@ -133,6 +149,17 @@ export class MockCouchDb {
 
   addUser(name: string, password: string, roles: string[]): void {
     this.users.set(name, { password, roles });
+  }
+
+  /** Seed a database's _security document, e.g. to test the fail-closed startup check. */
+  setSecurity(
+    db: string,
+    doc: {
+      admins?: { names?: string[]; roles?: string[] };
+      members?: { names?: string[]; roles?: string[] };
+    },
+  ): void {
+    this.security.set(db, doc);
   }
 
   /**
@@ -303,6 +330,42 @@ export class MockCouchDb {
 
     this.app.get('/', (req, res) => {
       res.json({ couchdb: 'Welcome', version: 'mock' });
+    });
+
+    // simulates CouchDB's server-admin-only [jwt_keys] config section, used
+    // by CouchdbStartupInvariantsService's startup check
+    this.app.get('/_node/_local/_config/jwt_keys', (req, res) => {
+      if (this.jwtKeysConfig === 'forbidden') {
+        return res.status(403).json({
+          error: 'forbidden',
+          reason: 'You are not a server admin.',
+        });
+      }
+      if (!this.jwtKeysConfig) {
+        return res.status(404).json({ error: 'not_found', reason: 'missing' });
+      }
+      res.json(this.jwtKeysConfig);
+    });
+
+    // creates the database if missing (like real CouchDB), 412 if it already
+    // exists - used by CouchdbService.createDb / CouchdbStartupInvariantsService
+    this.app.put('/:db', (req, res) => {
+      const existed = this.dbs.has(req.params.db);
+      this.getDb(req.params.db);
+      if (existed) {
+        return res.status(412).json({
+          error: 'file_exists',
+          reason: 'The database could not be created, the file already exists.',
+        });
+      }
+      res.status(201).json({ ok: true });
+    });
+
+    // registered before the generic /:db/:docId handler further down, same
+    // as the other literal-segment routes in this file (Express tries
+    // routes in registration order for equally-specific patterns)
+    this.app.get('/:db/_security', (req, res) => {
+      res.json(this.security.get(req.params.db) ?? {});
     });
 
     this.app.get('/:db/_changes', (req, res) => {

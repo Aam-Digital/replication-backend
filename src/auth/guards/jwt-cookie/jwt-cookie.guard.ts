@@ -1,5 +1,5 @@
-import { AuthGuard } from '@nestjs/passport';
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import { AuthGuard, AuthModuleOptions } from '@nestjs/passport';
+import { ExecutionContext, Injectable, Optional } from '@nestjs/common';
 import { CookieService } from '../../cookie/cookie.service';
 
 /**
@@ -7,8 +7,11 @@ import { CookieService } from '../../cookie/cookie.service';
  */
 @Injectable()
 export class JwtCookieGuard extends AuthGuard('jwt-cookie') {
-  constructor(private cookieService: CookieService) {
-    super();
+  constructor(
+    private readonly cookieService: CookieService,
+    @Optional() options?: AuthModuleOptions,
+  ) {
+    super(options);
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
