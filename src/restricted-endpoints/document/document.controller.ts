@@ -21,7 +21,7 @@ import { User } from '../../auth/user.decorator';
 import { QueryParams } from '../replication/bulk-document/couchdb-dtos/document.dto';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { PermissionService } from '../../permissions/permission/permission.service';
-import { firstValueFrom, map, Observable, tap, throwError } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 import { Request as Req } from 'express';
 import { AxiosResponse } from 'axios';
 import { DocumentWriteService } from './document-write.service';
@@ -51,36 +51,24 @@ export class DocumentController {
    * @param queryParams additional params that will be forwarded
    */
   @Head()
-  headDocument(
+  async headDocument(
     @Request() req: Req,
     @Param('db') db: string,
     @Param('docId') docId: string,
     @User() user: UserInfo,
     @Query() queryParams?: Record<string, string>,
-  ): Observable<void> {
-    const userAbility = this.permissionService.getAbilityFor(user);
+  ): Promise<void> {
+    // permission rules may have conditions on any field, so check the full doc just like GET
+    await this.getReadableDocument(db, docId, user, queryParams);
 
-    if (
-      !userAbility.can('read', {
-        _id: docId,
-      })
-    ) {
-      return throwError(
-        () =>
-          new UnauthorizedException('unauthorized', 'User is not permitted'),
-      );
-    }
-
-    return this.couchdbService.head(db, docId, queryParams).pipe(
-      tap((res) => {
-        this.forwardHeader(res, req, [
-          'ETag',
-          'X-Couch-Request-ID',
-          'X-CouchDB-Body-Time',
-        ]);
-      }),
-      map(() => undefined),
+    const res = await firstValueFrom(
+      this.couchdbService.head(db, docId, queryParams),
     );
+    this.forwardHeader(res, req, [
+      'ETag',
+      'X-Couch-Request-ID',
+      'X-CouchDB-Body-Time',
+    ]);
   }
 
   /**
@@ -98,22 +86,7 @@ export class DocumentController {
     @User() user: UserInfo,
     @Query() queryParams?: Record<string, string>,
   ): Promise<DatabaseDocument> {
-    const documentToReturn: DatabaseDocument = await firstValueFrom(
-      this.couchdbService.get(db, docId, queryParams),
-    );
-
-    if (
-      await this.permissionService.isAllowedTo(
-        'read',
-        documentToReturn,
-        user,
-        db,
-      )
-    ) {
-      return documentToReturn;
-    } else {
-      throw new UnauthorizedException('unauthorized', 'User is not permitted');
-    }
+    return this.getReadableDocument(db, docId, user, queryParams);
   }
 
   /**
@@ -163,6 +136,23 @@ export class DocumentController {
       user,
       queryParams,
     );
+  }
+
+  private async getReadableDocument(
+    db: string,
+    docId: string,
+    user: UserInfo,
+    queryParams?: Record<string, string>,
+  ): Promise<DatabaseDocument> {
+    const document: DatabaseDocument = await firstValueFrom(
+      this.couchdbService.get(db, docId, queryParams),
+    );
+
+    if (await this.permissionService.isAllowedTo('read', document, user, db)) {
+      return document;
+    } else {
+      throw new UnauthorizedException('unauthorized', 'User is not permitted');
+    }
   }
 
   private forwardHeader(res: AxiosResponse, req: Req, headers: string[]): void {

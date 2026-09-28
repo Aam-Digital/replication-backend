@@ -148,59 +148,86 @@ describe('DocumentController', () => {
     );
   });
 
-  it('headDocument() should throw unauthorized exception if user does not have read permission', (done) => {
-    mockAbility([
-      {
-        subject: COUCHDB_USER_DOC,
-        action: 'read',
-        inverted: true,
-      },
-    ]);
+  describe('headDocument()', () => {
+    let req: Req;
+    const childDoc = { _id: 'Child:1', _rev: '1-abc', location: 'Berlin' };
 
-    controller
-      .headDocument(mockReq, databaseName, userDoc._id, requestingUser)
-      .subscribe({
-        next: () => {
-          done('should reject observable');
+    beforeEach(() => {
+      req = {
+        res: {
+          setHeader: jest.fn(
+            (key: string, value: string) => (headers[key] = value),
+          ),
         },
-        error: () => {
-          done();
-        },
+      } as unknown as Req;
+      jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(childDoc));
+      // evaluate the (mocked) rules against whatever doc the controller passes
+      mockPermissionService.isAllowedTo = jest.fn(async (action, doc) =>
+        mockPermissionService.getAbilityFor(requestingUser).can(action, doc),
+      );
+    });
+
+    it.each<[string, DocumentRule[], boolean]>([
+      [
+        'allows a doc matching a conditional allow rule',
+        [
+          {
+            subject: 'Child',
+            action: 'read',
+            conditions: { location: 'Berlin' },
+          },
+        ],
+        true,
+      ],
+      [
+        'rejects a doc matching a conditional deny rule',
+        [
+          { subject: 'Child', action: 'read' },
+          {
+            subject: 'Child',
+            action: 'read',
+            inverted: true,
+            conditions: { location: 'Berlin' },
+          },
+        ],
+        false,
+      ],
+    ])('%s', async (_, rules, allowed) => {
+      mockAbility(rules);
+
+      const result = controller.headDocument(
+        req,
+        'app',
+        childDoc._id,
+        requestingUser,
+      );
+
+      if (allowed) {
+        await result;
+        expect(mockCouchDBService.head).toHaveBeenCalled();
+      } else {
+        await expect(result).rejects.toThrow(UnauthorizedException);
+        expect(mockCouchDBService.head).not.toHaveBeenCalled();
+      }
+      expect(mockPermissionService.isAllowedTo).toHaveBeenCalledWith(
+        'read',
+        childDoc,
+        requestingUser,
+        'app',
+      );
+    });
+
+    it('should forward header from couchdb response', async () => {
+      mockAbility([{ subject: 'Child', action: 'read' }]);
+
+      await controller.headDocument(req, 'app', childDoc._id, requestingUser);
+
+      expect(headers).toStrictEqual({
+        ETag: 'etag-value',
+        'X-Couch-Request-ID': 'request-id-value',
+        'X-CouchDB-Body-Time': 'body-time-value',
       });
-  });
-
-  it('headDocument() should forward header from couchdb response', (done) => {
-    mockAbility([
-      {
-        subject: COUCHDB_USER_DOC,
-        action: 'read',
-      },
-    ]);
-
-    const req = {
-      header: jest.fn((key: string, value: string) => (headers[key] = value)),
-      res: {
-        setHeader: jest.fn(
-          (key: string, value: string) => (headers[key] = value),
-        ),
-      },
-    } as unknown as Req;
-
-    controller
-      .headDocument(req, databaseName, userDoc._id, requestingUser)
-      .subscribe({
-        next: () => {
-          expect(headers).toStrictEqual({
-            ETag: 'etag-value',
-            'X-Couch-Request-ID': 'request-id-value',
-            'X-CouchDB-Body-Time': 'body-time-value',
-          });
-          done();
-        },
-        error: (err) => {
-          done(err);
-        },
-      });
+    });
   });
 
   it('should throw unauthorized exception if user does not have read permission', async () => {
