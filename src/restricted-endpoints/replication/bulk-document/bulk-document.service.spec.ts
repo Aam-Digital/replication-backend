@@ -376,7 +376,9 @@ describe('BulkDocumentService', () => {
 
     await service.handleBulkDocs(request, normalUser, 'app');
 
-    expect(mockAttachmentCleanupService.cleanupForBulkWrite).toHaveBeenCalledWith(
+    expect(
+      mockAttachmentCleanupService.cleanupForBulkWrite,
+    ).toHaveBeenCalledWith(
       'app',
       { new_edits: false, docs: [updatedChild] },
       bulkResponse,

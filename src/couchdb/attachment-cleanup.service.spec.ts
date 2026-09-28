@@ -56,9 +56,13 @@ describe('AttachmentCleanupService', () => {
 
       await service.cleanupForDeletedDocs('app', ['Child:1']);
 
-      expect(couchdb.post).toHaveBeenCalledWith('app-attachments', '_all_docs', {
-        keys: ['Child:1'],
-      });
+      expect(couchdb.post).toHaveBeenCalledWith(
+        'app-attachments',
+        '_all_docs',
+        {
+          keys: ['Child:1'],
+        },
+      );
       expect(couchdb.post).toHaveBeenCalledWith(
         'app-attachments',
         '_bulk_docs',
@@ -133,9 +137,13 @@ describe('AttachmentCleanupService', () => {
 
       await service.cleanupForBulkWrite('app', written, response);
 
-      expect(couchdb.post).toHaveBeenCalledWith('app-attachments', '_all_docs', {
-        keys: ['Child:1'],
-      });
+      expect(couchdb.post).toHaveBeenCalledWith(
+        'app-attachments',
+        '_all_docs',
+        {
+          keys: ['Child:1'],
+        },
+      );
     });
 
     it('does nothing when nothing was deleted', async () => {
