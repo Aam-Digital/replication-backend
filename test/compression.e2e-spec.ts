@@ -1,4 +1,5 @@
 import request from 'supertest';
+import zlib from 'zlib';
 import { basicAuth, startTestApp, TestContext } from './utils/test-app';
 
 /**
@@ -16,10 +17,21 @@ describe('Response compression (e2e)', () => {
         payload: 'x'.repeat(4000),
       });
       couch.putDoc('app', { _id: 'Child:small', name: 'tiny' });
+      // far more than the compression stream buffers, so streaming them
+      // back-pressures it many times
+      for (let i = 0; i < 100; i++) {
+        couch.putDoc('app', {
+          _id: `Child:bulk-${i}`,
+          bulk: true,
+          payload: 'x'.repeat(10_000),
+        });
+      }
     });
   });
 
   afterAll(() => ctx.stop());
+
+  afterEach(() => jest.restoreAllMocks());
 
   it('gzips large JSON responses when the client accepts it', async () => {
     const res = await request(ctx.app.getHttpServer())
@@ -81,6 +93,24 @@ describe('Response compression (e2e)', () => {
     expect(ids).toContain('Child:small');
     const bigResult = res.body.results.find((r: { id: string }) => r.id === 'Child:big');
     expect(bigResult.docs[0].ok).toMatchObject({ _id: 'Child:big', payload: 'x'.repeat(4000) });
+  });
+
+  it('does not pile up drain listeners on the compression stream of a back-pressured response', async () => {
+    // the middleware creates its compression stream internally, so reach it
+    // through the listeners registered on it
+    const on = jest.spyOn(zlib.BrotliCompress.prototype, 'on');
+
+    const res = await request(ctx.app.getHttpServer())
+      .post('/app/_find')
+      .set(...basicAuth('admin', 'admin-pw'))
+      .set('Accept-Encoding', 'br')
+      .send({ selector: { bulk: true }, limit: 100 })
+      .expect(200);
+
+    expect(res.headers['content-encoding']).toBe('br');
+    expect(res.body.docs).toHaveLength(100);
+    const compressStream = on.mock.contexts[0] as zlib.BrotliCompress;
+    expect(compressStream.listenerCount('drain')).toBeLessThanOrEqual(1);
   });
 
   it('compresses _changes responses', async () => {
