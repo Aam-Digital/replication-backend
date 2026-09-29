@@ -56,6 +56,9 @@ describe('CouchdbStartupInvariantsService', () => {
     );
   }
 
+  /** a `[chttpd]` config value, or 'unset' (404) / 'forbidden' (403) */
+  type ChttpdFlagStub = 'true' | 'false' | boolean | 'unset' | 'forbidden';
+
   /**
    * Stubs `couchdbService.get` for all four checks at once, defaulting to the
    * happy path (both dbs locked down, no jwt_keys, anonymous access blocked)
@@ -69,10 +72,10 @@ describe('CouchdbStartupInvariantsService', () => {
   }: {
     securityByDb?: Record<string, SecurityDoc | 'unreadable'>;
     jwtKeys?: 'absent' | 'forbidden' | Record<string, string>;
-    requireValidUser?: string | boolean | 'unset' | 'forbidden';
-    requireValidUserExceptForUp?: string | boolean | 'unset' | 'forbidden';
+    requireValidUser?: ChttpdFlagStub;
+    requireValidUserExceptForUp?: ChttpdFlagStub;
   } = {}) {
-    const stubChttpdFlag = (value: string | boolean) => {
+    const stubChttpdFlag = (value: ChttpdFlagStub) => {
       if (value === 'unset') return throwError(() => fakeHttpException(404));
       if (value === 'forbidden')
         return throwError(() => fakeHttpException(403));
