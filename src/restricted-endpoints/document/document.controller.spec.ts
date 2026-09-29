@@ -228,6 +228,33 @@ describe('DocumentController', () => {
         'X-CouchDB-Body-Time': 'body-time-value',
       });
     });
+
+    it('uses the authorized document revision for HEAD while preserving query params', async () => {
+      mockAbility([{ subject: 'Child', action: 'read' }]);
+      const queryParams = { rev: 'older-revision', conflicts: 'true' };
+
+      await controller.headDocument(
+        req,
+        'app',
+        childDoc._id,
+        requestingUser,
+        queryParams,
+      );
+
+      expect(mockCouchDBService.get).toHaveBeenCalledWith(
+        'app',
+        childDoc._id,
+        queryParams,
+      );
+      expect(mockCouchDBService.head).toHaveBeenCalledWith(
+        'app',
+        childDoc._id,
+        {
+          rev: childDoc._rev,
+          conflicts: 'true',
+        },
+      );
+    });
   });
 
   it('should throw unauthorized exception if user does not have read permission', async () => {

@@ -59,10 +59,18 @@ export class DocumentController {
     @Query() queryParams?: Record<string, string>,
   ): Promise<void> {
     // permission rules may have conditions on any field, so check the full doc just like GET
-    await this.getReadableDocument(db, docId, user, queryParams);
+    const document = await this.getReadableDocument(
+      db,
+      docId,
+      user,
+      queryParams,
+    );
 
     const res = await firstValueFrom(
-      this.couchdbService.head(db, docId, queryParams),
+      this.couchdbService.head(db, docId, {
+        ...queryParams,
+        rev: document._rev,
+      }),
     );
     this.forwardHeader(res, req, [
       'ETag',
