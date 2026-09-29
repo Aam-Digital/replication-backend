@@ -56,6 +56,9 @@ describe('CouchdbStartupInvariantsService', () => {
     );
   }
 
+  /** a `[chttpd]` config value, or 'unset' (404) / 'forbidden' (403) */
+  type ChttpdFlagStub = 'true' | 'false' | boolean | 'unset' | 'forbidden';
+
   /**
    * Stubs `couchdbService.get` for all four checks at once, defaulting to the
    * happy path (both dbs locked down, no jwt_keys, anonymous access blocked)
@@ -65,11 +68,19 @@ describe('CouchdbStartupInvariantsService', () => {
     securityByDb = {},
     jwtKeys = 'absent',
     requireValidUser = 'true',
+    requireValidUserExceptForUp = 'unset',
   }: {
     securityByDb?: Record<string, SecurityDoc | 'unreadable'>;
     jwtKeys?: 'absent' | 'forbidden' | Record<string, string>;
-    requireValidUser?: string | boolean | 'unset' | 'forbidden';
+    requireValidUser?: ChttpdFlagStub;
+    requireValidUserExceptForUp?: ChttpdFlagStub;
   } = {}) {
+    const stubChttpdFlag = (value: ChttpdFlagStub) => {
+      if (value === 'unset') return throwError(() => fakeHttpException(404));
+      if (value === 'forbidden')
+        return throwError(() => fakeHttpException(403));
+      return of(value);
+    };
     couchdbService.get.mockImplementation((db?: string, docId?: string) => {
       if (docId === '_security') {
         const security = securityByDb[db!];
@@ -86,11 +97,10 @@ describe('CouchdbStartupInvariantsService', () => {
         return of(jwtKeys) as any;
       }
       if (docId === 'require_valid_user') {
-        if (requireValidUser === 'unset')
-          return throwError(() => fakeHttpException(404)) as any;
-        if (requireValidUser === 'forbidden')
-          return throwError(() => fakeHttpException(403)) as any;
-        return of(requireValidUser) as any;
+        return stubChttpdFlag(requireValidUser) as any;
+      }
+      if (docId === 'require_valid_user_except_for_up') {
+        return stubChttpdFlag(requireValidUserExceptForUp) as any;
       }
       return of(undefined) as any;
     });
@@ -265,7 +275,10 @@ describe('CouchdbStartupInvariantsService', () => {
 
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('require_valid_user'),
-        expect.objectContaining({ requireValidUser: 'false' }),
+        expect.objectContaining({
+          requireValidUser: 'false',
+          requireValidUserExceptForUp: 'false',
+        }),
       );
     });
 
@@ -279,6 +292,18 @@ describe('CouchdbStartupInvariantsService', () => {
         expect.stringContaining('require_valid_user'),
         expect.objectContaining({ requireValidUser: 'false' }),
       );
+    });
+
+    it('accepts require_valid_user_except_for_up instead (keeps /_up open for the healthcheck)', async () => {
+      stubCouchdb({
+        requireValidUser: 'unset',
+        requireValidUserExceptForUp: 'true',
+      });
+      const service = buildService();
+
+      await service.onModuleInit();
+
+      expect(errorSpy).not.toHaveBeenCalled();
     });
 
     it('accepts a JSON boolean true, not just the string "true"', async () => {
