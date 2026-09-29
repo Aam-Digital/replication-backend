@@ -202,19 +202,57 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
    * with this off, a database whose `_security` isn't locked down is
    * reachable with no credentials at all.
    *
+   * Either `require_valid_user` or `require_valid_user_except_for_up` counts
+   * as enabled: the latter rejects every anonymous request except the
+   * `/_up` readiness probe (exposes no data), keeping unauthenticated health
+   * checks working.
+   *
    * Unlike `jwt_keys` above, an unset value here does not mean the feature
    * is off - it means CouchDB's default (anonymous allowed) applies, so
    * it's treated as a confirmed CRITICAL, not as evidence of safety.
    */
   private async warnIfAnonymousAccessAllowed(): Promise<void> {
     // response shape (string vs boolean) isn't confirmed by CouchDB's docs;
-    // String(...) below accepts either rather than risk a false CRITICAL
-    let requireValidUser: string | boolean;
+    // String(...) accepts either rather than risk a false CRITICAL
+    const isEnabled = (value: string | boolean) => String(value) === 'true';
+
+    const requireValidUser = await this.readChttpdFlag('require_valid_user');
+    if (requireValidUser === undefined || isEnabled(requireValidUser)) {
+      return;
+    }
+    const requireValidUserExceptForUp = await this.readChttpdFlag(
+      'require_valid_user_except_for_up',
+    );
+    if (
+      requireValidUserExceptForUp === undefined ||
+      isEnabled(requireValidUserExceptForUp)
+    ) {
+      return;
+    }
+
+    this.logger.error(
+      'CRITICAL: CouchDB does not have require_valid_user enabled, so it ' +
+        'accepts anonymous, unauthenticated requests - any database whose ' +
+        '_security is left open is reachable with no credentials ' +
+        'whatsoever. Fix: set [chttpd] require_valid_user_except_for_up = ' +
+        'true (or require_valid_user = true). Continuing startup.',
+      { requireValidUser, requireValidUserExceptForUp },
+    );
+  }
+
+  /**
+   * Reads a `[chttpd]` config value, treating "unset" (404) as CouchDB's
+   * default `'false'`. Returns `undefined` (after logging a warning) if the
+   * value could not be read, e.g. without server admin credentials.
+   */
+  private async readChttpdFlag(
+    key: string,
+  ): Promise<string | boolean | undefined> {
     try {
-      requireValidUser = await firstValueFrom(
+      return await firstValueFrom(
         this.couchdbService.get<string | boolean>(
           '_node/_local/_config/chttpd',
-          'require_valid_user',
+          key,
         ),
       );
     } catch (error) {
@@ -222,30 +260,19 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
         error instanceof HttpException &&
         error.getStatus() === HttpStatus.NOT_FOUND
       ) {
-        requireValidUser = 'false'; // confirmed unset, CouchDB's default applies
-      } else {
-        this.logger.warn(
-          'Could not verify whether CouchDB allows anonymous requests ' +
-            '(requires CouchDB server admin credentials); skipping this check.',
-          {
-            error: error instanceof Error ? error.message : String(error),
-            status:
-              error instanceof HttpException ? error.getStatus() : undefined,
-          },
-        );
-        return;
+        return 'false'; // confirmed unset, CouchDB's default applies
       }
-    }
-
-    if (String(requireValidUser) !== 'true') {
-      this.logger.error(
-        'CRITICAL: CouchDB does not have require_valid_user enabled, so it ' +
-          'accepts anonymous, unauthenticated requests - any database whose ' +
-          '_security is left open is reachable with no credentials ' +
-          'whatsoever. Fix: set [chttpd] require_valid_user = true. ' +
-          'Continuing startup.',
-        { requireValidUser },
+      this.logger.warn(
+        'Could not verify whether CouchDB allows anonymous requests ' +
+          '(requires CouchDB server admin credentials); skipping this check.',
+        {
+          key,
+          error: error instanceof Error ? error.message : String(error),
+          status:
+            error instanceof HttpException ? error.getStatus() : undefined,
+        },
       );
+      return undefined;
     }
   }
 }

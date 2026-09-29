@@ -92,16 +92,15 @@ outage:
   authenticating via JWT straight against CouchDB. Logs `CRITICAL`; needs
   CouchDB server admin to check, otherwise logs a "could not verify" warning.
 
-- **CouchDB rejects anonymous requests** (`[chttpd] require_valid_user =
-true`). Some databases in this deployment (`_users`, `report-calculation`,
+- **CouchDB rejects anonymous requests** (`[chttpd]
+require_valid_user_except_for_up = true`, or `require_valid_user = true`).
+  Some databases in this deployment (`_users`, `report-calculation`,
   `notification-webhook`) never get a `_security` document at all, so
-  without this they're reachable with no credentials whatsoever. Logs
-  `CRITICAL` if unset - CouchDB's default is "anonymous allowed", so unlike
-  the `jwt_keys` check, absence is not treated as safe. Same server-admin
-  caveat applies.
-
-  **Currently noisy by design:** not set in ndb-setup's CouchDB config yet,
-  so this logs `CRITICAL` on every startup until that's fixed there.
+  without this they're reachable with no credentials whatsoever. The
+  `except_for_up` variant still allows anonymous `/_up`, so unauthenticated
+  health checks keep working. Logs `CRITICAL` if neither is set - CouchDB's
+  default is "anonymous allowed", so unlike the `jwt_keys` check, absence is
+  not treated as safe. Same server-admin caveat applies.
 
 ## Operation
 
