@@ -35,6 +35,7 @@
     "@nestjs/platform-express": "^12.1.1",
     "@nestjs/swagger": "^12.0.2",
     "@sentry/node": "^11.1.0",
+    "@ucast/mongo2js": "^2.0.0",
     "compression": "^1.8.2",
     "cookie-parser": "^1.4.7",
     "http-proxy-middleware": "^4.2.0",

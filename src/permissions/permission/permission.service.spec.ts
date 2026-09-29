@@ -260,4 +260,84 @@ describe('PermissionService', () => {
       attachmentDoc._id,
     );
   });
+  describe('logical operators in conditions', () => {
+    const childInCenter1: DatabaseDocument = {
+      _id: 'Child:1',
+      _rev: 'rev',
+      center: 'center-1',
+      assignedTo: 'User:someone-else',
+      age: 10,
+    } as DatabaseDocument;
+
+    const abilityWithConditions = (conditions: Record<string, any>) => {
+      jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Child', conditions }]);
+      return service.getAbilityFor(normalUser);
+    };
+
+    it('should allow access if one branch of a $or condition matches', () => {
+      const ability = abilityWithConditions({
+        $or: [{ center: 'center-1' }, { assignedTo: 'User:normalUser' }],
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+    });
+
+    it('should deny access if no branch of a $or condition matches', () => {
+      const ability = abilityWithConditions({
+        $or: [{ center: 'center-2' }, { assignedTo: 'User:normalUser' }],
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(false);
+    });
+
+    it('should evaluate a $and condition restricting the same field twice', () => {
+      const ability = abilityWithConditions({
+        $and: [{ age: { $gt: 5 } }, { age: { $lt: 18 } }],
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+    });
+
+    it('should deny access if one part of a $and condition does not match', () => {
+      const ability = abilityWithConditions({
+        $and: [{ age: { $gt: 50 } }, { age: { $lt: 18 } }],
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(false);
+    });
+
+    it('should evaluate a $not condition', () => {
+      const ability = abilityWithConditions({
+        center: { $not: { $eq: 'center-2' } },
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+    });
+
+    it('should evaluate a $nor condition', () => {
+      const ability = abilityWithConditions({ $nor: [{ center: 'center-2' }] });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+    });
+
+    it('should combine a $or with a sibling condition as an implicit and', () => {
+      const ability = abilityWithConditions({
+        assignedTo: 'User:someone-else',
+        $or: [{ center: 'center-1' }, { center: 'center-2' }],
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+    });
+
+    it('should still evaluate plain field operators', () => {
+      const ability = abilityWithConditions({ center: { $in: ['center-1'] } });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+      expect(
+        ability.can('read', { ...childInCenter1, center: 'center-2' }),
+      ).toBe(false);
+    });
+  });
 });

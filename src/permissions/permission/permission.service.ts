@@ -2,8 +2,10 @@ import {
   CreateAbility,
   InferSubjects,
   MongoAbility,
+  buildMongoQueryMatcher,
   createMongoAbility,
 } from '@casl/ability';
+import { $and, $nor, $not, $or, and, nor, not, or } from '@ucast/mongo2js';
 import { Injectable } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import { CouchdbService } from '../../couchdb/couchdb.service';
@@ -24,6 +26,17 @@ type Subject = InferSubjects<typeof DatabaseDocument> | string;
 export type DocumentAbility = MongoAbility<[Action, Subject]>;
 export const createDocumentAbility =
   createMongoAbility as CreateAbility<DocumentAbility>;
+
+/**
+ * CASL only registers field operators ($eq, $in, $elemMatch, ...) by default.
+ * Without the logical operators a rule like `{ $or: [...] }` is parsed as a
+ * field literally named "$or" and therefore matches no document at all, so
+ * permissions built with them would silently grant nothing.
+ */
+const conditionsMatcher = buildMongoQueryMatcher(
+  { $or, $and, $nor, $not },
+  { or, and, nor, not },
+);
 
 export function detectDocumentType(subject: DatabaseDocument): string {
   if (!subject._id) {
@@ -79,6 +92,7 @@ export class PermissionService {
     const rules = this.rulesService.getRulesForUser(user);
     const ability = createDocumentAbility(rules, {
       detectSubjectType: detectDocumentType,
+      conditionsMatcher,
     });
 
     if (this.abilityCache.size >= PermissionService.ABILITY_CACHE_MAX_ENTRIES) {
