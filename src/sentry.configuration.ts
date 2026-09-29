@@ -172,7 +172,7 @@ function initSentrySdk(sentryConfiguration: SentryConfiguration): void {
     // Performance Monitoring
     tracesSampleRate: sentryConfiguration.TRACES_SAMPLE_RATE,
     // Set sampling rate for profiling - this is relative to tracesSampleRate
-    profilesSampleRate: 1.0,
+    profileSessionSampleRate: 1.0,
 
     beforeSend,
   });
