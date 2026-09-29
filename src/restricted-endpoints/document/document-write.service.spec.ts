@@ -30,12 +30,14 @@ function makeService(opts?: { existingDoc?: any; ability?: DocumentAbility }) {
       }),
   };
   const audit = { record: jest.fn() };
+  const attachmentCleanup = { cleanupForDeletedDocs: jest.fn() };
   const service = new DocumentWriteService(
     couchdb as any,
     permission as any,
     audit as any,
+    attachmentCleanup as any,
   );
-  return { service, couchdb, permission, audit };
+  return { service, couchdb, permission, audit, attachmentCleanup };
 }
 
 it('records a create when the document does not exist yet', async () => {
@@ -85,6 +87,30 @@ it('records a delete with the _deleted after-state', async () => {
   expect(entry.operation).toBe('delete');
   expect(entry.newDoc._deleted).toBe(true);
   expect(entry.newRev).toBe('2-del');
+});
+
+it('cleans up the attachments doc after a successful delete', async () => {
+  const existingDoc = { _id: 'Child:1', _rev: '1-a', name: 'A' };
+  const { service, attachmentCleanup } = makeService({ existingDoc });
+
+  await service.deleteDocument('app', 'Child:1', user, { rev: '1-a' });
+
+  expect(attachmentCleanup.cleanupForDeletedDocs).toHaveBeenCalledWith('app', [
+    'Child:1',
+  ]);
+});
+
+it('does not clean up attachments when delete permission is missing', async () => {
+  const existingDoc = { _id: 'Child:1', _rev: '1-a', name: 'A' };
+  const { service, permission, attachmentCleanup } = makeService({
+    existingDoc,
+  });
+  permission.isAllowedTo = jest.fn(async () => false);
+
+  await expect(
+    service.deleteDocument('app', 'Child:1', user),
+  ).rejects.toThrow();
+  expect(attachmentCleanup.cleanupForDeletedDocs).not.toHaveBeenCalled();
 });
 
 it('does not write or audit when create permission is missing', async () => {
