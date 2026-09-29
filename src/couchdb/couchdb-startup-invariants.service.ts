@@ -216,19 +216,17 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
     // String(...) accepts either rather than risk a false CRITICAL
     const isEnabled = (value: string | boolean) => String(value) === 'true';
 
+    // `undefined` = could not be read (warning already logged), so the
+    // check is skipped; an unset flag comes back as CouchDB's default 'false'
     const requireValidUser = await this.readChttpdFlag('require_valid_user');
-    if (requireValidUser === undefined || isEnabled(requireValidUser)) {
-      return;
-    }
+    if (requireValidUser === undefined) return;
+    if (isEnabled(requireValidUser)) return;
+
     const requireValidUserExceptForUp = await this.readChttpdFlag(
       'require_valid_user_except_for_up',
     );
-    if (
-      requireValidUserExceptForUp === undefined ||
-      isEnabled(requireValidUserExceptForUp)
-    ) {
-      return;
-    }
+    if (requireValidUserExceptForUp === undefined) return;
+    if (isEnabled(requireValidUserExceptForUp)) return;
 
     this.logger.error(
       'CRITICAL: CouchDB does not have require_valid_user enabled, so it ' +
