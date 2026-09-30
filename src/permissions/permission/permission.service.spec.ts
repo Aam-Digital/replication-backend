@@ -49,7 +49,9 @@ describe('PermissionService', () => {
 
     const ability = service.getAbilityFor(normalUser);
 
-    expect(ability.rules).toBe(rules);
+    // the rules are validated before being handed to CASL, so this is a new
+    // array carrying the same rules rather than the caller's array itself
+    expect(ability.rules).toEqual(rules);
   });
 
   it('should return ability that allows to create Aser objects if user has permissions', () => {
@@ -338,6 +340,70 @@ describe('PermissionService', () => {
       expect(
         ability.can('read', { ...childInCenter1, center: 'center-2' }),
       ).toBe(false);
+    });
+  });
+  describe('unusable conditions', () => {
+    const child: DatabaseDocument = {
+      _id: 'Child:1',
+      _rev: 'rev',
+      center: 'center-1',
+    } as DatabaseDocument;
+
+    const abilityForRules = (rules: any[]) => {
+      jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue(rules);
+      return service.getAbilityFor(normalUser);
+    };
+
+    it('should deny rather than throw for an empty logical array', () => {
+      const ability = abilityForRules([
+        { action: 'read', subject: 'Child', conditions: { $or: [] } },
+      ]);
+
+      expect(() => ability.can('read', child)).not.toThrow();
+      expect(ability.can('read', child)).toBe(false);
+    });
+
+    it('should deny rather than throw for a nested empty logical array', () => {
+      const ability = abilityForRules([
+        { action: 'read', subject: 'Child', conditions: { $or: [{ $and: [] }] } },
+      ]);
+
+      expect(() => ability.can('read', child)).not.toThrow();
+      expect(ability.can('read', child)).toBe(false);
+    });
+
+    it('should deny rather than throw when a logical operator is not an array', () => {
+      const ability = abilityForRules([
+        { action: 'read', subject: 'Child', conditions: { $or: 'nope' } },
+      ]);
+
+      expect(() => ability.can('read', child)).not.toThrow();
+      expect(ability.can('read', child)).toBe(false);
+    });
+
+    it('should still apply a valid rule when another rule for the same subject is unusable', () => {
+      const ability = abilityForRules([
+        { action: 'read', subject: 'Child', conditions: { center: 'center-1' } },
+        { action: 'read', subject: 'Child', conditions: { $or: [] } },
+      ]);
+
+      expect(() => ability.can('read', child)).not.toThrow();
+      expect(ability.can('read', child)).toBe(true);
+    });
+
+    it('should not widen access when an inverted rule has unusable conditions', () => {
+      const ability = abilityForRules([
+        { action: 'read', subject: 'Child' },
+        {
+          action: 'read',
+          subject: 'Child',
+          inverted: true,
+          conditions: { $or: [] },
+        },
+      ]);
+
+      expect(() => ability.can('read', child)).not.toThrow();
+      expect(ability.can('read', child)).toBe(false);
     });
   });
 });
