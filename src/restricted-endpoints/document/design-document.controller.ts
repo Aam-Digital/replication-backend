@@ -17,6 +17,7 @@ import { OnlyAuthenticated } from '../../auth/only-authenticated.decorator';
 import { User } from '../../auth/user.decorator';
 import { ClientDisconnectedError } from '../../common/client-disconnected.error';
 import { JsonArrayResponseStream } from '../../common/json-array-response-stream';
+import { streamFilteredJsonArray } from '../../common/stream-filtered-json-array';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { PermissionService } from '../../permissions/permission/permission.service';
 import {
@@ -126,8 +127,8 @@ export class DesignDocumentController {
   /**
    * Query a CouchDB view and filter the results based on user permissions.
    *
-   * Proxies the request to CouchDB and filters out any documents
-   * that the user is not permitted to read.
+   * Proxies the request to CouchDB and streams the rows back, filtering out
+   * any documents that the user is not permitted to read.
    *
    * When a valid `limit` is given together with `include_docs=true`, the backend
    * might request more docs than `limit` in order to find `limit` permitted docs.
@@ -159,13 +160,18 @@ export class DesignDocumentController {
     const rowFilter = this.viewRowFilter(user);
 
     if (!includeDocs || limit === undefined) {
-      const result = await firstValueFrom(
-        this.couchdbService.get<ViewResponse>(db, viewPath, queryParams),
+      const source = await this.couchdbService.getStream(
+        db,
+        viewPath,
+        queryParams,
       );
-      if (includeDocs) {
-        result.rows = result.rows.filter(rowFilter);
-      }
-      res.status(200).json(result);
+      await streamFilteredJsonArray(
+        source,
+        'rows',
+        (row: ViewResponseRow) =>
+          !includeDocs || rowFilter(row) ? row : undefined,
+        res,
+      );
       return;
     }
 

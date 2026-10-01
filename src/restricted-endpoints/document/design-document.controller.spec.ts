@@ -1,6 +1,7 @@
-import { ForbiddenException } from '@nestjs/common';
+import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { of } from 'rxjs';
+import { Readable, Writable } from 'stream';
 import { authGuardMockProviders } from '../../auth/auth-guard-mock.providers';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import {
@@ -62,41 +63,34 @@ describe('DesignDocumentController', () => {
   };
 
   /**
-   * Express Response stand-in supporting both the buffered `res.json(...)`
-   * path and the streamed `res.write`/`res.end` path used by ViewResponseStream.
+   * Express Response stand-in: a real Writable (so it works with
+   * `source.pipe(res)`) capturing the streamed JSON body.
    */
   function createMockResponse() {
     const chunks: string[] = [];
-    const res: any = {
-      headersSent: false,
-      destroyed: false,
-      statusCode: 200,
-      setHeader: jest.fn(),
-      flush: jest.fn(),
-      status: jest.fn((code: number) => {
-        res.statusCode = code;
-        return res;
-      }),
-      json: jest.fn((obj: unknown) => {
-        res.headersSent = true;
-        chunks.push(JSON.stringify(obj));
-      }),
-      write: jest.fn((chunk: string) => {
-        res.headersSent = true;
+    const res = new Writable({
+      write(chunk, _enc, cb) {
+        (res as any).headersSent = true;
         chunks.push(String(chunk));
-        return true;
-      }),
-      end: jest.fn(),
-      destroy: jest.fn(() => {
-        res.destroyed = true;
-      }),
-    };
+        cb();
+      },
+    }) as any;
+    res.headersSent = false;
+    res.setHeader = jest.fn();
+    res.flush = jest.fn();
+    res.status = jest.fn(() => res);
+    jest.spyOn(res, 'destroy');
     return { res, body: () => JSON.parse(chunks.join('')) };
+  }
+
+  function asStream(response: unknown): Readable {
+    return Readable.from([JSON.stringify(response)]);
   }
 
   beforeEach(async () => {
     mockCouchDBService = {
       get: () => of({}),
+      getStream: jest.fn(),
       put: () => of({}),
     } as any;
     jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(designDoc));
@@ -195,7 +189,9 @@ describe('DesignDocumentController', () => {
 
   describe('queryView (unbounded, no limit given)', () => {
     it('should proxy view query to CouchDB', async () => {
-      jest.spyOn(mockCouchDBService, 'get').mockReturnValue(of(viewResult));
+      jest
+        .spyOn(mockCouchDBService, 'getStream')
+        .mockResolvedValue(asStream(viewResult));
       const { res, body } = createMockResponse();
 
       await controller.queryView(
@@ -207,7 +203,7 @@ describe('DesignDocumentController', () => {
         res,
       );
 
-      expect(mockCouchDBService.get).toHaveBeenCalledWith(
+      expect(mockCouchDBService.getStream).toHaveBeenCalledWith(
         databaseName,
         '_design/search_index/_view/by_name',
         { key: '"Alice"' },
@@ -222,8 +218,8 @@ describe('DesignDocumentController', () => {
       );
       mockPermissionService.getAbilityFor = jest.fn(() => ability);
       jest
-        .spyOn(mockCouchDBService, 'get')
-        .mockReturnValue(of(JSON.parse(JSON.stringify(viewResult))));
+        .spyOn(mockCouchDBService, 'getStream')
+        .mockResolvedValue(asStream(viewResult));
       const { res, body } = createMockResponse();
 
       await controller.queryView(
@@ -243,8 +239,8 @@ describe('DesignDocumentController', () => {
 
     it('should not filter rows when include_docs is not set', async () => {
       jest
-        .spyOn(mockCouchDBService, 'get')
-        .mockReturnValue(of(JSON.parse(JSON.stringify(viewResult))));
+        .spyOn(mockCouchDBService, 'getStream')
+        .mockResolvedValue(asStream(viewResult));
       const { res, body } = createMockResponse();
 
       await controller.queryView(
@@ -265,8 +261,8 @@ describe('DesignDocumentController', () => {
       ]);
       mockPermissionService.getAbilityFor = jest.fn(() => ability);
       jest
-        .spyOn(mockCouchDBService, 'get')
-        .mockReturnValue(of(JSON.parse(JSON.stringify(viewResult))));
+        .spyOn(mockCouchDBService, 'getStream')
+        .mockResolvedValue(asStream(viewResult));
       const { res, body } = createMockResponse();
 
       await controller.queryView(
@@ -283,8 +279,8 @@ describe('DesignDocumentController', () => {
 
     it('should pass a limit through unmodified when include_docs is not set (no filtering possible)', async () => {
       jest
-        .spyOn(mockCouchDBService, 'get')
-        .mockReturnValue(of({ total_rows: 3, offset: 0, rows: [] }));
+        .spyOn(mockCouchDBService, 'getStream')
+        .mockResolvedValue(asStream({ total_rows: 3, offset: 0, rows: [] }));
       const { res } = createMockResponse();
 
       await controller.queryView(
@@ -298,8 +294,8 @@ describe('DesignDocumentController', () => {
 
       // no permission filtering can happen without doc content, so this
       // stays a single, unmodified proxy call
-      expect(mockCouchDBService.get).toHaveBeenCalledTimes(1);
-      expect(mockCouchDBService.get).toHaveBeenCalledWith(
+      expect(mockCouchDBService.getStream).toHaveBeenCalledTimes(1);
+      expect(mockCouchDBService.getStream).toHaveBeenCalledWith(
         databaseName,
         '_design/search_index/_view/by_name',
         { limit: '2', skip: '1' },
@@ -313,8 +309,8 @@ describe('DesignDocumentController', () => {
       );
       mockPermissionService.getAbilityFor = jest.fn(() => ability);
       jest
-        .spyOn(mockCouchDBService, 'get')
-        .mockReturnValue(of(JSON.parse(JSON.stringify(viewResult))));
+        .spyOn(mockCouchDBService, 'getStream')
+        .mockResolvedValue(asStream(viewResult));
       const { res, body } = createMockResponse();
 
       await controller.queryView(
@@ -326,8 +322,8 @@ describe('DesignDocumentController', () => {
         res,
       );
 
-      expect(mockCouchDBService.get).toHaveBeenCalledTimes(1);
-      // include_docs filtering still applies to the buffered result
+      expect(mockCouchDBService.getStream).toHaveBeenCalledTimes(1);
+      // include_docs filtering still applies to the streamed result
       // (Child:1 readable, Child:2 and Child:3 denied)
       expect(body().rows).toHaveLength(1);
     });
@@ -339,8 +335,8 @@ describe('DesignDocumentController', () => {
       );
       mockPermissionService.getAbilityFor = jest.fn(() => ability);
       jest
-        .spyOn(mockCouchDBService, 'get')
-        .mockReturnValue(of(JSON.parse(JSON.stringify(viewResult))));
+        .spyOn(mockCouchDBService, 'getStream')
+        .mockResolvedValue(asStream(viewResult));
       const { res, body } = createMockResponse();
 
       await controller.queryView(
@@ -354,15 +350,34 @@ describe('DesignDocumentController', () => {
 
       // limit=0 fails the positive-limit check, so the pagination loop is
       // never entered; the value is forwarded to CouchDB unmodified
-      expect(mockCouchDBService.get).toHaveBeenCalledTimes(1);
-      expect(mockCouchDBService.get).toHaveBeenCalledWith(
+      expect(mockCouchDBService.getStream).toHaveBeenCalledTimes(1);
+      expect(mockCouchDBService.getStream).toHaveBeenCalledWith(
         databaseName,
         '_design/search_index/_view/by_name',
         { limit: '0', include_docs: 'true' },
       );
-      // include_docs filtering still applies to the buffered result
+      // include_docs filtering still applies to the streamed result
       // (Child:1 readable, Child:2 and Child:3 denied)
       expect(body().rows).toHaveLength(1);
+    });
+
+    it('should rethrow CouchDB errors that occur before streaming starts', async () => {
+      jest
+        .spyOn(mockCouchDBService, 'getStream')
+        .mockRejectedValue(new NotFoundException('missing'));
+      const { res } = createMockResponse();
+
+      await expect(
+        controller.queryView(
+          databaseName,
+          'search_index',
+          'unknown_view',
+          requestingUser,
+          {},
+          res,
+        ),
+      ).rejects.toThrow(NotFoundException);
+      expect(res.headersSent).toBe(false);
     });
   });
 
