@@ -365,7 +365,11 @@ describe('PermissionService', () => {
 
     it('should deny rather than throw for a nested empty logical array', () => {
       const ability = abilityForRules([
-        { action: 'read', subject: 'Child', conditions: { $or: [{ $and: [] }] } },
+        {
+          action: 'read',
+          subject: 'Child',
+          conditions: { $or: [{ $and: [] }] },
+        },
       ]);
 
       expect(() => ability.can('read', child)).not.toThrow();
@@ -383,7 +387,11 @@ describe('PermissionService', () => {
 
     it('should still apply a valid rule when another rule for the same subject is unusable', () => {
       const ability = abilityForRules([
-        { action: 'read', subject: 'Child', conditions: { center: 'center-1' } },
+        {
+          action: 'read',
+          subject: 'Child',
+          conditions: { center: 'center-1' },
+        },
         { action: 'read', subject: 'Child', conditions: { $or: [] } },
       ]);
 
