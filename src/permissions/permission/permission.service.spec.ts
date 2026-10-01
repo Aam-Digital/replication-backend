@@ -49,7 +49,9 @@ describe('PermissionService', () => {
 
     const ability = service.getAbilityFor(normalUser);
 
-    expect(ability.rules).toBe(rules);
+    // the rules are validated before being handed to CASL, so this is a new
+    // array carrying the same rules rather than the caller's array itself
+    expect(ability.rules).toEqual(rules);
   });
 
   it('should return ability that allows to create Aser objects if user has permissions', () => {
@@ -259,5 +261,157 @@ describe('PermissionService', () => {
       'app',
       attachmentDoc._id,
     );
+  });
+  describe('logical operators in conditions', () => {
+    const childInCenter1: DatabaseDocument = {
+      _id: 'Child:1',
+      _rev: 'rev',
+      center: 'center-1',
+      assignedTo: 'User:someone-else',
+      age: 10,
+    } as DatabaseDocument;
+
+    const abilityWithConditions = (conditions: Record<string, any>) => {
+      jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'read', subject: 'Child', conditions }]);
+      return service.getAbilityFor(normalUser);
+    };
+
+    it('should allow access if one branch of a $or condition matches', () => {
+      const ability = abilityWithConditions({
+        $or: [{ center: 'center-1' }, { assignedTo: 'User:normalUser' }],
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+    });
+
+    it('should deny access if no branch of a $or condition matches', () => {
+      const ability = abilityWithConditions({
+        $or: [{ center: 'center-2' }, { assignedTo: 'User:normalUser' }],
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(false);
+    });
+
+    it('should evaluate a $and condition restricting the same field twice', () => {
+      const ability = abilityWithConditions({
+        $and: [{ age: { $gt: 5 } }, { age: { $lt: 18 } }],
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+    });
+
+    it('should deny access if one part of a $and condition does not match', () => {
+      const ability = abilityWithConditions({
+        $and: [{ age: { $gt: 50 } }, { age: { $lt: 18 } }],
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(false);
+    });
+
+    it('should evaluate a $not condition', () => {
+      const ability = abilityWithConditions({
+        center: { $not: { $eq: 'center-2' } },
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+    });
+
+    it('should evaluate a $nor condition', () => {
+      const ability = abilityWithConditions({ $nor: [{ center: 'center-2' }] });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+    });
+
+    it('should combine a $or with a sibling condition as an implicit and', () => {
+      const ability = abilityWithConditions({
+        assignedTo: 'User:someone-else',
+        $or: [{ center: 'center-1' }, { center: 'center-2' }],
+      });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+    });
+
+    it('should still evaluate plain field operators', () => {
+      const ability = abilityWithConditions({ center: { $in: ['center-1'] } });
+
+      expect(ability.can('read', childInCenter1)).toBe(true);
+      expect(
+        ability.can('read', { ...childInCenter1, center: 'center-2' }),
+      ).toBe(false);
+    });
+  });
+  describe('unusable conditions', () => {
+    const child: DatabaseDocument = {
+      _id: 'Child:1',
+      _rev: 'rev',
+      center: 'center-1',
+    } as DatabaseDocument;
+
+    const abilityForRules = (rules: any[]) => {
+      jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue(rules);
+      return service.getAbilityFor(normalUser);
+    };
+
+    it('should deny rather than throw for an empty logical array', () => {
+      const ability = abilityForRules([
+        { action: 'read', subject: 'Child', conditions: { $or: [] } },
+      ]);
+
+      expect(() => ability.can('read', child)).not.toThrow();
+      expect(ability.can('read', child)).toBe(false);
+    });
+
+    it('should deny rather than throw for a nested empty logical array', () => {
+      const ability = abilityForRules([
+        {
+          action: 'read',
+          subject: 'Child',
+          conditions: { $or: [{ $and: [] }] },
+        },
+      ]);
+
+      expect(() => ability.can('read', child)).not.toThrow();
+      expect(ability.can('read', child)).toBe(false);
+    });
+
+    it('should deny rather than throw when a logical operator is not an array', () => {
+      const ability = abilityForRules([
+        { action: 'read', subject: 'Child', conditions: { $or: 'nope' } },
+      ]);
+
+      expect(() => ability.can('read', child)).not.toThrow();
+      expect(ability.can('read', child)).toBe(false);
+    });
+
+    it('should still apply a valid rule when another rule for the same subject is unusable', () => {
+      const ability = abilityForRules([
+        {
+          action: 'read',
+          subject: 'Child',
+          conditions: { center: 'center-1' },
+        },
+        { action: 'read', subject: 'Child', conditions: { $or: [] } },
+      ]);
+
+      expect(() => ability.can('read', child)).not.toThrow();
+      expect(ability.can('read', child)).toBe(true);
+    });
+
+    it('should not widen access when an inverted rule has unusable conditions', () => {
+      const ability = abilityForRules([
+        { action: 'read', subject: 'Child' },
+        {
+          action: 'read',
+          subject: 'Child',
+          inverted: true,
+          conditions: { $or: [] },
+        },
+      ]);
+
+      expect(() => ability.can('read', child)).not.toThrow();
+      expect(ability.can('read', child)).toBe(false);
+    });
   });
 });

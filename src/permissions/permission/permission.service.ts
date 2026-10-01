@@ -2,14 +2,16 @@ import {
   CreateAbility,
   InferSubjects,
   MongoAbility,
+  buildMongoQueryMatcher,
   createMongoAbility,
 } from '@casl/ability';
-import { Injectable } from '@nestjs/common';
+import { $and, $nor, $not, $or, and, nor, not, or } from '@ucast/mongo2js';
+import { Injectable, Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import { CouchdbService } from '../../couchdb/couchdb.service';
 import { DatabaseDocument } from '../../restricted-endpoints/replication/bulk-document/couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
-import { RulesService } from '../rules/rules.service';
+import { DocumentRule, RulesService } from '../rules/rules.service';
 
 const actions = [
   'read',
@@ -25,6 +27,55 @@ export type DocumentAbility = MongoAbility<[Action, Subject]>;
 export const createDocumentAbility =
   createMongoAbility as CreateAbility<DocumentAbility>;
 
+/**
+ * CASL only registers field operators ($eq, $in, $elemMatch, ...) by default.
+ * Without the logical operators a rule like `{ $or: [...] }` is parsed as a
+ * field literally named "$or" and therefore matches no document at all, so
+ * permissions built with them would silently grant nothing.
+ */
+const conditionsMatcher = buildMongoQueryMatcher(
+  { $or, $and, $nor, $not },
+  { or, and, nor, not },
+);
+
+/**
+ * Drop rules whose conditions the matcher cannot compile, e.g. `{ $or: [] }`,
+ * which a direct edit of the permission config can introduce. Such a rule
+ * throws on every permission check for its subject - and because CASL evaluates
+ * rules in order, one broken rule also takes down the valid rules next to it.
+ *
+ * Validating by compiling with the very matcher that later evaluates the rule
+ * keeps the two from drifting apart as the operator set changes.
+ *
+ * A granting rule is removed, which preserves the deny-by-default outcome such
+ * a config already had while the logical operators were unregistered. An
+ * inverted rule is kept without its conditions instead, since removing it would
+ * lift a restriction.
+ */
+function withEvaluableConditions(rule: DocumentRule): DocumentRule[] {
+  if (!rule.conditions) {
+    return [rule];
+  }
+
+  try {
+    conditionsMatcher(rule.conditions);
+    return [rule];
+  } catch (error) {
+    PermissionService.logger.warn(
+      'Ignoring permission rule with unusable conditions',
+      {
+        subject: rule.subject,
+        action: rule.action,
+        inverted: !!rule.inverted,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    );
+
+    const { conditions, ...unconditional } = rule;
+    return rule.inverted ? [unconditional as DocumentRule] : [];
+  }
+}
+
 export function detectDocumentType(subject: DatabaseDocument): string {
   if (!subject._id) {
     throw new Error('Cannot detect document type: missing _id');
@@ -39,6 +90,8 @@ export function detectDocumentType(subject: DatabaseDocument): string {
  */
 @Injectable()
 export class PermissionService {
+  static readonly logger = new Logger(PermissionService.name);
+
   /** safety cap to bound memory for systems with very many distinct users */
   static readonly ABILITY_CACHE_MAX_ENTRIES = 1000;
 
@@ -76,9 +129,12 @@ export class PermissionService {
       return cached;
     }
 
-    const rules = this.rulesService.getRulesForUser(user);
+    const rules = (this.rulesService.getRulesForUser(user) ?? []).flatMap(
+      withEvaluableConditions,
+    );
     const ability = createDocumentAbility(rules, {
       detectSubjectType: detectDocumentType,
+      conditionsMatcher,
     });
 
     if (this.abilityCache.size >= PermissionService.ABILITY_CACHE_MAX_ENTRIES) {
