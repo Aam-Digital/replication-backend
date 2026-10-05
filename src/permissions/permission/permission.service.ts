@@ -72,7 +72,7 @@ function withEvaluableConditions(rule: DocumentRule): DocumentRule[] {
     );
 
     const { conditions, ...unconditional } = rule;
-    return rule.inverted ? [unconditional as DocumentRule] : [];
+    return rule.inverted ? [unconditional] : [];
   }
 }
 
