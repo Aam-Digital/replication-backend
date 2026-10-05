@@ -31,6 +31,19 @@ jobs:
           platforms: linux/amd64
           context: ./
           push: true
+          # Standard OCI image annotations, as ndb-core and aam-services already publish (both get
+          # them from docker/metadata-action). `version` is the one with a job to do: it records which
+          # release an image is, which the `stable` and `latest` tags below deliberately don't say. A
+          # deployment pinned to a floating tag can then be asked what it is actually running, with
+          #   docker inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' <container>
+          # which ndb-setup's update scripts use to refuse an upgrade they cannot verify is safe.
+          labels: |
+            org.opencontainers.image.version=${{ github.event.release.tag_name }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.title=replication-backend
+            org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
+            org.opencontainers.image.licenses=GPL-3.0
           # `stable` alongside `latest`, like ndb-core's; `released` excludes prereleases.
           tags: |
             ghcr.io/aam-digital/replication-backend:${{ github.event.release.tag_name }}

@@ -29,4 +29,13 @@ jobs:
           platforms: linux/amd64
           context: ./
           push: true
+          # Same annotations as the release build, so a pr- image is identifiable too. The version
+          # mirrors the one injected into package.json above.
+          labels: |
+            org.opencontainers.image.version=0.0.0-pr.${{ github.event.number }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.title=replication-backend
+            org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
+            org.opencontainers.image.licenses=GPL-3.0
           tags: ghcr.io/aam-digital/replication-backend:pr-${{ github.event.number }}
