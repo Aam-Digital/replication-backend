@@ -20,6 +20,7 @@ import { Ability } from '@casl/ability';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
 import { DocumentFilterService } from '../document-filter/document-filter.service';
 import { AuditService } from '../../../audit/audit.service';
+import { AttachmentCleanupService } from '../../../couchdb/attachment-cleanup.service';
 
 /**
  * Handle bulk document requests with the remote CouchDB server
@@ -34,6 +35,7 @@ export class BulkDocumentService {
     private readonly couchdbService: CouchdbService,
     private readonly documentFilter: DocumentFilterService,
     private readonly auditService: AuditService,
+    private readonly attachmentCleanupService: AttachmentCleanupService,
   ) {}
 
   /**
@@ -110,6 +112,11 @@ export class BulkDocumentService {
       existingDocs,
       response,
       user,
+    );
+    await this.attachmentCleanupService.cleanupForBulkWrite(
+      db,
+      filtered,
+      response,
     );
     return response;
   }
