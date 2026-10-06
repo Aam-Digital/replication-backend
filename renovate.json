@@ -47,8 +47,9 @@
     },
     {
       "matchManagers": ["github-actions"],
-      "matchUpdateTypes": ["minor", "patch"],
+      "matchPackageNames": ["!node"],
       "groupName": "github-actions",
+      "draftPR": false,
       "automerge": false
     },
     {
