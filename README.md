@@ -92,28 +92,33 @@ outage:
   authenticating via JWT straight against CouchDB. Logs `CRITICAL`; needs
   CouchDB server admin to check, otherwise logs a "could not verify" warning.
 
-This service does **not** assert that CouchDB rejects anonymous requests
-(`[chttpd] require_valid_user` / `require_valid_user_except_for_up`), and
-deployments are expected to leave both settings off. On CouchDB 3,
-`[couchdb] default_security = admin_only` is the default, so a database
-created without an explicit `_security` document is admin-only already -
-`app` and `app-attachments` get one regardless (see above), and every other
-database this stack creates (`_users`, `report-calculation`,
-`notification-webhook`, confirmed in `create-couchdb.sh`) relies on that
-default instead. A server-wide login requirement would only add a
-redundant safety net for a database left open by mistake, at the cost of
-blinding anonymous monitoring (`require_valid_user` rejects an anonymous
-probe before CouchDB evaluates `_security`, so a probe expecting a `_security`-driven
-`401` can no longer tell a locked-down database from an open one) and of
-blocking Fauxton's own login.
+- **No other database on the server is left open to anyone.**
+  `GET /_all_dbs` lists every database CouchDB knows about, including ones
+  this service never creates itself (e.g. `_users`, `report-calculation`,
+  `notification-webhook`), and each one (other than the two checked above)
+  is flagged if its `_security` is empty - the same unsafe state described
+  in the note above. This is safe to check even for a database that never
+  got an explicit `_security` PUT: CouchDB persists its
+  `[couchdb] default_security` fallback (`admin_only` by default on
+  CouchDB 3) into the database's actual `_security` document the first
+  time it's initialized with none set, so `GET /_security` on such a
+  database already reflects that fallback instead of staying empty. Logs
+  `CRITICAL` per affected database. `/_all_dbs` needs CouchDB server admin
+  credentials; without them this logs the same "could not verify" warning
+  as the `jwt_keys` check and skips entirely.
 
-A database's `_security` document doesn't reveal whether `default_security`
-is protecting it: `GET /db/_security` returns the same empty object whether
-the fallback in effect is `admin_only` or `everyone`, so this can't be
-checked from here the way the two bullets above are. Confirming it holds
-requires an anonymous request against a real deployment; see
+This replaces an earlier check on `[chttpd] require_valid_user` /
+`require_valid_user_except_for_up`: a server-wide login requirement added
+only a redundant safety net on top of the check above, at the cost of
+blinding anonymous monitoring (`require_valid_user` rejects an anonymous
+probe before CouchDB evaluates `_security`, so a probe expecting a
+`_security`-driven `401` could no longer tell a locked-down database from
+an open one) and of blocking Fauxton's own login. Deployments are expected
+to leave both settings off; see
 [Aam-Digital/replication-backend#376](https://github.com/Aam-Digital/replication-backend/issues/376)
-for the commands.
+for the full reasoning, including the one case this doesn't cover (a
+database whose `_security` predates CouchDB 3's `default_security`
+handling) and how to check for it against a real deployment.
 
 ## Operation
 
