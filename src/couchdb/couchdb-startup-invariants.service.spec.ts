@@ -1,6 +1,6 @@
 import { HttpException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { of, throwError } from 'rxjs';
+import { NEVER, of, throwError } from 'rxjs';
 import { RulesService } from '../permissions/rules/rules.service';
 import { CouchdbStartupInvariantsService } from './couchdb-startup-invariants.service';
 import { CouchdbService } from './couchdb.service';
@@ -31,6 +31,12 @@ describe('CouchdbStartupInvariantsService', () => {
     members: { names: [], roles: [] },
   };
 
+  /** exactly what couch_bt_engine:set_default_security_object/4 persists for `default_security = admin_only` - no `names` key at all */
+  const couchdbPersistedDefaultSecurity: SecurityDoc = {
+    admins: { roles: ['_admin'] },
+    members: { roles: ['_admin'] },
+  };
+
   beforeEach(() => {
     couchdbService = {
       createDb: jest.fn().mockReturnValue(of({ ok: true })),
@@ -56,32 +62,28 @@ describe('CouchdbStartupInvariantsService', () => {
     );
   }
 
-  /** a `[chttpd]` config value, or 'unset' (404) / 'forbidden' (403) */
-  type ChttpdFlagStub = 'true' | 'false' | boolean | 'unset' | 'forbidden';
-
   /**
-   * Stubs `couchdbService.get` for all four checks at once, defaulting to the
-   * happy path (both dbs locked down, no jwt_keys, anonymous access blocked)
-   * and overriding only what a test cares about.
+   * Stubs `couchdbService.get` for all checks at once, defaulting to the
+   * happy path (both primary dbs and every other known database locked
+   * down, no jwt_keys) and overriding only what a test cares about.
    */
   function stubCouchdb({
     securityByDb = {},
     jwtKeys = 'absent',
-    requireValidUser = 'true',
-    requireValidUserExceptForUp = 'unset',
+    allDbs = ['app', 'app-attachments', '_users', 'report-calculation'],
+    allDbsResult = 'ok',
   }: {
     securityByDb?: Record<string, SecurityDoc | 'unreadable'>;
     jwtKeys?: 'absent' | 'forbidden' | Record<string, string>;
-    requireValidUser?: ChttpdFlagStub;
-    requireValidUserExceptForUp?: ChttpdFlagStub;
+    allDbs?: string[];
+    allDbsResult?: 'ok' | 'forbidden';
   } = {}) {
-    const stubChttpdFlag = (value: ChttpdFlagStub) => {
-      if (value === 'unset') return throwError(() => fakeHttpException(404));
-      if (value === 'forbidden')
-        return throwError(() => fakeHttpException(403));
-      return of(value);
-    };
     couchdbService.get.mockImplementation((db?: string, docId?: string) => {
+      if (db === undefined && docId === '_all_dbs') {
+        if (allDbsResult === 'forbidden')
+          return throwError(() => fakeHttpException(403)) as any;
+        return of(allDbs) as any;
+      }
       if (docId === '_security') {
         const security = securityByDb[db!];
         if (security === 'unreadable') {
@@ -95,12 +97,6 @@ describe('CouchdbStartupInvariantsService', () => {
         if (jwtKeys === 'forbidden')
           return throwError(() => fakeHttpException(403)) as any;
         return of(jwtKeys) as any;
-      }
-      if (docId === 'require_valid_user') {
-        return stubChttpdFlag(requireValidUser) as any;
-      }
-      if (docId === 'require_valid_user_except_for_up') {
-        return stubChttpdFlag(requireValidUserExceptForUp) as any;
       }
       return of(undefined) as any;
     });
@@ -124,17 +120,26 @@ describe('CouchdbStartupInvariantsService', () => {
     const service = buildService();
 
     await service.onModuleInit();
+    await service.runSecurityChecks();
 
     expect(couchdbService.createDb).toHaveBeenCalledWith('custom-db');
     expect(couchdbService.createDb).toHaveBeenCalledWith('app-attachments');
     expect(couchdbService.get).toHaveBeenCalledWith('custom-db', '_security');
   });
 
-  it('logs nothing on the full happy path (locked-down security, no jwt_keys, anonymous access blocked)', async () => {
+  it('does not wait for the security checks before completing startup', async () => {
+    stubCouchdb();
+    couchdbService.get.mockReturnValue(NEVER as any);
+    const service = buildService();
+
+    await expect(service.onModuleInit()).resolves.toBeUndefined();
+  });
+
+  it('logs nothing on the full happy path (locked-down security everywhere, no jwt_keys)', async () => {
     stubCouchdb();
     const service = buildService();
 
-    await service.onModuleInit();
+    await service.runSecurityChecks();
 
     expect(errorSpy).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
@@ -154,7 +159,7 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({ securityByDb: { app: security } });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(errorSpy).not.toHaveBeenCalled();
     });
@@ -191,7 +196,7 @@ describe('CouchdbStartupInvariantsService', () => {
         stubCouchdb({ securityByDb: { app: security } });
         const service = buildService();
 
-        await service.onModuleInit();
+        await service.runSecurityChecks();
 
         expect(errorSpy).toHaveBeenCalledWith(
           expect.stringMatching(messagePattern),
@@ -211,7 +216,7 @@ describe('CouchdbStartupInvariantsService', () => {
       });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('non-admin-only'),
@@ -223,7 +228,7 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({ securityByDb: { app: 'unreadable' } });
       const service = buildService();
 
-      await expect(service.onModuleInit()).resolves.toBeUndefined();
+      await service.runSecurityChecks();
 
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringMatching(/CRITICAL.*Could not verify/),
@@ -245,7 +250,7 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({ jwtKeys: { 'rsa:kid1': '-----BEGIN PUBLIC KEY-----...' } });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('CRITICAL'),
@@ -257,7 +262,7 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({ jwtKeys: 'forbidden' });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Could not verify'),
@@ -266,68 +271,103 @@ describe('CouchdbStartupInvariantsService', () => {
     });
   });
 
-  describe('require_valid_user', () => {
-    it('logs CRITICAL when confirmed false', async () => {
-      stubCouchdb({ requireValidUser: 'false' });
+  describe('the other databases on the server', () => {
+    it("does not double-log when the primary db's _security is empty (it is not checked again as part of /_all_dbs)", async () => {
+      stubCouchdb({ securityByDb: { app: emptySecurity } });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('require_valid_user'),
-        expect.objectContaining({
-          requireValidUser: 'false',
-          requireValidUserExceptForUp: 'false',
-        }),
-      );
+      expect(errorSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('logs CRITICAL when unset (404) - unlike jwt_keys, absence is not safe here', async () => {
-      stubCouchdb({ requireValidUser: 'unset' });
-      const service = buildService();
-
-      await service.onModuleInit();
-
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('require_valid_user'),
-        expect.objectContaining({ requireValidUser: 'false' }),
-      );
-    });
-
-    it('accepts require_valid_user_except_for_up instead (keeps /_up open for the healthcheck)', async () => {
+    it('logs CRITICAL for any other database whose _security grants a non-admin role', async () => {
       stubCouchdb({
-        requireValidUser: 'unset',
-        requireValidUserExceptForUp: 'true',
+        securityByDb: {
+          'report-calculation': {
+            admins: { names: [], roles: [] },
+            members: { names: [], roles: ['user_app'] },
+          },
+        },
       });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/non-admin-only/),
+        expect.objectContaining({ db: 'report-calculation' }),
+      );
+    });
+
+    it('logs CRITICAL for any other database on the server whose _security is empty', async () => {
+      stubCouchdb({
+        securityByDb: { 'report-calculation': emptySecurity },
+      });
+      const service = buildService();
+
+      await service.runSecurityChecks();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/empty _security document/),
+        expect.objectContaining({ db: 'report-calculation' }),
+      );
+    });
+
+    it('does not flag a database whose _security was persisted admin-only by CouchDB itself (no explicit PUT ever made)', async () => {
+      stubCouchdb({
+        allDbs: ['app', 'app-attachments', '_users', 'report-calculation'],
+        securityByDb: {
+          _users: couchdbPersistedDefaultSecurity,
+          'report-calculation': couchdbPersistedDefaultSecurity,
+        },
+      });
+      const service = buildService();
+
+      await service.runSecurityChecks();
 
       expect(errorSpy).not.toHaveBeenCalled();
     });
 
-    it('accepts a JSON boolean true, not just the string "true"', async () => {
-      stubCouchdb({ requireValidUser: true });
+    it('logs CRITICAL but still checks remaining databases when a _security document is unreadable', async () => {
+      stubCouchdb({
+        securityByDb: {
+          _users: 'unreadable',
+          'report-calculation': emptySecurity,
+        },
+      });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
-      expect(errorSpy).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/CRITICAL.*Could not verify/),
+        expect.objectContaining({ db: '_users', error: 'unreadable response' }),
+      );
+      // the database after the unreadable one is still checked
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/empty _security document/),
+        expect.objectContaining({ db: 'report-calculation' }),
+      );
     });
 
-    it('logs "could not verify" instead of failing when the check is forbidden', async () => {
-      stubCouchdb({ requireValidUser: 'forbidden' });
+    it('warns but still checks the primary databases when /_all_dbs is forbidden', async () => {
+      stubCouchdb({
+        allDbsResult: 'forbidden',
+        securityByDb: { app: emptySecurity },
+      });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Could not verify whether CouchDB allows anonymous requests',
-        ),
+        expect.stringContaining('Could not list the CouchDB databases'),
         expect.anything(),
       );
-      expect(errorSpy).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/empty _security document/),
+        expect.objectContaining({ db: 'app' }),
+      );
     });
   });
 });

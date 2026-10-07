@@ -35,11 +35,29 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
   ) {}
 
   async onModuleInit(): Promise<void> {
+    await this.ensureDatabasesExist(this.getPrimaryDbName());
+    void this.runSecurityChecks();
+  }
+
+  /**
+   * The checks below only ever log, and their cost grows with the number of
+   * databases on the server, so they run detached instead of holding up the
+   * port NestJS listens on. Returns a promise so tests can await them.
+   */
+  async runSecurityChecks(): Promise<void> {
     const primaryDb = this.getPrimaryDbName();
-    await this.ensureDatabasesExist(primaryDb);
-    await this.assertSecurityIsLockedDown(primaryDb);
-    await this.warnIfJwtKeysConfigured();
-    await this.warnIfAnonymousAccessAllowed();
+    try {
+      await this.assertSecurityIsLockedDown(primaryDb);
+      await this.warnIfJwtKeysConfigured();
+    } catch (error) {
+      // nothing is awaiting this, so an error escaping here would be an
+      // unhandled rejection rather than a failed check
+      this.logger.error(
+        'CRITICAL: CouchDB security invariant checks did not complete, so ' +
+          'they are inconclusive.',
+        { error: error instanceof Error ? error.message : String(error) },
+      );
+    }
   }
 
   private getPrimaryDbName(): string {
@@ -59,10 +77,13 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
   private static readonly ADMIN_ROLE = '_admin';
 
   /**
-   * Flags it if either database's `_security` grants access beyond CouchDB
+   * Flags any database whose `_security` grants access beyond CouchDB
    * server admins - a permissive `_security` lets any client CouchDB itself
-   * accepts read and write the database directly, bypassing every
-   * permission check this service performs.
+   * accepts read and write that database directly, bypassing every
+   * permission check this service performs. Nothing in this stack is meant
+   * to be reachable by anything but a server admin, so every database on
+   * the server is held to that standard, not only the two this service
+   * creates itself.
    *
    * Counterintuitively, an *empty* `_security` document is the worst case,
    * not the safe one: CouchDB treats an empty `members` list as no
@@ -70,11 +91,22 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
    * "admins only" is restricting `members` to CouchDB's reserved `_admin`
    * role.
    *
+   * A database that never got an explicit `_security` PUT - `_users`,
+   * `report-calculation`, `notification-webhook` here - passes this all the
+   * same: CouchDB persists its `[couchdb] default_security` fallback
+   * (`admin_only` by default on CouchDB 3) into the database's actual
+   * `_security` document the first time it is initialized with none set
+   * (`couch_bt_engine:set_default_security_object/4`). One whose security
+   * predates that behavior still reads back empty, which is exactly the
+   * case this check catches.
+   *
    * Logs CRITICAL rather than failing closed, so a stale CouchDB config
    * doesn't turn a routine restart into an outage.
    */
   private async assertSecurityIsLockedDown(primaryDb: string): Promise<void> {
-    for (const db of [primaryDb, ATTACHMENTS_DB]) {
+    const primaryDbs = [primaryDb, ATTACHMENTS_DB];
+    const otherDbs = await this.listOtherDatabases(primaryDbs);
+    for (const db of [...primaryDbs, ...otherDbs]) {
       let security: CouchdbSecurityDoc;
       try {
         security = await firstValueFrom(
@@ -97,11 +129,8 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
       if (CouchdbStartupInvariantsService.isSecurityLockedDown(security)) {
         continue;
       }
-      const isOpenToAnyone =
-        CouchdbStartupInvariantsService.isEmptyList(security?.members?.names) &&
-        CouchdbStartupInvariantsService.isEmptyList(security?.members?.roles);
       this.logger.error(
-        isOpenToAnyone
+        CouchdbStartupInvariantsService.isOpenToAnyone(security)
           ? 'CRITICAL: CouchDB database has an empty _security document, ' +
               'which CouchDB treats as open to any client it accepts - not ' +
               'admin-only. Fix: PUT a _security document that restricts ' +
@@ -123,8 +152,46 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
     }
   }
 
+  /**
+   * `GET /_all_dbs` finds the databases this service never creates itself
+   * (`_users`, `report-calculation`, `notification-webhook` in this stack).
+   * It requires CouchDB server-admin credentials; without them this warns
+   * and the check above covers only the primary databases, rather than risk
+   * a false CRITICAL.
+   */
+  private async listOtherDatabases(primaryDbs: string[]): Promise<string[]> {
+    try {
+      const allDbs = await firstValueFrom(
+        this.couchdbService.get<string[]>(undefined, '_all_dbs'),
+      );
+      return allDbs.filter((db) => !primaryDbs.includes(db));
+    } catch (error) {
+      this.logger.warn(
+        'Could not list the CouchDB databases to verify their _security ' +
+          'documents (requires CouchDB server admin credentials); checking ' +
+          'only the primary databases.',
+        {
+          error: error instanceof Error ? error.message : String(error),
+          status:
+            error instanceof HttpException ? error.getStatus() : undefined,
+        },
+      );
+      return [];
+    }
+  }
+
   private static isEmptyList(arr: string[] | undefined): boolean {
     return !arr || arr.length === 0;
+  }
+
+  /** CouchDB treats an empty `members` list as no restriction, not as admin-only. */
+  private static isOpenToAnyone(
+    security: CouchdbSecurityDoc | undefined,
+  ): boolean {
+    return (
+      CouchdbStartupInvariantsService.isEmptyList(security?.members?.names) &&
+      CouchdbStartupInvariantsService.isEmptyList(security?.members?.roles)
+    );
   }
 
   private static isSecurityLockedDown(
@@ -192,85 +259,6 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
           'jwt_authentication_handler. Continuing startup.',
         { configuredKeyIds: Object.keys(jwtKeys) },
       );
-    }
-  }
-
-  /**
-   * `_security` locked down (asserted above) only blocks *authenticated*
-   * non-admin clients. CouchDB still accepts anonymous requests by default,
-   * and an anonymous request is subject to the same `_security` check - so
-   * with this off, a database whose `_security` isn't locked down is
-   * reachable with no credentials at all.
-   *
-   * Either `require_valid_user` or `require_valid_user_except_for_up` counts
-   * as enabled: the latter rejects every anonymous request except the
-   * `/_up` readiness probe (exposes no data), keeping unauthenticated health
-   * checks working.
-   *
-   * Unlike `jwt_keys` above, an unset value here does not mean the feature
-   * is off - it means CouchDB's default (anonymous allowed) applies, so
-   * it's treated as a confirmed CRITICAL, not as evidence of safety.
-   */
-  private async warnIfAnonymousAccessAllowed(): Promise<void> {
-    // response shape (string vs boolean) isn't confirmed by CouchDB's docs;
-    // String(...) accepts either rather than risk a false CRITICAL
-    const isEnabled = (value: string | boolean) => String(value) === 'true';
-
-    // `undefined` = could not be read (warning already logged), so the
-    // check is skipped; an unset flag comes back as CouchDB's default 'false'
-    const requireValidUser = await this.readChttpdFlag('require_valid_user');
-    if (requireValidUser === undefined) return;
-    if (isEnabled(requireValidUser)) return;
-
-    const requireValidUserExceptForUp = await this.readChttpdFlag(
-      'require_valid_user_except_for_up',
-    );
-    if (requireValidUserExceptForUp === undefined) return;
-    if (isEnabled(requireValidUserExceptForUp)) return;
-
-    this.logger.error(
-      'CRITICAL: CouchDB does not have require_valid_user enabled, so it ' +
-        'accepts anonymous, unauthenticated requests - any database whose ' +
-        '_security is left open is reachable with no credentials ' +
-        'whatsoever. Fix: set [chttpd] require_valid_user_except_for_up = ' +
-        'true (or require_valid_user = true). Continuing startup.',
-      { requireValidUser, requireValidUserExceptForUp },
-    );
-  }
-
-  /**
-   * Reads a `[chttpd]` config value, treating "unset" (404) as CouchDB's
-   * default `'false'`. Returns `undefined` (after logging a warning) if the
-   * value could not be read, e.g. without server admin credentials.
-   */
-  private async readChttpdFlag(
-    key: string,
-  ): Promise<string | boolean | undefined> {
-    try {
-      return await firstValueFrom(
-        this.couchdbService.get<string | boolean>(
-          '_node/_local/_config/chttpd',
-          key,
-        ),
-      );
-    } catch (error) {
-      if (
-        error instanceof HttpException &&
-        error.getStatus() === HttpStatus.NOT_FOUND
-      ) {
-        return 'false'; // confirmed unset, CouchDB's default applies
-      }
-      this.logger.warn(
-        'Could not verify whether CouchDB allows anonymous requests ' +
-          '(requires CouchDB server admin credentials); skipping this check.',
-        {
-          key,
-          error: error instanceof Error ? error.message : String(error),
-          status:
-            error instanceof HttpException ? error.getStatus() : undefined,
-        },
-      );
-      return undefined;
     }
   }
 }

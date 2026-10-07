@@ -65,42 +65,30 @@ configured via `PERMISSION_DB` during startup. Its behavior is fail-closed:
 
 ### Startup invariant checks (`CouchdbStartupInvariantsService`)
 
-This service's whole security model relies on it being the _only_ door to
-its databases - every client authenticates against it, never against
-CouchDB directly. That assumption lives in CouchDB's own configuration, not
-in this codebase, so `CouchdbStartupInvariantsService` asserts it
-(but doesn't write) at startup, against the primary DBs.
-Insecure settings log `CRITICAL` and continue, so a routine version
-upgrade against an already-misconfigured CouchDB doesn't turn into an
-outage:
+This service's whole security model relies on it being the _only_ door to its
+databases - every client authenticates against it, never against CouchDB
+directly. That assumption lives in CouchDB's own configuration, not in this
+codebase, so `CouchdbStartupInvariantsService` asserts (but never writes) it
+when the app starts. Only the database creation blocks startup; the read-only
+checks run detached and merely log `CRITICAL`, so a routine version upgrade
+against an already-misconfigured CouchDB doesn't turn into an outage.
 
 - **Both databases exist**, creating them if missing (helps a fresh install
   only; an existing, misconfigured database is caught by the next check).
-- **`_security` is locked down to CouchDB's reserved `_admin` role** only.
-  `_admin` is only ever attached to a request CouchDB itself authenticated
-  as a genuine server admin (this stack's `COUCHDB_USER`/`COUCHDB_PASSWORD`,
-  the same account handed to this service as `DATABASE_USER`).
+- **Every database's `_security` restricts `members` to CouchDB's reserved
+  `_admin` role**, including databases this service never creates itself.
+  Note that an _empty_ `_security` document is **not** the safe state but the
+  opposite: CouchDB treats an empty `members` list as "no restriction".
+- **CouchDB has no `[jwt_keys]` configured**, which would otherwise let a
+  Keycloak realm role named `_admin` bypass `_security` entirely.
 
-  **Note:** an _empty_ `_security` document (no admins, no members) is
-  **not** a safe/admin-only state - it's the opposite. CouchDB treats an
-  empty `members` list as "no restriction", so it grants access to _any_
-  authenticated CouchDB user (not just server admins), and this check flags
-  it just as loudly as a populated-but-too-broad one.
+The database listing and the `jwt_keys` check need CouchDB server admin
+credentials. Without them they log a "could not verify" warning, and
+`_security` is only checked on the two databases this service knows by name.
 
-- **CouchDB has no `[jwt_keys]` configured.** A Keycloak realm role literally
-  named `_admin` would otherwise let a user bypass `_security` entirely by
-  authenticating via JWT straight against CouchDB. Logs `CRITICAL`; needs
-  CouchDB server admin to check, otherwise logs a "could not verify" warning.
-
-- **CouchDB rejects anonymous requests** (`[chttpd]
-require_valid_user_except_for_up = true`, or `require_valid_user = true`).
-  Some databases in this deployment (`_users`, `report-calculation`,
-  `notification-webhook`) never get a `_security` document at all, so
-  without this they're reachable with no credentials whatsoever. The
-  `except_for_up` variant still allows anonymous `/_up`, so unauthenticated
-  health checks keep working. Logs `CRITICAL` if neither is set - CouchDB's
-  default is "anonymous allowed", so unlike the `jwt_keys` check, absence is
-  not treated as safe. Same server-admin caveat applies.
+This service deliberately does **not** assert that CouchDB rejects anonymous
+requests (`[chttpd] require_valid_user` / `require_valid_user_except_for_up`);
+there is little to gain and we lose access to the Fauxton UI login page otherwise.
 
 ## Operation
 
