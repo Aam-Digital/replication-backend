@@ -65,55 +65,30 @@ configured via `PERMISSION_DB` during startup. Its behavior is fail-closed:
 
 ### Startup invariant checks (`CouchdbStartupInvariantsService`)
 
-This service's whole security model relies on it being the _only_ door to
-its databases - every client authenticates against it, never against
-CouchDB directly. That assumption lives in CouchDB's own configuration, not
-in this codebase, so `CouchdbStartupInvariantsService` asserts it (but
-doesn't write) when the app starts. Insecure settings log `CRITICAL` and
-continue, so a routine version upgrade against an already-misconfigured
-CouchDB doesn't turn into an outage. Only the database creation blocks
-startup; the read-only checks run detached, as their cost grows with the
-number of databases on the server:
+This service's whole security model relies on it being the _only_ door to its
+databases - every client authenticates against it, never against CouchDB
+directly. That assumption lives in CouchDB's own configuration, not in this
+codebase, so `CouchdbStartupInvariantsService` asserts (but never writes) it
+when the app starts. Only the database creation blocks startup; the read-only
+checks run detached and merely log `CRITICAL`, so a routine version upgrade
+against an already-misconfigured CouchDB doesn't turn into an outage.
 
 - **Both databases exist**, creating them if missing (helps a fresh install
   only; an existing, misconfigured database is caught by the next check).
-- **Every database's `_security` is locked down to CouchDB's reserved
-  `_admin` role** only. `_admin` is only ever attached to a request CouchDB
-  itself authenticated as a genuine server admin (this stack's
-  `COUCHDB_USER`/`COUCHDB_PASSWORD`, the same account handed to this
-  service as `DATABASE_USER`). `GET /_all_dbs` lists every database CouchDB
-  knows about, including the ones this service never creates itself (e.g.
-  `_users`, `report-calculation`, `notification-webhook`) - nothing here is
-  meant to be reachable by anything but a server admin, so all of them are
-  held to the same standard. Logs `CRITICAL` per affected database.
+- **Every database's `_security` restricts `members` to CouchDB's reserved
+  `_admin` role**, including databases this service never creates itself.
+  Note that an _empty_ `_security` document is **not** the safe state but the
+  opposite: CouchDB treats an empty `members` list as "no restriction".
+- **CouchDB has no `[jwt_keys]` configured**, which would otherwise let a
+  Keycloak realm role named `_admin` bypass `_security` entirely.
 
-  **Note:** an _empty_ `_security` document (no admins, no members) is
-  **not** a safe/admin-only state - it's the opposite. CouchDB treats an
-  empty `members` list as "no restriction", so it grants access to _any_
-  client CouchDB itself accepts, anonymous requests included, and this
-  check flags it just as loudly as a populated-but-too-broad one.
+The database listing and the `jwt_keys` check need CouchDB server admin
+credentials. Without them they log a "could not verify" warning, and
+`_security` is only checked on the two databases this service knows by name.
 
-  A database that never got an explicit `_security` PUT passes all the
-  same: CouchDB persists its `[couchdb] default_security` fallback
-  (`admin_only` by default on CouchDB 3) into the database's actual
-  `_security` document the first time it's initialized with none set, so
-  `GET /_security` on such a database already reflects that fallback
-  instead of staying empty.
-
-  `/_all_dbs` needs CouchDB server admin credentials; without them this
-  logs a "could not verify" warning and checks only the two databases it
-  knows by name.
-
-- **CouchDB has no `[jwt_keys]` configured.** A Keycloak realm role literally
-  named `_admin` would otherwise let a user bypass `_security` entirely by
-  authenticating via JWT straight against CouchDB. Logs `CRITICAL`; needs
-  CouchDB server admin to check, otherwise logs a "could not verify" warning.
-
-This service does **not** assert that CouchDB rejects anonymous requests
-(`[chttpd] require_valid_user` / `require_valid_user_except_for_up`), and
-deployments are expected to leave both settings off; see
-[Aam-Digital/replication-backend#376](https://github.com/Aam-Digital/replication-backend/issues/376)
-for the full reasoning.
+This service deliberately does **not** assert that CouchDB rejects anonymous
+requests (`[chttpd] require_valid_user` / `require_valid_user_except_for_up`);
+see [#376](https://github.com/Aam-Digital/replication-backend/issues/376).
 
 ## Operation
 
