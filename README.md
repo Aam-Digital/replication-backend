@@ -88,7 +88,7 @@ credentials. Without them they log a "could not verify" warning, and
 
 This service deliberately does **not** assert that CouchDB rejects anonymous
 requests (`[chttpd] require_valid_user` / `require_valid_user_except_for_up`);
-see [#376](https://github.com/Aam-Digital/replication-backend/issues/376).
+there is little to gain and we lose access to the Fauxton UI login page otherwise.
 
 ## Operation
 
