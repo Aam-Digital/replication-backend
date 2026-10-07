@@ -25,27 +25,32 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Generates the standard OCI image labels, as ndb-core and aam-services already publish.
+      # `version` is the one with a job to do: it records which release an image is, which the
+      # `stable` and `latest` tags deliberately don't say. A deployment pinned to a floating tag can
+      # then be asked what it is actually running, with
+      #   docker inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' <container>
+      # which ndb-setup's update scripts use to refuse an upgrade they cannot verify is safe.
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/aam-digital/replication-backend
+          # `version` is taken from the first tag, so the release tag has to stay first.
+          # `stable` alongside `latest`, like ndb-core's; `released` excludes prereleases.
+          tags: |
+            type=raw,value=${{ github.event.release.tag_name }}
+            type=raw,value=stable
+            type=raw,value=latest
+          # Overrides the description generated from the GitHub repository description.
+          labels: |
+            org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
+
       - name: Build and push
         uses: docker/build-push-action@v7
         with:
           platforms: linux/amd64
           context: ./
           push: true
-          # Standard OCI image annotations, as ndb-core and aam-services already publish (both get
-          # them from docker/metadata-action). `version` is the one with a job to do: it records which
-          # release an image is, which the `stable` and `latest` tags below deliberately don't say. A
-          # deployment pinned to a floating tag can then be asked what it is actually running, with
-          #   docker inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' <container>
-          # which ndb-setup's update scripts use to refuse an upgrade they cannot verify is safe.
-          labels: |
-            org.opencontainers.image.version=${{ github.event.release.tag_name }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
-            org.opencontainers.image.title=replication-backend
-            org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
-            org.opencontainers.image.licenses=GPL-3.0
-          # `stable` alongside `latest`, like ndb-core's; `released` excludes prereleases.
-          tags: |
-            ghcr.io/aam-digital/replication-backend:${{ github.event.release.tag_name }}
-            ghcr.io/aam-digital/replication-backend:stable
-            ghcr.io/aam-digital/replication-backend:latest
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
