@@ -1,6 +1,6 @@
 import { HttpException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { of, throwError } from 'rxjs';
+import { NEVER, of, throwError } from 'rxjs';
 import { RulesService } from '../permissions/rules/rules.service';
 import { CouchdbStartupInvariantsService } from './couchdb-startup-invariants.service';
 import { CouchdbService } from './couchdb.service';
@@ -73,7 +73,7 @@ describe('CouchdbStartupInvariantsService', () => {
     allDbs = ['app', 'app-attachments', '_users', 'report-calculation'],
     allDbsResult = 'ok',
   }: {
-    securityByDb?: Record<string, SecurityDoc | 'unreadable'>;
+    securityByDb?: Record<string, SecurityDoc | 'unreadable' | number>;
     jwtKeys?: 'absent' | 'forbidden' | Record<string, string>;
     allDbs?: string[];
     allDbsResult?: 'ok' | 'forbidden';
@@ -88,6 +88,9 @@ describe('CouchdbStartupInvariantsService', () => {
         const security = securityByDb[db!];
         if (security === 'unreadable') {
           return throwError(() => new Error('unreadable response')) as any;
+        }
+        if (typeof security === 'number') {
+          return throwError(() => fakeHttpException(security)) as any;
         }
         return of(security ?? lockedDownSecurity) as any;
       }
@@ -120,17 +123,26 @@ describe('CouchdbStartupInvariantsService', () => {
     const service = buildService();
 
     await service.onModuleInit();
+    await service.runSecurityChecks();
 
     expect(couchdbService.createDb).toHaveBeenCalledWith('custom-db');
     expect(couchdbService.createDb).toHaveBeenCalledWith('app-attachments');
     expect(couchdbService.get).toHaveBeenCalledWith('custom-db', '_security');
   });
 
+  it('does not wait for the security checks before completing startup', async () => {
+    stubCouchdb();
+    couchdbService.get.mockReturnValue(NEVER as any);
+    const service = buildService();
+
+    await expect(service.onModuleInit()).resolves.toBeUndefined();
+  });
+
   it('logs nothing on the full happy path (locked-down security everywhere, no jwt_keys)', async () => {
     stubCouchdb();
     const service = buildService();
 
-    await service.onModuleInit();
+    await service.runSecurityChecks();
 
     expect(errorSpy).not.toHaveBeenCalled();
     expect(warnSpy).not.toHaveBeenCalled();
@@ -150,7 +162,7 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({ securityByDb: { app: security } });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(errorSpy).not.toHaveBeenCalled();
     });
@@ -187,7 +199,7 @@ describe('CouchdbStartupInvariantsService', () => {
         stubCouchdb({ securityByDb: { app: security } });
         const service = buildService();
 
-        await service.onModuleInit();
+        await service.runSecurityChecks();
 
         expect(errorSpy).toHaveBeenCalledWith(
           expect.stringMatching(messagePattern),
@@ -207,7 +219,7 @@ describe('CouchdbStartupInvariantsService', () => {
       });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('non-admin-only'),
@@ -219,7 +231,7 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({ securityByDb: { app: 'unreadable' } });
       const service = buildService();
 
-      await expect(service.onModuleInit()).resolves.toBeUndefined();
+      await service.runSecurityChecks();
 
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringMatching(/CRITICAL.*Could not verify/),
@@ -234,6 +246,18 @@ describe('CouchdbStartupInvariantsService', () => {
         'jwt_keys',
       );
     });
+
+    it('logs CRITICAL when a primary db refuses the _security read, which leaves the stricter admin-only check unanswered', async () => {
+      stubCouchdb({ securityByDb: { app: 403 } });
+      const service = buildService();
+
+      await service.runSecurityChecks();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/CRITICAL.*Could not verify/),
+        expect.objectContaining({ db: 'app', status: 403 }),
+      );
+    });
   });
 
   describe('jwt_keys', () => {
@@ -241,7 +265,7 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({ jwtKeys: { 'rsa:kid1': '-----BEGIN PUBLIC KEY-----...' } });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('CRITICAL'),
@@ -253,7 +277,7 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({ jwtKeys: 'forbidden' });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Could not verify'),
@@ -267,18 +291,18 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({ securityByDb: { app: emptySecurity } });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(errorSpy).toHaveBeenCalledTimes(1);
     });
 
-    it('logs CRITICAL for a database beyond app/app-attachments whose _security is empty', async () => {
+    it('logs CRITICAL for any other database on the server whose _security is empty', async () => {
       stubCouchdb({
         securityByDb: { 'report-calculation': emptySecurity },
       });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringMatching(/empty _security document/),
@@ -296,25 +320,51 @@ describe('CouchdbStartupInvariantsService', () => {
       });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(errorSpy).not.toHaveBeenCalled();
     });
 
     it('logs CRITICAL but still checks remaining databases when a _security document is unreadable', async () => {
       stubCouchdb({
-        securityByDb: { 'report-calculation': 'unreadable' },
+        securityByDb: {
+          _users: 'unreadable',
+          'report-calculation': emptySecurity,
+        },
       });
       const service = buildService();
 
-      await expect(service.onModuleInit()).resolves.toBeUndefined();
+      await service.runSecurityChecks();
 
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringMatching(/CRITICAL.*Could not verify/),
-        expect.objectContaining({
-          db: 'report-calculation',
-          error: 'unreadable response',
-        }),
+        expect.objectContaining({ db: '_users', error: 'unreadable response' }),
+      );
+      // the database after the unreadable one is still checked
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/empty _security document/),
+        expect.objectContaining({ db: 'report-calculation' }),
+      );
+    });
+
+    it('does not flag a database that refuses the _security read with 403 (not a member, so not open to anyone)', async () => {
+      stubCouchdb({ securityByDb: { 'report-calculation': 403 } });
+      const service = buildService();
+
+      await service.runSecurityChecks();
+
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it("logs CRITICAL on a 401, which means this service's own credentials were rejected rather than the database being restricted", async () => {
+      stubCouchdb({ securityByDb: { 'report-calculation': 401 } });
+      const service = buildService();
+
+      await service.runSecurityChecks();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/CRITICAL.*Could not verify/),
+        expect.objectContaining({ db: 'report-calculation', status: 401 }),
       );
     });
 
@@ -322,7 +372,7 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({ allDbsResult: 'forbidden' });
       const service = buildService();
 
-      await service.onModuleInit();
+      await service.runSecurityChecks();
 
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining(

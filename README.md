@@ -69,9 +69,11 @@ This service's whole security model relies on it being the _only_ door to
 its databases - every client authenticates against it, never against
 CouchDB directly. That assumption lives in CouchDB's own configuration, not
 in this codebase, so `CouchdbStartupInvariantsService` asserts it (but
-doesn't write) at startup. Insecure settings log `CRITICAL` and continue, so a routine version
-upgrade against an already-misconfigured CouchDB doesn't turn into an
-outage:
+doesn't write) when the app starts. Insecure settings log `CRITICAL` and
+continue, so a routine version upgrade against an already-misconfigured
+CouchDB doesn't turn into an outage. Only the database creation blocks
+startup; the read-only checks run detached, as their cost grows with the
+number of databases on the server:
 
 - **Both databases exist**, creating them if missing (helps a fresh install
   only; an existing, misconfigured database is caught by the next check).
@@ -91,7 +93,10 @@ outage:
   authenticating via JWT straight against CouchDB. Logs `CRITICAL`; needs
   CouchDB server admin to check, otherwise logs a "could not verify" warning.
 
-- **No other database on the server is left open to anyone.**
+- **No other database on the server is left open to anyone.** Only this
+  weaker check applies to them: a database this service doesn't own may
+  legitimately grant members of its own, whereas being readable by anyone
+  is unsafe whichever component owns it.
   `GET /_all_dbs` lists every database CouchDB knows about, including ones
   this service never creates itself (e.g. `_users`, `report-calculation`,
   `notification-webhook`), and each one (other than the two checked above)
@@ -104,7 +109,10 @@ outage:
   database already reflects that fallback instead of staying empty. Logs
   `CRITICAL` per affected database. `/_all_dbs` needs CouchDB server admin
   credentials; without them this logs the same "could not verify" warning
-  as the `jwt_keys` check and skips entirely.
+  as the `jwt_keys` check and skips entirely. A database that refuses the
+  `_security` read with a 403 is not flagged: CouchDB hands `_security` to
+  any client it accepts while `members` is empty and only to a member once
+  it isn't, so being refused already proves the database isn't open.
 
 This service does **not** assert that CouchDB rejects anonymous requests
 (`[chttpd] require_valid_user` / `require_valid_user_except_for_up`), and
