@@ -68,9 +68,8 @@ configured via `PERMISSION_DB` during startup. Its behavior is fail-closed:
 This service's whole security model relies on it being the _only_ door to
 its databases - every client authenticates against it, never against
 CouchDB directly. That assumption lives in CouchDB's own configuration, not
-in this codebase, so `CouchdbStartupInvariantsService` asserts it
-(but doesn't write) at startup, against the primary DBs.
-Insecure settings log `CRITICAL` and continue, so a routine version
+in this codebase, so `CouchdbStartupInvariantsService` asserts it (but
+doesn't write) at startup. Insecure settings log `CRITICAL` and continue, so a routine version
 upgrade against an already-misconfigured CouchDB doesn't turn into an
 outage:
 
@@ -107,18 +106,11 @@ outage:
   credentials; without them this logs the same "could not verify" warning
   as the `jwt_keys` check and skips entirely.
 
-This replaces an earlier check on `[chttpd] require_valid_user` /
-`require_valid_user_except_for_up`: a server-wide login requirement added
-only a redundant safety net on top of the check above, at the cost of
-blinding anonymous monitoring (`require_valid_user` rejects an anonymous
-probe before CouchDB evaluates `_security`, so a probe expecting a
-`_security`-driven `401` could no longer tell a locked-down database from
-an open one) and of blocking Fauxton's own login. Deployments are expected
-to leave both settings off; see
+This service does **not** assert that CouchDB rejects anonymous requests
+(`[chttpd] require_valid_user` / `require_valid_user_except_for_up`), and
+deployments are expected to leave both settings off; see
 [Aam-Digital/replication-backend#376](https://github.com/Aam-Digital/replication-backend/issues/376)
-for the full reasoning, including the one case this doesn't cover (a
-database whose `_security` predates CouchDB 3's `default_security`
-handling) and how to check for it against a real deployment.
+for the full reasoning.
 
 ## Operation
 

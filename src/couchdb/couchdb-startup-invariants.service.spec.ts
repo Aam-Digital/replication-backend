@@ -31,6 +31,12 @@ describe('CouchdbStartupInvariantsService', () => {
     members: { names: [], roles: [] },
   };
 
+  /** exactly what couch_bt_engine:set_default_security_object/4 persists for `default_security = admin_only` - no `names` key at all */
+  const couchdbPersistedDefaultSecurity: SecurityDoc = {
+    admins: { roles: ['_admin'] },
+    members: { roles: ['_admin'] },
+  };
+
   beforeEach(() => {
     couchdbService = {
       createDb: jest.fn().mockReturnValue(of({ ok: true })),
@@ -284,8 +290,8 @@ describe('CouchdbStartupInvariantsService', () => {
       stubCouchdb({
         allDbs: ['app', 'app-attachments', '_users', 'report-calculation'],
         securityByDb: {
-          _users: lockedDownSecurity,
-          'report-calculation': lockedDownSecurity,
+          _users: couchdbPersistedDefaultSecurity,
+          'report-calculation': couchdbPersistedDefaultSecurity,
         },
       });
       const service = buildService();
