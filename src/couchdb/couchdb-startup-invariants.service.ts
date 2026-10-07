@@ -49,7 +49,6 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
     try {
       await this.assertSecurityIsLockedDown(primaryDb);
       await this.warnIfJwtKeysConfigured();
-      await this.warnIfAnyDatabaseSecurityIsOpenToAnyone(primaryDb);
     } catch (error) {
       // nothing is awaiting this, so an error escaping here would be an
       // unhandled rejection rather than a failed check
@@ -77,24 +76,14 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
   /** CouchDB's reserved role for genuine server admins - never grantable to a regular user. */
   private static readonly ADMIN_ROLE = '_admin';
 
-  private static readonly OPEN_TO_ANYONE_MESSAGE =
-    'CRITICAL: CouchDB database has an empty _security document, ' +
-    'which CouchDB treats as open to any client it accepts - not ' +
-    'admin-only. Fix: PUT a _security document that restricts ' +
-    "members to CouchDB's reserved `_admin` role. Continuing startup.";
-
-  private static readonly NOT_ADMIN_ONLY_MESSAGE =
-    'CRITICAL: CouchDB database has a non-admin-only _security ' +
-    'document - any client CouchDB itself accepts can bypass ' +
-    'every permission check this service performs. Fix: PUT a ' +
-    "_security document that restricts members to CouchDB's " +
-    'reserved `_admin` role. Continuing startup.';
-
   /**
-   * Flags it if either database's `_security` grants access beyond CouchDB
+   * Flags any database whose `_security` grants access beyond CouchDB
    * server admins - a permissive `_security` lets any client CouchDB itself
-   * accepts read and write the database directly, bypassing every
-   * permission check this service performs.
+   * accepts read and write that database directly, bypassing every
+   * permission check this service performs. Nothing in this stack is meant
+   * to be reachable by anything but a server admin, so every database on
+   * the server is held to that standard, not only the two this service
+   * creates itself.
    *
    * Counterintuitively, an *empty* `_security` document is the worst case,
    * not the safe one: CouchDB treats an empty `members` list as no
@@ -102,92 +91,93 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
    * "admins only" is restricting `members` to CouchDB's reserved `_admin`
    * role.
    *
+   * A database that never got an explicit `_security` PUT - `_users`,
+   * `report-calculation`, `notification-webhook` here - passes this all the
+   * same: CouchDB persists its `[couchdb] default_security` fallback
+   * (`admin_only` by default on CouchDB 3) into the database's actual
+   * `_security` document the first time it is initialized with none set
+   * (`couch_bt_engine:set_default_security_object/4`). One whose security
+   * predates that behavior still reads back empty, which is exactly the
+   * case this check catches.
+   *
    * Logs CRITICAL rather than failing closed, so a stale CouchDB config
    * doesn't turn a routine restart into an outage.
    */
   private async assertSecurityIsLockedDown(primaryDb: string): Promise<void> {
-    for (const db of [primaryDb, ATTACHMENTS_DB]) {
-      const security = await this.readSecurity(db);
-      if (
-        !security ||
-        CouchdbStartupInvariantsService.isSecurityLockedDown(security)
-      ) {
+    const primaryDbs = [primaryDb, ATTACHMENTS_DB];
+    const otherDbs = await this.listOtherDatabases(primaryDbs);
+    for (const db of [...primaryDbs, ...otherDbs]) {
+      let security: CouchdbSecurityDoc;
+      try {
+        security = await firstValueFrom(
+          this.couchdbService.get<CouchdbSecurityDoc>(db, '_security'),
+        );
+      } catch (error) {
+        this.logger.error(
+          'CRITICAL: Could not verify whether CouchDB database has a ' +
+            'locked-down _security document. The response was unreadable, so ' +
+            'this check is inconclusive. Continuing startup.',
+          {
+            db,
+            error: error instanceof Error ? error.message : String(error),
+            status:
+              error instanceof HttpException ? error.getStatus() : undefined,
+          },
+        );
         continue;
       }
-      this.logInsecureSecurity(
-        db,
-        security,
+      if (CouchdbStartupInvariantsService.isSecurityLockedDown(security)) {
+        continue;
+      }
+      this.logger.error(
         CouchdbStartupInvariantsService.isOpenToAnyone(security)
-          ? CouchdbStartupInvariantsService.OPEN_TO_ANYONE_MESSAGE
-          : CouchdbStartupInvariantsService.NOT_ADMIN_ONLY_MESSAGE,
+          ? 'CRITICAL: CouchDB database has an empty _security document, ' +
+              'which CouchDB treats as open to any client it accepts - not ' +
+              'admin-only. Fix: PUT a _security document that restricts ' +
+              "members to CouchDB's reserved `_admin` role. Continuing " +
+              'startup.'
+          : 'CRITICAL: CouchDB database has a non-admin-only _security ' +
+              'document - any client CouchDB itself accepts can bypass ' +
+              'every permission check this service performs. Fix: PUT a ' +
+              "_security document that restricts members to CouchDB's " +
+              'reserved `_admin` role. Continuing startup.',
+        {
+          db,
+          security,
+          fixCommand:
+            `curl -X PUT $COUCHDB_URL/${db}/_security -d ` +
+            `'{"admins":{"names":[],"roles":["_admin"]},"members":{"names":[],"roles":["_admin"]}}'`,
+        },
       );
     }
   }
 
   /**
-   * @param refusalIsConclusive whether being refused already answers the
-   *   caller's question rather than leaving it open - see {@link isNotAMember}
-   * @returns the database's `_security`, or undefined if there is nothing
-   *   left for the caller to check - a read that failed inconclusively is
-   *   logged as CRITICAL here
+   * `GET /_all_dbs` finds the databases this service never creates itself
+   * (`_users`, `report-calculation`, `notification-webhook` in this stack).
+   * It requires CouchDB server-admin credentials; without them this warns
+   * and the check above covers only the primary databases, rather than risk
+   * a false CRITICAL.
    */
-  private async readSecurity(
-    db: string,
-    { refusalIsConclusive = false } = {},
-  ): Promise<CouchdbSecurityDoc | undefined> {
+  private async listOtherDatabases(primaryDbs: string[]): Promise<string[]> {
     try {
-      return await firstValueFrom(
-        this.couchdbService.get<CouchdbSecurityDoc>(db, '_security'),
+      const allDbs = await firstValueFrom(
+        this.couchdbService.get<string[]>(undefined, '_all_dbs'),
       );
+      return allDbs.filter((db) => !primaryDbs.includes(db));
     } catch (error) {
-      if (
-        refusalIsConclusive &&
-        CouchdbStartupInvariantsService.isNotAMember(error)
-      ) {
-        return undefined;
-      }
-      this.logger.error(
-        'CRITICAL: Could not verify whether CouchDB database has a ' +
-          'locked-down _security document. The response was unreadable, so ' +
-          'this check is inconclusive. Continuing startup.',
+      this.logger.warn(
+        'Could not list the CouchDB databases to verify their _security ' +
+          'documents (requires CouchDB server admin credentials); checking ' +
+          'only the primary databases.',
         {
-          db,
           error: error instanceof Error ? error.message : String(error),
           status:
             error instanceof HttpException ? error.getStatus() : undefined,
         },
       );
-      return undefined;
+      return [];
     }
-  }
-
-  private logInsecureSecurity(
-    db: string,
-    security: CouchdbSecurityDoc,
-    message: string,
-  ): void {
-    this.logger.error(message, {
-      db,
-      security,
-      fixCommand:
-        `curl -X PUT $COUCHDB_URL/${db}/_security -d ` +
-        `'{"admins":{"names":[],"roles":["_admin"]},"members":{"names":[],"roles":["_admin"]}}'`,
-    });
-  }
-
-  /**
-   * CouchDB hands a database's `_security` to any client it accepts while
-   * `members` is empty, and only to a member once it isn't - so a 403 proves
-   * the database is not open to anyone, which is exactly what
-   * {@link isOpenToAnyone} looks for. Deliberately not 401: that one means
-   * CouchDB rejected this service's own credentials and says nothing about
-   * the database.
-   */
-  private static isNotAMember(error: unknown): boolean {
-    return (
-      error instanceof HttpException &&
-      error.getStatus() === HttpStatus.FORBIDDEN
-    );
   }
 
   private static isEmptyList(arr: string[] | undefined): boolean {
@@ -269,71 +259,6 @@ export class CouchdbStartupInvariantsService implements OnModuleInit {
           'jwt_authentication_handler. Continuing startup.',
         { configuredKeyIds: Object.keys(jwtKeys) },
       );
-    }
-  }
-
-  /**
-   * `assertSecurityIsLockedDown` above only knows the primary databases by
-   * name. CouchDB persists its `[couchdb] default_security` fallback into a
-   * database's actual `_security` document the first time the database is
-   * initialized with none set (`couch_bt_engine:set_default_security_object/4`),
-   * so a database that never had an explicit `_security` PUT - `_users`,
-   * `report-calculation`, `notification-webhook` in this stack - still ends
-   * up with a real, readable `_admin`-locked document once created under a
-   * default-`admin_only` CouchDB 3. A genuinely open one (`default_security`
-   * overridden, or a database whose security predates that CouchDB 3
-   * behavior) still persists as empty, so the same `isOpenToAnyone` check
-   * used above still catches it. `GET /_all_dbs` finds every database on the
-   * server, not just the ones this service creates, so that check runs here
-   * against all of them. Only that weaker check: a database this service
-   * doesn't own may legitimately grant members of its own, whereas being
-   * readable by anyone is unsafe whichever component owns it. The primary
-   * databases are skipped, since the stricter check above already covers
-   * them and would otherwise double-log the same finding.
-   *
-   * `/_all_dbs` requires CouchDB server-admin credentials; without them this
-   * logs the same "could not verify" warning as {@link warnIfJwtKeysConfigured}
-   * and skips the check entirely, rather than risk a false CRITICAL. A single
-   * database refusing the `_security` read is not inconclusive in the same
-   * way - see {@link isNotAMember}.
-   */
-  private async warnIfAnyDatabaseSecurityIsOpenToAnyone(
-    primaryDb: string,
-  ): Promise<void> {
-    let allDbs: string[];
-    try {
-      allDbs = await firstValueFrom(
-        this.couchdbService.get<string[]>(undefined, '_all_dbs'),
-      );
-    } catch (error) {
-      this.logger.warn(
-        'Could not verify whether any CouchDB database has an open ' +
-          '_security document (requires CouchDB server admin credentials); ' +
-          'skipping this check.',
-        {
-          error: error instanceof Error ? error.message : String(error),
-          status:
-            error instanceof HttpException ? error.getStatus() : undefined,
-        },
-      );
-      return;
-    }
-
-    const alreadyChecked = new Set([primaryDb, ATTACHMENTS_DB]);
-    for (const db of allDbs.filter((db) => !alreadyChecked.has(db))) {
-      const security = await this.readSecurity(db, {
-        refusalIsConclusive: true,
-      });
-      if (
-        security &&
-        CouchdbStartupInvariantsService.isOpenToAnyone(security)
-      ) {
-        this.logInsecureSecurity(
-          db,
-          security,
-          CouchdbStartupInvariantsService.OPEN_TO_ANYONE_MESSAGE,
-        );
-      }
     }
   }
 }

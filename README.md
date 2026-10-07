@@ -77,10 +77,15 @@ number of databases on the server:
 
 - **Both databases exist**, creating them if missing (helps a fresh install
   only; an existing, misconfigured database is caught by the next check).
-- **`_security` is locked down to CouchDB's reserved `_admin` role** only.
-  `_admin` is only ever attached to a request CouchDB itself authenticated
-  as a genuine server admin (this stack's `COUCHDB_USER`/`COUCHDB_PASSWORD`,
-  the same account handed to this service as `DATABASE_USER`).
+- **Every database's `_security` is locked down to CouchDB's reserved
+  `_admin` role** only. `_admin` is only ever attached to a request CouchDB
+  itself authenticated as a genuine server admin (this stack's
+  `COUCHDB_USER`/`COUCHDB_PASSWORD`, the same account handed to this
+  service as `DATABASE_USER`). `GET /_all_dbs` lists every database CouchDB
+  knows about, including the ones this service never creates itself (e.g.
+  `_users`, `report-calculation`, `notification-webhook`) - nothing here is
+  meant to be reachable by anything but a server admin, so all of them are
+  held to the same standard. Logs `CRITICAL` per affected database.
 
   **Note:** an _empty_ `_security` document (no admins, no members) is
   **not** a safe/admin-only state - it's the opposite. CouchDB treats an
@@ -88,31 +93,21 @@ number of databases on the server:
   client CouchDB itself accepts, anonymous requests included, and this
   check flags it just as loudly as a populated-but-too-broad one.
 
+  A database that never got an explicit `_security` PUT passes all the
+  same: CouchDB persists its `[couchdb] default_security` fallback
+  (`admin_only` by default on CouchDB 3) into the database's actual
+  `_security` document the first time it's initialized with none set, so
+  `GET /_security` on such a database already reflects that fallback
+  instead of staying empty.
+
+  `/_all_dbs` needs CouchDB server admin credentials; without them this
+  logs a "could not verify" warning and checks only the two databases it
+  knows by name.
+
 - **CouchDB has no `[jwt_keys]` configured.** A Keycloak realm role literally
   named `_admin` would otherwise let a user bypass `_security` entirely by
   authenticating via JWT straight against CouchDB. Logs `CRITICAL`; needs
   CouchDB server admin to check, otherwise logs a "could not verify" warning.
-
-- **No other database on the server is left open to anyone.** Only this
-  weaker check applies to them: a database this service doesn't own may
-  legitimately grant members of its own, whereas being readable by anyone
-  is unsafe whichever component owns it.
-  `GET /_all_dbs` lists every database CouchDB knows about, including ones
-  this service never creates itself (e.g. `_users`, `report-calculation`,
-  `notification-webhook`), and each one (other than the two checked above)
-  is flagged if its `_security` is empty - the same unsafe state described
-  in the note above. This is safe to check even for a database that never
-  got an explicit `_security` PUT: CouchDB persists its
-  `[couchdb] default_security` fallback (`admin_only` by default on
-  CouchDB 3) into the database's actual `_security` document the first
-  time it's initialized with none set, so `GET /_security` on such a
-  database already reflects that fallback instead of staying empty. Logs
-  `CRITICAL` per affected database. `/_all_dbs` needs CouchDB server admin
-  credentials; without them this logs the same "could not verify" warning
-  as the `jwt_keys` check and skips entirely. A database that refuses the
-  `_security` read with a 403 is not flagged: CouchDB hands `_security` to
-  any client it accepts while `members` is empty and only to a member once
-  it isn't, so being refused already proves the database isn't open.
 
 This service does **not** assert that CouchDB rejects anonymous requests
 (`[chttpd] require_valid_user` / `require_valid_user_except_for_up`), and

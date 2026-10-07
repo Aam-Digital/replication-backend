@@ -73,7 +73,7 @@ describe('CouchdbStartupInvariantsService', () => {
     allDbs = ['app', 'app-attachments', '_users', 'report-calculation'],
     allDbsResult = 'ok',
   }: {
-    securityByDb?: Record<string, SecurityDoc | 'unreadable' | number>;
+    securityByDb?: Record<string, SecurityDoc | 'unreadable'>;
     jwtKeys?: 'absent' | 'forbidden' | Record<string, string>;
     allDbs?: string[];
     allDbsResult?: 'ok' | 'forbidden';
@@ -88,9 +88,6 @@ describe('CouchdbStartupInvariantsService', () => {
         const security = securityByDb[db!];
         if (security === 'unreadable') {
           return throwError(() => new Error('unreadable response')) as any;
-        }
-        if (typeof security === 'number') {
-          return throwError(() => fakeHttpException(security)) as any;
         }
         return of(security ?? lockedDownSecurity) as any;
       }
@@ -246,18 +243,6 @@ describe('CouchdbStartupInvariantsService', () => {
         'jwt_keys',
       );
     });
-
-    it('logs CRITICAL when a primary db refuses the _security read, which leaves the stricter admin-only check unanswered', async () => {
-      stubCouchdb({ securityByDb: { app: 403 } });
-      const service = buildService();
-
-      await service.runSecurityChecks();
-
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/CRITICAL.*Could not verify/),
-        expect.objectContaining({ db: 'app', status: 403 }),
-      );
-    });
   });
 
   describe('jwt_keys', () => {
@@ -286,14 +271,33 @@ describe('CouchdbStartupInvariantsService', () => {
     });
   });
 
-  describe('any database open to anyone', () => {
-    it("does not double-log when the primary db's _security is empty (already covered by assertSecurityIsLockedDown)", async () => {
+  describe('the other databases on the server', () => {
+    it("does not double-log when the primary db's _security is empty (it is not checked again as part of /_all_dbs)", async () => {
       stubCouchdb({ securityByDb: { app: emptySecurity } });
       const service = buildService();
 
       await service.runSecurityChecks();
 
       expect(errorSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('logs CRITICAL for any other database whose _security grants a non-admin role', async () => {
+      stubCouchdb({
+        securityByDb: {
+          'report-calculation': {
+            admins: { names: [], roles: [] },
+            members: { names: [], roles: ['user_app'] },
+          },
+        },
+      });
+      const service = buildService();
+
+      await service.runSecurityChecks();
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/non-admin-only/),
+        expect.objectContaining({ db: 'report-calculation' }),
+      );
     });
 
     it('logs CRITICAL for any other database on the server whose _security is empty', async () => {
@@ -347,40 +351,23 @@ describe('CouchdbStartupInvariantsService', () => {
       );
     });
 
-    it('does not flag a database that refuses the _security read with 403 (not a member, so not open to anyone)', async () => {
-      stubCouchdb({ securityByDb: { 'report-calculation': 403 } });
-      const service = buildService();
-
-      await service.runSecurityChecks();
-
-      expect(errorSpy).not.toHaveBeenCalled();
-    });
-
-    it("logs CRITICAL on a 401, which means this service's own credentials were rejected rather than the database being restricted", async () => {
-      stubCouchdb({ securityByDb: { 'report-calculation': 401 } });
-      const service = buildService();
-
-      await service.runSecurityChecks();
-
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringMatching(/CRITICAL.*Could not verify/),
-        expect.objectContaining({ db: 'report-calculation', status: 401 }),
-      );
-    });
-
-    it('logs "could not verify" instead of failing when /_all_dbs is forbidden', async () => {
-      stubCouchdb({ allDbsResult: 'forbidden' });
+    it('warns but still checks the primary databases when /_all_dbs is forbidden', async () => {
+      stubCouchdb({
+        allDbsResult: 'forbidden',
+        securityByDb: { app: emptySecurity },
+      });
       const service = buildService();
 
       await service.runSecurityChecks();
 
       expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Could not verify whether any CouchDB database has an open _security document',
-        ),
+        expect.stringContaining('Could not list the CouchDB databases'),
         expect.anything(),
       );
-      expect(errorSpy).not.toHaveBeenCalled();
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringMatching(/empty _security document/),
+        expect.objectContaining({ db: 'app' }),
+      );
     });
   });
 });
