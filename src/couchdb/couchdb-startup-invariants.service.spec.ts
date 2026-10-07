@@ -56,31 +56,18 @@ describe('CouchdbStartupInvariantsService', () => {
     );
   }
 
-  /** a `[chttpd]` config value, or 'unset' (404) / 'forbidden' (403) */
-  type ChttpdFlagStub = 'true' | 'false' | boolean | 'unset' | 'forbidden';
-
   /**
-   * Stubs `couchdbService.get` for all four checks at once, defaulting to the
-   * happy path (both dbs locked down, no jwt_keys, anonymous access blocked)
-   * and overriding only what a test cares about.
+   * Stubs `couchdbService.get` for both checks at once, defaulting to the
+   * happy path (both dbs locked down, no jwt_keys) and overriding only what
+   * a test cares about.
    */
   function stubCouchdb({
     securityByDb = {},
     jwtKeys = 'absent',
-    requireValidUser = 'true',
-    requireValidUserExceptForUp = 'unset',
   }: {
     securityByDb?: Record<string, SecurityDoc | 'unreadable'>;
     jwtKeys?: 'absent' | 'forbidden' | Record<string, string>;
-    requireValidUser?: ChttpdFlagStub;
-    requireValidUserExceptForUp?: ChttpdFlagStub;
   } = {}) {
-    const stubChttpdFlag = (value: ChttpdFlagStub) => {
-      if (value === 'unset') return throwError(() => fakeHttpException(404));
-      if (value === 'forbidden')
-        return throwError(() => fakeHttpException(403));
-      return of(value);
-    };
     couchdbService.get.mockImplementation((db?: string, docId?: string) => {
       if (docId === '_security') {
         const security = securityByDb[db!];
@@ -95,12 +82,6 @@ describe('CouchdbStartupInvariantsService', () => {
         if (jwtKeys === 'forbidden')
           return throwError(() => fakeHttpException(403)) as any;
         return of(jwtKeys) as any;
-      }
-      if (docId === 'require_valid_user') {
-        return stubChttpdFlag(requireValidUser) as any;
-      }
-      if (docId === 'require_valid_user_except_for_up') {
-        return stubChttpdFlag(requireValidUserExceptForUp) as any;
       }
       return of(undefined) as any;
     });
@@ -130,7 +111,7 @@ describe('CouchdbStartupInvariantsService', () => {
     expect(couchdbService.get).toHaveBeenCalledWith('custom-db', '_security');
   });
 
-  it('logs nothing on the full happy path (locked-down security, no jwt_keys, anonymous access blocked)', async () => {
+  it('logs nothing on the full happy path (locked-down security, no jwt_keys)', async () => {
     stubCouchdb();
     const service = buildService();
 
@@ -263,71 +244,6 @@ describe('CouchdbStartupInvariantsService', () => {
         expect.stringContaining('Could not verify'),
         expect.anything(),
       );
-    });
-  });
-
-  describe('require_valid_user', () => {
-    it('logs CRITICAL when confirmed false', async () => {
-      stubCouchdb({ requireValidUser: 'false' });
-      const service = buildService();
-
-      await service.onModuleInit();
-
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('require_valid_user'),
-        expect.objectContaining({
-          requireValidUser: 'false',
-          requireValidUserExceptForUp: 'false',
-        }),
-      );
-    });
-
-    it('logs CRITICAL when unset (404) - unlike jwt_keys, absence is not safe here', async () => {
-      stubCouchdb({ requireValidUser: 'unset' });
-      const service = buildService();
-
-      await service.onModuleInit();
-
-      expect(errorSpy).toHaveBeenCalledWith(
-        expect.stringContaining('require_valid_user'),
-        expect.objectContaining({ requireValidUser: 'false' }),
-      );
-    });
-
-    it('accepts require_valid_user_except_for_up instead (keeps /_up open for the healthcheck)', async () => {
-      stubCouchdb({
-        requireValidUser: 'unset',
-        requireValidUserExceptForUp: 'true',
-      });
-      const service = buildService();
-
-      await service.onModuleInit();
-
-      expect(errorSpy).not.toHaveBeenCalled();
-    });
-
-    it('accepts a JSON boolean true, not just the string "true"', async () => {
-      stubCouchdb({ requireValidUser: true });
-      const service = buildService();
-
-      await service.onModuleInit();
-
-      expect(errorSpy).not.toHaveBeenCalled();
-    });
-
-    it('logs "could not verify" instead of failing when the check is forbidden', async () => {
-      stubCouchdb({ requireValidUser: 'forbidden' });
-      const service = buildService();
-
-      await service.onModuleInit();
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'Could not verify whether CouchDB allows anonymous requests',
-        ),
-        expect.anything(),
-      );
-      expect(errorSpy).not.toHaveBeenCalled();
     });
   });
 });
