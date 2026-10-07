@@ -201,29 +201,18 @@ describe('BulkDocumentService', () => {
   });
 
   describe('handleBulkDocs', () => {
-    /**
-     * `_all_docs` returns `existing` as the server state; `_bulk_docs` answers
-     * like CouchDB, i.e. lists only failures with `new_edits: false`.
-     */
+    /** `_all_docs` returns `existing` as the server state. */
     function stubCouchdb({
       existing = [],
       conflicts = [],
     }: { existing?: DatabaseDocument[]; conflicts?: string[] } = {}) {
       jest
         .spyOn(mockCouchDBService, 'post')
-        .mockImplementation((_db, path, body: any) => {
-          if (path === '_all_docs') {
-            return of(createAllDocsResponse(...existing));
-          }
-          const results = (body as BulkDocsRequest).docs.map((doc) =>
-            conflicts.includes(doc._id!)
-              ? { id: doc._id, rev: doc._rev, error: 'conflict', reason: 'x' }
-              : { ok: true, id: doc._id, rev: '2-new' },
-          );
-          return of(
-            body.new_edits === false ? results.filter((r) => r.error) : results,
-          );
-        });
+        .mockImplementation((_db, path, body: any) =>
+          path === '_all_docs'
+            ? of(createAllDocsResponse(...existing))
+            : of(bulkDocsResponse(body, conflicts)),
+        );
     }
 
     function bulkDocsCalls() {
@@ -234,7 +223,7 @@ describe('BulkDocumentService', () => {
 
     function forwardedIds(): string[] {
       return bulkDocsCalls().flatMap(([, , body]) =>
-        (body as BulkDocsRequest).docs.map((d) => d._id!),
+        docIds(body as BulkDocsRequest),
       );
     }
 
@@ -469,3 +458,17 @@ describe('BulkDocumentService', () => {
     };
   }
 });
+
+/** Answer `_bulk_docs` like CouchDB, i.e. list only failures with `new_edits: false`. */
+function bulkDocsResponse(request: BulkDocsRequest, conflicts: string[]) {
+  const results = request.docs.map((doc) =>
+    conflicts.includes(doc._id!)
+      ? { id: doc._id, rev: doc._rev, error: 'conflict', reason: 'x' }
+      : { ok: true, id: doc._id, rev: '2-new' },
+  );
+  return request.new_edits === false ? results.filter((r) => r.error) : results;
+}
+
+function docIds(request: BulkDocsRequest): string[] {
+  return request.docs.map((d) => d._id!);
+}
