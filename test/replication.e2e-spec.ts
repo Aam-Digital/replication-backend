@@ -251,10 +251,15 @@ describe('Replication endpoints (e2e)', () => {
     });
   });
 
-  // TODO(#274): response only contains forwarded docs, breaking the one-result-per-input CouchDB contract
-  // https://github.com/Aam-Digital/replication-backend/issues/274
   describe('POST /:db/_bulk_docs', () => {
-    it('forwards only permitted writes to CouchDB', async () => {
+    const forwardedIds = () =>
+      ctx.couch
+        .requestsFor('POST', '/app/_bulk_docs')
+        .map((r) => (r.body as { docs: { _id: string }[] }).docs)
+        .flat()
+        .map((d) => d._id);
+
+    it('forwards only permitted writes and reports the others as forbidden', async () => {
       ctx.couch.clearRequestLog();
       const note1 = ctx.couch.dbs.get('app')!.get('Note:1')!;
       const note2 = ctx.couch.dbs.get('app')!.get('Note:2')!;
@@ -271,20 +276,47 @@ describe('Replication endpoints (e2e)', () => {
         })
         .expect(201);
 
-      const forwarded = ctx.couch
-        .requestsFor('POST', '/app/_bulk_docs')
-        .map((r) => (r.body as { docs: { _id: string }[] }).docs)
-        .flat()
-        .map((d) => d._id);
-      expect(forwarded).toEqual(['Child:bulk-new', 'Note:1']);
+      expect(forwardedIds()).toEqual(['Child:bulk-new', 'Note:1']);
 
-      const responseIds = res.body.map((r: { id: string }) => r.id);
-      expect(responseIds).toEqual(['Child:bulk-new', 'Note:1']);
+      // one result per submitted doc, in the submitted order
+      expect(res.body).toEqual([
+        expect.objectContaining({ ok: true, id: 'Child:bulk-new' }),
+        expect.objectContaining({ id: 'School:bulk-new', error: 'forbidden' }),
+        expect.objectContaining({ ok: true, id: 'Note:1' }),
+        expect.objectContaining({ id: 'Note:2', error: 'forbidden' }),
+      ]);
 
       expect(ctx.couch.dbs.get('app')!.get('School:bulk-new')).toBeUndefined();
       expect(ctx.couch.dbs.get('app')!.get('Note:2')).toMatchObject({
         subject: 'foreign',
       });
+    });
+
+    it('reports only denied docs as forbidden for a replication write', async () => {
+      ctx.couch.clearRequestLog();
+      const note2 = ctx.couch.dbs.get('app')!.get('Note:2')!;
+      const res = await request(ctx.app.getHttpServer())
+        .post('/app/_bulk_docs')
+        .set(...basicAuth('user', 'user-pw'))
+        .send({
+          new_edits: false,
+          docs: [
+            { _id: 'Child:replicated', _rev: '1-a', name: 'pushed' },
+            { ...note2, _rev: '9-z', subject: 'replicated hijack' },
+            { _id: '_design/local-index', _rev: '1-b', views: {} },
+          ],
+        })
+        .expect(201);
+
+      expect(forwardedIds()).toEqual(['Child:replicated']);
+      // written and ignored (non-replicable) docs have no result
+      expect(res.body).toEqual([
+        expect.objectContaining({
+          id: 'Note:2',
+          rev: '9-z',
+          error: 'forbidden',
+        }),
+      ]);
     });
   });
 
