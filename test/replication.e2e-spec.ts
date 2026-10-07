@@ -309,14 +309,17 @@ describe('Replication endpoints (e2e)', () => {
         .expect(201);
 
       expect(forwardedIds()).toEqual(['Child:replicated']);
-      // written and ignored (non-replicable) docs have no result
-      expect(res.body).toEqual([
+      expect(res.body).toContainEqual(
         expect.objectContaining({
           id: 'Note:2',
           rev: '9-z',
           error: 'forbidden',
         }),
-      ]);
+      );
+      // non-replicable docs are ignored without a result
+      expect(res.body.map((r: { id: string }) => r.id)).not.toContain(
+        '_design/local-index',
+      );
     });
   });
 

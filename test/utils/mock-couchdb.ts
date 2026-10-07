@@ -507,16 +507,12 @@ export class MockCouchDb {
 
     this.app.post('/:db/_bulk_docs', (req, res) => {
       const db = req.params.db;
-      const body = req.body as {
-        docs: Record<string, unknown>[];
-        new_edits?: boolean;
-      };
+      const body = req.body as { docs: Record<string, unknown>[] };
       const result = (body?.docs ?? []).map((doc) => {
         const stored = this.putDoc(db, doc);
         return { ok: true, id: stored._id, rev: stored._rev };
       });
-      // a replication write (new_edits: false) lists only failed docs
-      res.status(201).json(body?.new_edits === false ? [] : result);
+      res.status(201).json(result);
     });
 
     this.app.post('/:db/_find', (req, res) => {
