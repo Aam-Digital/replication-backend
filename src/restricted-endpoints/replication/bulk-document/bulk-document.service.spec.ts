@@ -153,108 +153,6 @@ describe('BulkDocumentService', () => {
     expect(result).toEqual(createAllDocsResponse(schoolDoc, childDoc));
   });
 
-  it('should apply permissions to CREATE operations in BulkDocs', async () => {
-    const request: BulkDocsRequest = {
-      new_edits: true,
-      docs: [childDoc, schoolDoc],
-    };
-    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: 'create', subject: 'Child' },
-      { action: ['read', 'update'], subject: 'School' },
-    ]);
-    jest.spyOn(mockCouchDBService, 'post').mockReturnValue(of({ rows: [] }));
-
-    const result = await service.filterBulkDocsRequest(request, normalUser, '');
-
-    expect(result).toEqual({
-      new_edits: true,
-      docs: [childDoc],
-    });
-  });
-
-  it('should apply permissions to UPDATE operations in BulkDocs', async () => {
-    const request: BulkDocsRequest = {
-      new_edits: false,
-      docs: [childDoc, schoolDoc],
-    };
-    jest
-      .spyOn(mockCouchDBService, 'post')
-      .mockReturnValue(of(createAllDocsResponse(childDoc, schoolDoc)));
-
-    const result = await service.filterBulkDocsRequest(request, normalUser, '');
-
-    expect(result).toEqual({
-      new_edits: false,
-      docs: [childDoc],
-    });
-  });
-
-  it('should apply permissions to DELETE operations in BulkDocs', async () => {
-    const deletedChildDoc = getChildDoc();
-    deletedChildDoc._deleted = true;
-    const deletedSchoolDoc = getSchoolDoc();
-    deletedSchoolDoc._deleted = true;
-    const request: BulkDocsRequest = {
-      new_edits: false,
-      docs: [deletedChildDoc, deletedSchoolDoc],
-    };
-    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: 'delete', subject: 'Child' },
-      { action: ['read', 'update'], subject: 'School' },
-    ]);
-    jest
-      .spyOn(mockCouchDBService, 'post')
-      .mockReturnValue(of(createAllDocsResponse(childDoc, schoolDoc)));
-
-    const result = await service.filterBulkDocsRequest(request, normalUser, '');
-
-    expect(result).toEqual({
-      new_edits: false,
-      docs: [deletedChildDoc],
-    });
-  });
-
-  it('should check the permissions on the document from the database', async () => {
-    const privateSchool = getSchoolDoc();
-    privateSchool.privateSchool = true;
-    const publicSchool = getSchoolDoc();
-    publicSchool._id = 'School:2';
-    publicSchool.privateSchool = false;
-    jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
-      { action: 'update', subject: 'Child' },
-      {
-        action: ['update', 'delete'],
-        subject: 'School',
-        conditions: { privateSchool: false }, // User is only allowed to update/delete public schools
-      },
-    ]);
-    jest
-      .spyOn(mockCouchDBService, 'post')
-      .mockReturnValue(of(createAllDocsResponse(privateSchool, publicSchool)));
-    // User makes change to a document on which no permissions are given
-    const updatedPrivateSchool = getSchoolDoc();
-    updatedPrivateSchool.privateSchool = false;
-    updatedPrivateSchool.name = 'Not so Private School';
-    // User deletes a document, permissions can't be checked directly
-    const deletedPublicSchool: DatabaseDocument = {
-      _id: publicSchool._id,
-      _rev: publicSchool._rev,
-      _revisions: publicSchool._revisions,
-      _deleted: true,
-    };
-    const request: BulkDocsRequest = {
-      new_edits: false,
-      docs: [updatedPrivateSchool, deletedPublicSchool],
-    };
-
-    const result = await service.filterBulkDocsRequest(request, normalUser, '');
-
-    expect(result).toEqual({
-      new_edits: false,
-      docs: [deletedPublicSchool],
-    });
-  });
-
   it('should filter out _design/ docs in BulkGet', () => {
     const designDoc: DatabaseDocument = {
       _id: '_design/some-view',
@@ -285,24 +183,6 @@ describe('BulkDocumentService', () => {
     expect(result.rows.map((r) => r.id)).toEqual([schoolDoc._id]);
   });
 
-  it('should filter out _design/ docs in BulkDocs writes', async () => {
-    const designDoc: DatabaseDocument = {
-      _id: '_design/search_index',
-      _rev: 'rev1',
-    };
-    const request: BulkDocsRequest = {
-      new_edits: false,
-      docs: [childDoc, designDoc],
-    };
-    jest
-      .spyOn(mockCouchDBService, 'post')
-      .mockReturnValue(of(createAllDocsResponse(childDoc)));
-
-    const result = await service.filterBulkDocsRequest(request, normalUser, '');
-
-    expect(result.docs.map((d) => d._id)).toEqual([childDoc._id]);
-  });
-
   it('should filter out _design/ docs in Find responses', () => {
     const designDoc: DatabaseDocument = {
       _id: '_design/some-index',
@@ -320,87 +200,209 @@ describe('BulkDocumentService', () => {
     expect(result.docs.map((d) => d._id)).toEqual([schoolDoc._id]);
   });
 
-  it('writes filtered docs and audits the write on handleBulkDocs', async () => {
-    const updatedChild = getChildDoc();
-    updatedChild._rev = '2-new';
-    const request: BulkDocsRequest = {
-      new_edits: false,
-      docs: [updatedChild],
-    };
-    const existingChild = getChildDoc();
-    const bulkResponse: any[] = [];
-    jest.spyOn(mockCouchDBService, 'post').mockImplementation((_db, path) => {
-      if (path === '_all_docs') {
-        return of(createAllDocsResponse(existingChild));
-      }
-      // _bulk_docs with new_edits:false returns only failures (none here)
-      return of(bulkResponse);
-    });
+  describe('handleBulkDocs', () => {
+    /** `_all_docs` returns `existing` as the server state. */
+    function stubCouchdb({
+      existing = [],
+      conflicts = [],
+    }: { existing?: DatabaseDocument[]; conflicts?: string[] } = {}) {
+      jest
+        .spyOn(mockCouchDBService, 'post')
+        .mockImplementation((_db, path, body: any) =>
+          path === '_all_docs'
+            ? of(createAllDocsResponse(...existing))
+            : of(bulkDocsResponse(body, conflicts)),
+        );
+    }
 
-    await service.handleBulkDocs(request, normalUser, 'app');
+    function bulkDocsCalls() {
+      return jest
+        .mocked(mockCouchDBService.post)
+        .mock.calls.filter(([, path]) => path === '_bulk_docs');
+    }
 
-    // the filtered docs are actually written to the source db
-    expect(mockCouchDBService.post).toHaveBeenCalledWith('app', '_bulk_docs', {
-      new_edits: false,
-      docs: [updatedChild],
-    });
+    function forwardedIds(): string[] {
+      return bulkDocsCalls().flatMap(([, , body]) =>
+        docIds(body as BulkDocsRequest),
+      );
+    }
 
-    // the write is handed to the audit service: source db, filtered request,
-    // the pre-write existing docs, the couch response and the user
-    expect(mockAuditService.recordBulkWrite).toHaveBeenCalledTimes(1);
-    const [db, written, existingDocs, response, user] =
-      mockAuditService.recordBulkWrite.mock.calls[0];
-    expect(db).toBe('app');
-    expect(written).toEqual({ new_edits: false, docs: [updatedChild] });
-    expect(existingDocs).toBeInstanceOf(Map);
-    expect(existingDocs.get('Child:1')).toEqual(existingChild);
-    expect(response).toBe(bulkResponse);
-    expect(user).toBe(normalUser);
-  });
+    function forbidden(doc: DatabaseDocument) {
+      return expect.objectContaining({
+        id: doc._id,
+        rev: doc._rev,
+        error: 'forbidden',
+      });
+    }
 
-  it('cleans up attachments for the written docs after handleBulkDocs', async () => {
-    const updatedChild = getChildDoc();
-    updatedChild._rev = '2-new';
-    const request: BulkDocsRequest = {
-      new_edits: false,
-      docs: [updatedChild],
-    };
-    const existingChild = getChildDoc();
-    const bulkResponse: any[] = [];
-    jest.spyOn(mockCouchDBService, 'post').mockImplementation((_db, path) => {
-      if (path === '_all_docs') {
-        return of(createAllDocsResponse(existingChild));
-      }
-      return of(bulkResponse);
-    });
+    const deleted = (doc: DatabaseDocument) => ({ ...doc, _deleted: true });
 
-    await service.handleBulkDocs(request, normalUser, 'app');
+    it.each<[string, any[], DatabaseDocument[], DatabaseDocument[]]>([
+      [
+        'create',
+        [
+          { action: 'create', subject: 'Child' },
+          { action: ['read', 'update'], subject: 'School' },
+        ],
+        [],
+        [getChildDoc(), getSchoolDoc()],
+      ],
+      [
+        'update',
+        [
+          { action: 'update', subject: 'Child' },
+          { action: 'read', subject: 'School' },
+        ],
+        [getChildDoc(), getSchoolDoc()],
+        [getChildDoc(), getSchoolDoc()],
+      ],
+      [
+        'delete',
+        [
+          { action: 'delete', subject: 'Child' },
+          { action: ['read', 'update'], subject: 'School' },
+        ],
+        [getChildDoc(), getSchoolDoc()],
+        [deleted(getChildDoc()), deleted(getSchoolDoc())],
+      ],
+    ])(
+      'forwards only docs the user may %s',
+      async (_action, rules, existing, docs) => {
+        jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue(rules);
+        stubCouchdb({ existing });
 
-    expect(
-      mockAttachmentCleanupService.cleanupForBulkWrite,
-    ).toHaveBeenCalledWith(
-      'app',
-      { new_edits: false, docs: [updatedChild] },
-      bulkResponse,
+        await service.handleBulkDocs(
+          { new_edits: false, docs },
+          normalUser,
+          'app',
+        );
+
+        expect(forwardedIds()).toEqual(['Child:1']);
+      },
     );
-  });
 
-  it('audits only the permission-filtered docs, not the rejected ones', async () => {
-    const request: BulkDocsRequest = {
-      new_edits: false,
-      docs: [childDoc, schoolDoc],
-    };
-    jest
-      .spyOn(mockCouchDBService, 'post')
-      .mockReturnValue(of(createAllDocsResponse(childDoc, schoolDoc)));
+    it('checks update and delete permissions against the doc in the database', async () => {
+      const privateSchool = { ...getSchoolDoc(), privateSchool: true };
+      const publicSchool = {
+        ...getSchoolDoc(),
+        _id: 'School:2',
+        privateSchool: false,
+      };
+      jest.spyOn(mockRulesService, 'getRulesForUser').mockReturnValue([
+        {
+          action: ['update', 'delete'],
+          subject: 'School',
+          conditions: { privateSchool: false }, // only public schools
+        },
+      ]);
+      stubCouchdb({ existing: [privateSchool, publicSchool] });
 
-    await service.handleBulkDocs(request, normalUser, 'app');
+      await service.handleBulkDocs(
+        {
+          new_edits: false,
+          docs: [
+            // the change itself would be permitted, the stored doc is not
+            { ...privateSchool, privateSchool: false },
+            // a deletion carries no fields to check
+            { _id: publicSchool._id, _rev: publicSchool._rev, _deleted: true },
+          ],
+        },
+        normalUser,
+        'app',
+      );
 
-    // normalUser may update Child but not School, so only Child is audited
-    const written = mockAuditService.recordBulkWrite.mock.calls[0][1];
-    expect(written.docs.map((d: DatabaseDocument) => d._id)).toEqual([
-      'Child:1',
-    ]);
+      expect(forwardedIds()).toEqual(['School:2']);
+    });
+
+    it('returns a result for every submitted doc in its original position', async () => {
+      jest
+        .spyOn(mockRulesService, 'getRulesForUser')
+        .mockReturnValue([{ action: 'create', subject: 'Child' }]);
+      stubCouchdb();
+      const designDoc = { _id: '_design/search_index' };
+
+      const response = await service.handleBulkDocs(
+        { new_edits: true, docs: [schoolDoc, childDoc, designDoc] },
+        normalUser,
+        'app',
+      );
+
+      expect(forwardedIds()).toEqual(['Child:1']);
+      expect(response).toEqual([
+        forbidden(schoolDoc),
+        { ok: true, id: 'Child:1', rev: '2-new' },
+        forbidden(designDoc),
+      ]);
+    });
+
+    it('adds a forbidden result for denied docs to the failures of a replication write', async () => {
+      const otherChild = { ...getChildDoc(), _id: 'Child:2' };
+      const designDoc = { _id: '_design/search_index', _rev: '1-a' };
+      stubCouchdb({
+        existing: [childDoc, otherChild, schoolDoc],
+        conflicts: ['Child:1'],
+      });
+
+      const response = await service.handleBulkDocs(
+        {
+          new_edits: false,
+          docs: [childDoc, schoolDoc, designDoc, otherChild],
+        },
+        normalUser,
+        'app',
+      );
+
+      // non-replicable docs are ignored like written ones: no result at all
+      expect(forwardedIds()).toEqual(['Child:1', 'Child:2']);
+      expect(response).toEqual([
+        expect.objectContaining({ id: 'Child:1', error: 'conflict' }),
+        forbidden(schoolDoc),
+      ]);
+    });
+
+    it('does not call CouchDB when no doc may be written', async () => {
+      stubCouchdb({ existing: [schoolDoc] });
+
+      const response = await service.handleBulkDocs(
+        { new_edits: true, docs: [schoolDoc] },
+        normalUser,
+        'app',
+      );
+
+      expect(response).toEqual([forbidden(schoolDoc)]);
+      expect(bulkDocsCalls()).toHaveLength(0);
+      expect(mockAuditService.recordBulkWrite).not.toHaveBeenCalled();
+      expect(
+        mockAttachmentCleanupService.cleanupForBulkWrite,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("audits and cleans up the forwarded docs against CouchDB's own response", async () => {
+      const updatedChild = { ...getChildDoc(), _rev: '2-new' };
+      stubCouchdb({ existing: [childDoc, schoolDoc] });
+
+      const response = await service.handleBulkDocs(
+        { new_edits: true, docs: [schoolDoc, updatedChild] },
+        normalUser,
+        'app',
+      );
+
+      const forwarded = { new_edits: true, docs: [updatedChild] };
+      const couchdbResponse = [{ ok: true, id: 'Child:1', rev: '2-new' }];
+      expect(response).toHaveLength(2);
+      expect(mockAuditService.recordBulkWrite).toHaveBeenCalledWith(
+        'app',
+        forwarded,
+        expect.any(Map),
+        couchdbResponse,
+        normalUser,
+      );
+      const existingDocs = mockAuditService.recordBulkWrite.mock.calls[0][2];
+      expect(existingDocs.get('Child:1')).toEqual(childDoc);
+      expect(
+        mockAttachmentCleanupService.cleanupForBulkWrite,
+      ).toHaveBeenCalledWith('app', forwarded, couchdbResponse);
+    });
   });
 
   function getSchoolDoc(): DatabaseDocument {
@@ -456,3 +458,17 @@ describe('BulkDocumentService', () => {
     };
   }
 });
+
+/** Answer `_bulk_docs` like CouchDB, i.e. list only failures with `new_edits: false`. */
+function bulkDocsResponse(request: BulkDocsRequest, conflicts: string[]) {
+  const results = request.docs.map((doc) =>
+    conflicts.includes(doc._id!)
+      ? { id: doc._id, rev: doc._rev, error: 'conflict', reason: 'x' }
+      : { ok: true, id: doc._id, rev: '2-new' },
+  );
+  return request.new_edits === false ? results.filter((r) => r.error) : results;
+}
+
+function docIds(request: BulkDocsRequest): string[] {
+  return request.docs.map((d) => d._id!);
+}
