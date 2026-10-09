@@ -3,45 +3,12 @@ on:
   pull_request:
 
 jobs:
-  build_and_publish_branch:
-    name: Build and publish pr image
-    runs-on: ubuntu-latest
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      version: 0.0.0-pr.${{ github.event.number }}
+      docker_tags: |
+        type=raw,value=pr-${{ github.event.number }}
     permissions:
       contents: read
       packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Inject PR version into package.json
-        run: npm version "0.0.0-pr.${{ github.event.number }}" --no-git-tag-version --allow-same-version
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Same labels as the release build, so a pr- image is identifiable too.
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/aam-digital/replication-backend
-          tags: |
-            type=raw,value=pr-${{ github.event.number }}
-          # `version` would otherwise be the `pr-<n>` tag. Overridden to mirror the version injected
-          # into package.json above, which — unlike `pr-<n>` — is semver and so comparable.
-          labels: |
-            org.opencontainers.image.version=0.0.0-pr.${{ github.event.number }}
-            org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
-
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          platforms: linux/amd64
-          context: ./
-          push: true
-          labels: ${{ steps.meta.outputs.labels }}
-          tags: ${{ steps.meta.outputs.tags }}

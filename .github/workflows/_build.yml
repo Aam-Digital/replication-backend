@@ -1,0 +1,71 @@
+name: Build and publish container image
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+        description: Version injected into package.json and recorded as the image's `org.opencontainers.image.version` label
+      docker_tags:
+        type: string
+        required: true
+        description: Docker tags configuration for docker/metadata-action (multiline string)
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-image:
+    name: Build and publish replication-backend image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Inject version into package.json
+        run: npm version "${{ inputs.version }}" --no-git-tag-version --allow-same-version
+
+      # Generates the standard OCI image labels, as ndb-core and aam-services already publish.
+      # `version` is the one with a job to do: it records which release an image is, which the
+      # `stable`, `latest` and `pr-<n>` tags deliberately don't say. A deployment pinned to a
+      # floating tag can then be asked what it is actually running, with
+      #   docker inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' <container>
+      # which ndb-setup's update scripts use to refuse an upgrade they cannot verify is safe.
+      # It mirrors the version injected into package.json above, rather than being taken from the
+      # first tag, so that it stays semver (and so comparable) for `pr-<n>` images too.
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/aam-digital/replication-backend
+          tags: ${{ inputs.docker_tags }}
+          # Overrides the description generated from the GitHub repository description.
+          labels: |
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push multi-platform image
+        uses: docker/build-push-action@v7
+        with:
+          platforms: linux/amd64,linux/arm64
+          context: ./
+          push: true
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=min,ignore-error=true
