@@ -66,10 +66,13 @@ jobs:
       - name: Run E2E Tests
         run: npm run test:e2e
 
-  # Check name: `Create Release / release`. The shared workflow only releases on master and does nothing on other
-  # branches. Auto release mode: every releasable push to master becomes a full release.
+  # Check name: `Create Release / release` (on other branches the skipped `Create Release`).
+  # Auto release mode: every releasable push to master becomes a full release.
   release:
     name: Create Release
+    # Only master: the shared workflow queues all its runs in one concurrency group per repository, so a branch push
+    # could otherwise replace a master release that is waiting in that group.
+    if: github.ref == 'refs/heads/master'
     needs:
       - lint
       - test
