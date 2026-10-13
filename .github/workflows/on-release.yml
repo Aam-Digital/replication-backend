@@ -2,18 +2,25 @@ name: On Semantic Release (build & publish image)
 
 on:
   release:
-    types: [released]
+    types: [published]
 
 jobs:
+  # Check name: `build / build`
   build:
-    uses: ./.github/workflows/_build.yml
-    with:
-      version: ${{ github.event.release.tag_name }}
-      # `stable` alongside `latest`, like ndb-core's; `released` excludes prereleases.
-      docker_tags: |
-        type=raw,value=${{ github.event.release.tag_name }}
-        type=raw,value=stable
-        type=raw,value=latest
+    uses: Aam-Digital/.github/.github/workflows/docker-image.yml@feat/reusable-workflows
     permissions:
       contents: read
       packages: write
+    with:
+      images: ghcr.io/aam-digital/replication-backend
+      # Tag `<version>`; full releases also `stable` and `latest`.
+      # The version is also recorded as the `org.opencontainers.image.version` label, which says which release an
+      # image is (the floating tags don't). ndb-setup's update scripts read it to refuse an upgrade they cannot
+      # verify is safe:
+      #   docker inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' <container>
+      version: ${{ github.event.release.tag_name }}
+      stable: ${{ !github.event.release.prerelease }}
+      labels: |
+        org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
+      # package.json's version is what the app reports (e.g. to Sentry)
+      prepare: npm version "$VERSION" --no-git-tag-version --allow-same-version

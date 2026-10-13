@@ -1,0 +1,13 @@
+name: On PR closed (delete pre-release image)
+on:
+  pull_request:
+    types: [closed]
+
+jobs:
+  # Check name: `cleanup-image / cleanup`
+  cleanup-image:
+    # PRs from forks have no image
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    uses: Aam-Digital/.github/.github/workflows/pr-image-cleanup.yml@feat/reusable-workflows
+    permissions:
+      packages: write
