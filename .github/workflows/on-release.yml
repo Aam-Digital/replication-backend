@@ -5,52 +5,15 @@ on:
     types: [released]
 
 jobs:
-  build_and_publish:
-    name: Build and publish replication-backend package
-    runs-on: ubuntu-latest
+  build:
+    uses: ./.github/workflows/_build.yml
+    with:
+      version: ${{ github.event.release.tag_name }}
+      # `stable` alongside `latest`, like ndb-core's; `released` excludes prereleases.
+      docker_tags: |
+        type=raw,value=${{ github.event.release.tag_name }}
+        type=raw,value=stable
+        type=raw,value=latest
     permissions:
       contents: read
       packages: write
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Inject release version into package.json
-        run: npm version "${{ github.event.release.tag_name }}" --no-git-tag-version --allow-same-version
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # Generates the standard OCI image labels, as ndb-core and aam-services already publish.
-      # `version` is the one with a job to do: it records which release an image is, which the
-      # `stable` and `latest` tags deliberately don't say. A deployment pinned to a floating tag can
-      # then be asked what it is actually running, with
-      #   docker inspect -f '{{index .Config.Labels "org.opencontainers.image.version"}}' <container>
-      # which ndb-setup's update scripts use to refuse an upgrade they cannot verify is safe.
-      - name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v6
-        with:
-          images: ghcr.io/aam-digital/replication-backend
-          # `version` is taken from the first tag, so the release tag has to stay first.
-          # `stable` alongside `latest`, like ndb-core's; `released` excludes prereleases.
-          tags: |
-            type=raw,value=${{ github.event.release.tag_name }}
-            type=raw,value=stable
-            type=raw,value=latest
-          # Overrides the description generated from the GitHub repository description.
-          labels: |
-            org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
-
-      - name: Build and push
-        uses: docker/build-push-action@v7
-        with:
-          platforms: linux/amd64
-          context: ./
-          push: true
-          labels: ${{ steps.meta.outputs.labels }}
-          tags: ${{ steps.meta.outputs.tags }}
