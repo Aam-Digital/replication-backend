@@ -2,10 +2,12 @@ name: On PR (build & publish pre-release image)
 on:
   pull_request:
 
+permissions: {}
+
 jobs:
   # Check name: `build / build`
   build:
-    uses: Aam-Digital/.github/.github/workflows/docker-image.yml@feat/reusable-workflows
+    uses: Aam-Digital/.github/.github/workflows/docker-image.yml@feat/reusable-workflows # TODO switch to @v1
     permissions:
       contents: read
       packages: write

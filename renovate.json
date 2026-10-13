@@ -1,62 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    "group:allNonMajor",
-    ":maintainLockFilesMonthly"
+    "local>Aam-Digital/.github//renovate/default",
+    "local>Aam-Digital/.github//renovate/node",
+    "local>Aam-Digital/.github//renovate/docker"
   ],
-  "enabledManagers": ["npm", "dockerfile", "github-actions"],
-  "timezone": "Etc/UTC",
-  "schedule": ["* * * * 0"],
-  "dependencyDashboard": false,
-  "prConcurrentLimit": 5,
-  "prHourlyLimit": 2,
-  "labels": ["dependencies"],
-  "vulnerabilityAlerts": {
-    "enabled": true,
-    "schedule": ["at any time"],
-    "labels": ["dependencies", "security"]
-  },
-  "osvVulnerabilityAlerts": true,
-  "reviewers": ["sleidig", "Abhinegi2"],
-  "rangeStrategy": "bump",
-  "constraints": {
-    "npm": ">=11.0.0"
-  },
-  "packageRules": [
-    {
-      "matchManagers": ["npm"],
-      "rangeStrategy": "bump"
-    },
-    {
-      "matchUpdateTypes": ["major"],
-      "draftPR": true,
-      "labels": ["dependencies"]
-    },
-    {
-      "matchDepTypes": ["dependencies", "devDependencies"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "weekly-non-major-updates",
-      "automerge": false
-    },
-    {
-      "matchManagers": ["dockerfile"],
-      "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "docker-base-image",
-      "automerge": false
-    },
-    {
-      "matchManagers": ["github-actions"],
-      "matchPackageNames": ["!node"],
-      "groupName": "github-actions",
-      "draftPR": false,
-      "automerge": false
-    },
-    {
-      "matchManagers": ["dockerfile", "github-actions"],
-      "matchPackageNames": ["node"],
-      "groupName": "node",
-      "automerge": false
-    }
-  ]
+  "enabledManagers": ["npm", "nvm", "dockerfile", "github-actions"],
+  "additionalReviewers": ["Abhinegi2"]
 }
