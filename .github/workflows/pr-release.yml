@@ -5,7 +5,6 @@ on:
 jobs:
   # Check name: `build / build`
   build:
-    needs: cleanup-test # TEMP
     uses: Aam-Digital/.github/.github/workflows/docker-image.yml@feat/reusable-workflows
     permissions:
       contents: read
@@ -22,9 +21,3 @@ jobs:
         org.opencontainers.image.version=0.0.0-pr.${{ github.event.number }}
         org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
       prepare: npm version "0.0.0-pr.${{ github.event.number }}" --no-git-tag-version --allow-same-version
-
-  # TEMP test: really delete this PR's current (multi-platform) pr-<n> image before rebuilding it
-  cleanup-test:
-    uses: Aam-Digital/.github/.github/workflows/pr-image-cleanup.yml@feat/reusable-workflows
-    permissions:
-      packages: write
