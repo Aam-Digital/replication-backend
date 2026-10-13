@@ -10,4 +10,7 @@ jobs:
     if: github.event.pull_request.head.repo.full_name == github.repository
     uses: Aam-Digital/.github/.github/workflows/pr-image-cleanup.yml@feat/reusable-workflows
     permissions:
+      actions: write # cancel a still running PR image build, which would otherwise push pr-<n> after the cleanup
       packages: write
+    with:
+      build-workflows: pr-release.yml
