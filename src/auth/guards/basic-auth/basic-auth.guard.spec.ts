@@ -54,6 +54,8 @@ describe('BasicAuthGuard', () => {
     ['a different scheme', 'Bearer some-token'],
     ['no credentials', 'Basic'],
     ['no colon', basic('testUser')],
+    ['invalid Base64 characters', basic('testUser:pass') + '!!!'],
+    ['excess Base64 padding', basic('testUser:pass') + '='],
     ['an empty username', basic(':pass')],
     ['an empty password', basic('testUser:')],
   ])('rejects a request with %s', async (_, header) => {
