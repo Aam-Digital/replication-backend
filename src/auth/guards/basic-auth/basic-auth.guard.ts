@@ -39,7 +39,7 @@ export class BasicAuthGuard implements CanActivate {
 export function parseBasicAuthHeader(
   header: string | undefined,
 ): { username: string; password: string } | undefined {
-  const match = /^Basic\s+([A-Za-z0-9+/]+={0,2})\s*$/i.exec(header ?? '');
+  const match = /^Basic\s+([a-z0-9+/]+={0,2})\s*$/i.exec(header ?? '');
   if (!match) {
     return undefined;
   }
