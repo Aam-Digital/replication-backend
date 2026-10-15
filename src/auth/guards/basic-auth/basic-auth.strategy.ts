@@ -25,7 +25,7 @@ export class BasicAuthStrategy {
   >();
   private readonly cacheKeySalt = randomBytes(16);
 
-  constructor(private couchdbService: CouchdbService) {}
+  constructor(private readonly couchdbService: CouchdbService) {}
 
   async validate(username: string, password: string): Promise<UserInfo> {
     const key = this.cacheKey(username, password);

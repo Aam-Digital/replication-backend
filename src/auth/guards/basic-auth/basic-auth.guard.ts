@@ -14,7 +14,7 @@ import { BasicAuthStrategy } from './basic-auth.strategy';
  */
 @Injectable()
 export class BasicAuthGuard implements CanActivate {
-  constructor(private basicAuthStrategy: BasicAuthStrategy) {}
+  constructor(private readonly basicAuthStrategy: BasicAuthStrategy) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const req = context
