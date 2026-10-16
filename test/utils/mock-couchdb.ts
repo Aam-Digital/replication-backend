@@ -315,9 +315,10 @@ export class MockCouchDb {
       if (!auth.startsWith('Basic ')) {
         return res.status(401).json({ error: 'unauthorized' });
       }
-      const [name, password] = Buffer.from(auth.slice(6), 'base64')
-        .toString()
-        .split(':');
+      const decoded = Buffer.from(auth.slice(6), 'base64').toString();
+      const separator = decoded.indexOf(':');
+      const name = decoded.slice(0, separator);
+      const password = decoded.slice(separator + 1);
       const user = this.users.get(name);
       if (!user || user.password !== password) {
         return res.status(401).json({

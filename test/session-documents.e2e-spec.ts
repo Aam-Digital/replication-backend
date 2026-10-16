@@ -60,6 +60,18 @@ describe('Session & document endpoints (e2e)', () => {
       });
     });
 
+    it('GET accepts basic auth with colons in the password', async () => {
+      ctx.couch.addUser('colon-user', 'ab:cd:ef', ['user_app']);
+      const res = await request(ctx.app.getHttpServer())
+        .get('/_session')
+        .set(...basicAuth('colon-user', 'ab:cd:ef'))
+        .expect(200);
+      expect(res.body.userCtx).toEqual({
+        name: 'colon-user',
+        roles: ['user_app'],
+      });
+    });
+
     it('GET allows the JWT cookie from login as authentication', async () => {
       const login = await request(ctx.app.getHttpServer())
         .post('/_session')
