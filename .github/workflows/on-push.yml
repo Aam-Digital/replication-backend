@@ -70,8 +70,7 @@ jobs:
   # Auto release mode: every releasable push to master becomes a full release.
   release:
     name: Create Release
-    # Only master: the shared workflow queues all its runs in one concurrency group per repository, so a branch push
-    # could otherwise replace a master release that is waiting in that group.
+    # Only master (the shared workflow also skips other branches itself)
     if: github.ref == 'refs/heads/master'
     needs:
       - lint
@@ -80,7 +79,37 @@ jobs:
     uses: Aam-Digital/.github/.github/workflows/release.yml@feat/reusable-workflows # TODO switch to @v1
     permissions:
       contents: read # everything that writes uses the GH_TOKEN PAT (its releases trigger the image build)
-    with:
-      type: release
     secrets:
       token: ${{ secrets.GH_TOKEN }}
+
+  # Edge build of every master push (see Aam-Digital/.github): version `X.Y.Z-edge.N` (the last release with the patch
+  # number bumped, plus the commits since), no tag and no GitHub release.
+  edge-version:
+    if: github.ref == 'refs/heads/master'
+    needs:
+      - lint
+      - test
+      - e2e
+    uses: Aam-Digital/.github/.github/workflows/edge-version.yml@feat/reusable-workflows # TODO switch to @v1
+    permissions:
+      contents: read
+
+  # Check name: `edge-build / build`. Image `X.Y.Z-edge.N`, plus `edge` if this is still the newest master commit.
+  # A newer push cancels an older edge build, so that `edge` never moves back.
+  edge-build:
+    needs: edge-version
+    concurrency:
+      group: edge-build
+      cancel-in-progress: true
+    uses: Aam-Digital/.github/.github/workflows/docker-image.yml@feat/reusable-workflows # TODO switch to @v1
+    permissions:
+      contents: read
+      packages: write
+    with:
+      images: ghcr.io/aam-digital/replication-backend
+      version: ${{ needs.edge-version.outputs.version }}
+      tags: ${{ needs.edge-version.outputs.is-head == 'true' && 'edge' || '' }}
+      labels: |
+        org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
+      # package.json's version is what the app reports (e.g. to Sentry)
+      prepare: npm version "$VERSION" --no-git-tag-version --allow-same-version

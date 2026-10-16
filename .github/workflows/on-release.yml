@@ -26,3 +26,12 @@ jobs:
         org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
       # package.json's version is what the app reports (e.g. to Sentry)
       prepare: npm version "$VERSION" --no-git-tag-version --allow-same-version
+
+  # After a full release, the edge images (`*-edge.*`) of the finished cycle are no longer needed. The image `edge`
+  # points to is kept.
+  prune-edge-images:
+    if: ${{ !github.event.release.prerelease }}
+    needs: build
+    uses: Aam-Digital/.github/.github/workflows/image-prune.yml@feat/reusable-workflows # TODO switch to @v1
+    permissions:
+      packages: write
