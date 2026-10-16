@@ -1,0 +1,16 @@
+name: PR title lint
+
+on:
+  # pull_request_target so that it also runs for PRs from forks. Safe here: the shared workflow never checks out PR code
+  # and only reads the PR title from the event payload.
+  pull_request_target: # zizmor: ignore[dangerous-triggers] never checks out PR code, only reads the PR title from the event payload
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  # Check name: `pr-title / Validate PR title`
+  pr-title:
+    uses: Aam-Digital/.github/.github/workflows/pr-title-lint.yml@feat/reusable-workflows # TODO switch to @v1
+    permissions:
+      pull-requests: read
