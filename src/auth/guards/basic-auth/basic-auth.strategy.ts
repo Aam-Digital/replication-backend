@@ -1,6 +1,4 @@
-import { BasicStrategy as Strategy } from 'passport-http';
 import { Injectable } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
 import { UserInfo } from '../../../restricted-endpoints/session/user-auth.dto';
 import { firstValueFrom } from 'rxjs';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
@@ -8,14 +6,14 @@ import { setUser } from '@sentry/node';
 import { randomBytes, scryptSync } from 'crypto';
 
 /**
- * Authenticate a user from the BasicAuth header of a request.
+ * Validate BasicAuth credentials against CouchDB (see {@link BasicAuthGuard}).
  *
  * Successful logins are cached for a short time so that request bursts
  * (e.g. during replication) do not trigger a CouchDB `_session` round trip
  * — and the password hash verification inside CouchDB — for every request.
  */
 @Injectable()
-export class BasicAuthStrategy extends PassportStrategy(Strategy) {
+export class BasicAuthStrategy {
   /** how long a successful login is reused without re-checking with CouchDB */
   static readonly LOGIN_CACHE_TTL_MS = 60_000;
   /** safety cap to bound memory use */
@@ -27,9 +25,7 @@ export class BasicAuthStrategy extends PassportStrategy(Strategy) {
   >();
   private readonly cacheKeySalt = randomBytes(16);
 
-  constructor(private couchdbService: CouchdbService) {
-    super();
-  }
+  constructor(private readonly couchdbService: CouchdbService) {}
 
   async validate(username: string, password: string): Promise<UserInfo> {
     const key = this.cacheKey(username, password);

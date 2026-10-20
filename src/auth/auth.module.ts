@@ -36,7 +36,13 @@ import { JwtBearerGuard } from './guards/jwt-bearer/jwt-bearer.guard';
     JwtCookieGuard,
     JwtBearerGuard,
   ],
-  exports: [CookieService, BasicAuthGuard, JwtCookieGuard, JwtBearerGuard],
+  exports: [
+    CookieService,
+    BasicAuthStrategy,
+    BasicAuthGuard,
+    JwtCookieGuard,
+    JwtBearerGuard,
+  ],
 })
 export class AuthModule {
   /** name of the environment variable that defines the JWT secret */

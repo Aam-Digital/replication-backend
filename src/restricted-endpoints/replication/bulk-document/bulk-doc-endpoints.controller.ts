@@ -88,11 +88,9 @@ export class BulkDocEndpointsController {
    * @param db name of the database to which the documents should be uploaded
    * @param body list of documents to be saved in the remote database
    * @param user logged in user
-   * @returns BulkDocsResponse list of success or error messages regarding the to-be-saved documents
+   * @returns BulkDocsResponse list of success or error messages regarding the to-be-saved documents,
+   *   with a `forbidden` error for each document the user may not write
    */
-  // TODO(#274): denied docs are silently dropped rather than returning forbidden error entries per input;
-  // this breaks the CouchDB one-result-per-input contract and may cause PouchDB retry churn
-  // https://github.com/Aam-Digital/replication-backend/issues/274
   @Post('/:db/_bulk_docs')
   @ApiOperation({
     description: `Upload multiple documents with a single request.\n\ncaveats: only works with ?include_docs=true`,

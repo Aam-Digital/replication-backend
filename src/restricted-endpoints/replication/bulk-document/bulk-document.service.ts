@@ -9,12 +9,10 @@ import {
   BulkDocsRequest,
   BulkDocsResponse,
   DatabaseDocument,
+  DocError,
 } from './couchdb-dtos/bulk-docs.dto';
 import { UserInfo } from '../../session/user-auth.dto';
-import {
-  DocumentAbility,
-  PermissionService,
-} from '../../../permissions/permission/permission.service';
+import { PermissionService } from '../../../permissions/permission/permission.service';
 import { firstValueFrom } from 'rxjs';
 import { Ability } from '@casl/ability';
 import { CouchdbService } from '../../../couchdb/couchdb.service';
@@ -95,6 +93,9 @@ export class BulkDocumentService {
    * The previously-fetched `existingDocs` (needed for permission checks) is
    * reused as the "before" state for the audit diff, so it never leaves the
    * service and the hot path fetches each existing doc only once.
+   *
+   * Docs the user may not write are not forwarded and get a `forbidden`
+   * result instead, as CouchDB reports a doc rejected by validation.
    */
   async handleBulkDocs(
     request: BulkDocsRequest,
@@ -102,32 +103,59 @@ export class BulkDocumentService {
     db: string,
   ): Promise<BulkDocsResponse> {
     const existingDocs = await this.fetchExistingDocs(request.docs, db);
-    const filtered = this.filterDocs(request, user, existingDocs);
+    const decisions = this.decideWrites(request, user, existingDocs);
+    const forwarded: BulkDocsRequest = {
+      new_edits: request.new_edits,
+      docs: request.docs.filter((_, i) => decisions[i] === 'forward'),
+    };
+    if (forwarded.docs.length === 0) {
+      return this.toClientResponse(request, decisions, []);
+    }
+
     const response = await firstValueFrom(
-      this.couchdbService.post<BulkDocsResponse>(db, '_bulk_docs', filtered),
+      this.couchdbService.post<BulkDocsResponse>(db, '_bulk_docs', forwarded),
     );
     await this.auditService.recordBulkWrite(
       db,
-      filtered,
+      forwarded,
       existingDocs,
       response,
       user,
     );
     await this.attachmentCleanupService.cleanupForBulkWrite(
       db,
-      filtered,
+      forwarded,
       response,
     );
-    return response;
+    return this.toClientResponse(request, decisions, response);
   }
 
-  async filterBulkDocsRequest(
+  /**
+   * Add a `forbidden` result for each denied doc to CouchDB's response.
+   *
+   * With `new_edits: false` (replication) CouchDB lists only failed docs, and
+   * an omitted doc counts as written - which is how non-replicable docs (e.g.
+   * a client's local index definitions) are ignored without a failure.
+   * Otherwise every submitted doc gets a result in its original position.
+   */
+  private toClientResponse(
     request: BulkDocsRequest,
-    user: UserInfo,
-    db: string,
-  ): Promise<BulkDocsRequest> {
-    const existingDocs = await this.fetchExistingDocs(request.docs, db);
-    return this.filterDocs(request, user, existingDocs);
+    decisions: WriteDecision[],
+    couchdbResponse: BulkDocsResponse,
+  ): BulkDocsResponse {
+    if (request.new_edits === false) {
+      const denied = request.docs
+        .filter((_, i) => decisions[i] === 'deny')
+        .map((doc) => forbiddenResult(doc));
+      return [...couchdbResponse, ...denied];
+    }
+
+    let next = 0;
+    return request.docs.map((doc, i) =>
+      decisions[i] === 'forward'
+        ? couchdbResponse[next++]
+        : forbiddenResult(doc),
+    );
   }
 
   /**
@@ -160,39 +188,41 @@ export class BulkDocumentService {
     return existingDocs;
   }
 
-  private filterDocs(
+  /** Decide for each submitted doc (by position) whether it is forwarded to CouchDB. */
+  private decideWrites(
     request: BulkDocsRequest,
     user: UserInfo,
     existingDocs: Map<string, DatabaseDocument>,
-  ): BulkDocsRequest {
+  ): WriteDecision[] {
     const ability = this.permissionService.getAbilityFor(user);
-    const permitted: DatabaseDocument[] = [];
     const deniedIds: string[] = [];
-    for (const doc of request.docs) {
+    const deniedActions: Partial<Record<WriteAction, number>> = {};
+
+    const decisions = request.docs.map((doc): WriteDecision => {
       if (!doc._id || !this.documentFilter.isReplicable(doc._id)) {
-        continue;
+        return 'ignore';
       }
-      if (this.hasPermissionsForDoc(doc, existingDocs.get(doc._id), ability)) {
-        permitted.push(doc);
-      } else {
-        deniedIds.push(doc._id);
+      const existingDoc = existingDocs.get(doc._id);
+      const action = requiredAction(doc, existingDoc);
+      if (ability.can(action, existingDoc ?? doc)) {
+        return 'forward';
       }
-    }
+      deniedIds.push(doc._id);
+      deniedActions[action] = (deniedActions[action] ?? 0) + 1;
+      return 'deny';
+    });
 
     if (deniedIds.length > 0) {
-      // Dropped docs get no error entry in the _bulk_docs response, so the
-      // client's replication checkpoints past them and never retries:
-      // the doc silently stays local-only. Log to make this traceable.
+      // The client gets a `forbidden` result for these, but its local copy
+      // keeps the rejected change. Log to make this traceable.
       this.logger.warn(`_bulk_docs: dropped doc(s) without write permission`, {
         user: user?.name,
         ids: deniedIds,
+        actions: deniedActions,
       });
     }
 
-    return {
-      new_edits: request.new_edits,
-      docs: permitted,
-    };
+    return decisions;
   }
 
   /**
@@ -207,20 +237,39 @@ export class BulkDocumentService {
       this.documentFilter.isReplicable(doc._id) &&
       ability.can('read', doc);
   }
+}
 
-  private hasPermissionsForDoc(
-    updatedDoc: DatabaseDocument,
-    existingDoc: DatabaseDocument | undefined,
-    ability: DocumentAbility,
-  ) {
-    if (existingDoc) {
-      if (updatedDoc._deleted) {
-        return ability.can('delete', existingDoc);
-      } else {
-        return ability.can('update', existingDoc);
-      }
-    } else {
-      return ability.can('create', updatedDoc);
-    }
+/**
+ * What happens to a submitted doc: written to CouchDB, refused for missing
+ * permissions, or not writable through this proxy at all (no `_id` or a
+ * non-replicable prefix such as `_design/`).
+ */
+type WriteDecision = 'forward' | 'deny' | 'ignore';
+
+type WriteAction = 'create' | 'update' | 'delete';
+
+/** The permission needed to write `updatedDoc`, checked against `existingDoc` if there is one. */
+function requiredAction(
+  updatedDoc: DatabaseDocument,
+  existingDoc: DatabaseDocument | undefined,
+): WriteAction {
+  if (!existingDoc) {
+    return 'create';
   }
+  return updatedDoc._deleted ? 'delete' : 'update';
+}
+
+/**
+ * A `_bulk_docs` result for a doc this proxy refuses to write.
+ *
+ * The reason is the same for every action, so it does not reveal whether
+ * the doc already exists on the server.
+ */
+function forbiddenResult(doc: DatabaseDocument): DocError {
+  return {
+    id: doc._id,
+    rev: doc._rev,
+    error: 'forbidden',
+    reason: 'missing permission to write this document',
+  } as DocError;
 }
