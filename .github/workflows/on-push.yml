@@ -76,7 +76,7 @@ jobs:
       - lint
       - test
       - e2e
-    uses: Aam-Digital/.github/.github/workflows/release.yml@feat/reusable-workflows # TODO switch to @v1
+    uses: Aam-Digital/.github/.github/workflows/release.yml@v1
     permissions:
       contents: read # everything that writes uses the GH_TOKEN PAT (its releases trigger the image build)
     secrets:
@@ -90,7 +90,7 @@ jobs:
       - lint
       - test
       - e2e
-    uses: Aam-Digital/.github/.github/workflows/edge-version.yml@feat/reusable-workflows # TODO switch to @v1
+    uses: Aam-Digital/.github/.github/workflows/edge-version.yml@v1
     permissions:
       contents: read
 
@@ -101,7 +101,7 @@ jobs:
     concurrency:
       group: edge-build
       cancel-in-progress: true
-    uses: Aam-Digital/.github/.github/workflows/docker-image.yml@feat/reusable-workflows # TODO switch to @v1
+    uses: Aam-Digital/.github/.github/workflows/docker-image.yml@v1
     permissions:
       contents: read
       packages: write
