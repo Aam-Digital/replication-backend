@@ -5,7 +5,7 @@ on:
 permissions: {}
 
 jobs:
-  # Check name: `build / build`
+  # Check names: `build / build (linux/amd64)`, `build / merge`
   build:
     uses: Aam-Digital/.github/.github/workflows/docker-image.yml@feat/reusable-workflows # TODO switch to @v1
     permissions:

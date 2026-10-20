@@ -7,7 +7,7 @@ on:
 permissions: {}
 
 jobs:
-  # Check name: `build / build`
+  # Check names: `build / build (linux/amd64)`, `build / build (linux/arm64)`, `build / merge`
   build:
     uses: Aam-Digital/.github/.github/workflows/docker-image.yml@feat/reusable-workflows # TODO switch to @v1
     permissions:
@@ -32,6 +32,9 @@ jobs:
   prune-edge-images:
     if: ${{ !github.event.release.prerelease }}
     needs: build
-    uses: Aam-Digital/.github/.github/workflows/image-prune.yml@feat/reusable-workflows # TODO switch to @v1
+    uses: Aam-Digital/.github/.github/workflows/image-cleanup.yml@feat/reusable-workflows # TODO switch to @v1
     permissions:
+      actions: write
       packages: write
+    with:
+      tags: "*-edge.*"
