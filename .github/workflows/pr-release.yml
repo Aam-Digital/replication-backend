@@ -17,9 +17,8 @@ jobs:
       platforms: linux/amd64
       # PRs from forks cannot push; only check that the image builds
       push: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-      # The version label (and package.json version, which Sentry reports) stays semver for PR images,
-      # so that ndb-setup's update scripts can compare it (see on-release.yml).
       labels: |
-        org.opencontainers.image.version=0.0.0-pr.${{ github.event.number }}
         org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
+      # package.json's version is what the app reports (e.g. to Sentry). npm only accepts semver, so PR builds use
+      # `0.0.0-pr.<n>`; the image's version label is its tag `pr-<n>`, like the PR images of the other repositories.
       prepare: npm version "0.0.0-pr.${{ github.event.number }}" --no-git-tag-version --allow-same-version
