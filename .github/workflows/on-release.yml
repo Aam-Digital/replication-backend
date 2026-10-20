@@ -37,4 +37,4 @@ jobs:
       actions: write
       packages: write
     with:
-      tags: "*-edge.*"
+      tags: '*-edge.*'
