@@ -2,13 +2,23 @@ name: On PR (build & publish pre-release image)
 on:
   pull_request:
 
+permissions: {}
+
 jobs:
+  # Check names: `build / build (linux/amd64)`, `build / merge`
   build:
-    uses: ./.github/workflows/_build.yml
-    with:
-      version: 0.0.0-pr.${{ github.event.number }}
-      docker_tags: |
-        type=raw,value=pr-${{ github.event.number }}
+    uses: Aam-Digital/.github/.github/workflows/docker-image.yml@v1
     permissions:
       contents: read
       packages: write
+    with:
+      images: ghcr.io/aam-digital/replication-backend
+      tags: pr-${{ github.event.number }}
+      platforms: linux/amd64
+      # PRs from forks cannot push; only check that the image builds
+      push: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+      labels: |
+        org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
+      # package.json's version is what the app reports (e.g. to Sentry). npm only accepts semver, so PR builds use
+      # `0.0.0-pr.<n>`; the image's version label is its tag `pr-<n>`, like the PR images of the other repositories.
+      prepare: npm version "0.0.0-pr.${{ github.event.number }}" --no-git-tag-version --allow-same-version

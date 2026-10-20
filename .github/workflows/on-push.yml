@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 24.22.0
+          node-version-file: .nvmrc
 
       - name: Install dependencies
         run: npm ci
@@ -36,7 +36,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 24.22.0
+          node-version-file: .nvmrc
 
       - name: Install dependencies
         run: npm ci
@@ -58,7 +58,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 24.22.0
+          node-version-file: .nvmrc
 
       - name: Install dependencies
         run: npm ci
@@ -66,27 +66,50 @@ jobs:
       - name: Run E2E Tests
         run: npm run test:e2e
 
+  # Check name: `Create Release / release` (on other branches the skipped `Create Release`).
+  # Auto release mode: every releasable push to master becomes a full release.
   release:
     name: Create Release
-    runs-on: ubuntu-latest
+    # Only master (the shared workflow also skips other branches itself)
+    if: github.ref == 'refs/heads/master'
     needs:
       - lint
       - test
       - e2e
+    uses: Aam-Digital/.github/.github/workflows/release.yml@v1
     permissions:
-      contents: write # to be able to publish a GitHub release
-      issues: write # to be able to comment on released issues
-      pull-requests: write # to be able to comment on released pull requests
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
+      contents: read # everything that writes uses the GH_TOKEN PAT (its releases trigger the image build)
+    secrets:
+      token: ${{ secrets.GH_TOKEN }}
 
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24.22.0
+  # Edge build of every master push (see Aam-Digital/.github): version `X.Y.Z-edge.N` (the last release with the patch
+  # number bumped, plus the commits since), no tag and no GitHub release.
+  edge-version:
+    if: github.ref == 'refs/heads/master'
+    needs:
+      - lint
+      - test
+      - e2e
+    uses: Aam-Digital/.github/.github/workflows/edge-version.yml@v1
+    permissions:
+      contents: read
 
-      - name: Semantic Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
-        run: |
-          npx semantic-release
+  # Check names: `edge-build / build (<platform>)`, `edge-build / merge`. Image `X.Y.Z-edge.N`, plus `edge` if this is still the newest master commit.
+  # A newer push cancels an older edge build, so that `edge` never moves back.
+  edge-build:
+    needs: edge-version
+    concurrency:
+      group: edge-build
+      cancel-in-progress: true
+    uses: Aam-Digital/.github/.github/workflows/docker-image.yml@v1
+    permissions:
+      contents: read
+      packages: write
+    with:
+      images: ghcr.io/aam-digital/replication-backend
+      version: ${{ needs.edge-version.outputs.version }}
+      tags: ${{ needs.edge-version.outputs.is-head == 'true' && 'edge' || '' }}
+      labels: |
+        org.opencontainers.image.description=A proxy that implements the CouchDB replication protocol
+      # package.json's version is what the app reports (e.g. to Sentry)
+      prepare: npm version "$VERSION" --no-git-tag-version --allow-same-version
