@@ -9,6 +9,10 @@ import {
   DocumentChangesService,
 } from '../../couchdb/document-changes.service';
 import { UserInfo } from '../../restricted-endpoints/session/user-auth.dto';
+import {
+  createDocumentAbility,
+  detectDocumentType,
+} from '../permission/permission.service';
 import { UserIdentityService } from '../user-identity/user-identity.service';
 import {
   MANAGED_DEFAULT_RULES,
@@ -511,6 +515,30 @@ describe('RulesService', () => {
     // in-memory rules are not modified directly; the enriched doc arrives via the changes feed
     expect(service.getRulesForUser(normalUser)).toEqual(userRules);
   });
+
+  it.each(['NotificationConfig', 'UserSettings'])(
+    'should let the managed defaults grant every user only their own %s',
+    (subject) => {
+      loadPermissionConfig({ _default: MANAGED_DEFAULT_RULES });
+      const ability = createDocumentAbility(
+        service.getRulesForUser(normalUser),
+        { detectSubjectType: detectDocumentType },
+      );
+
+      // the frontend persists the account id the document belongs to as userId
+      const ownDoc = {
+        _id: `${subject}:${normalUser.id}`,
+        userId: normalUser.id,
+      };
+      const otherDoc = {
+        _id: `${subject}:someone-else`,
+        userId: 'someone-else',
+      };
+      expect(ability.can('update', ownDoc)).toBe(true);
+      expect(ability.can('read', otherDoc)).toBe(false);
+      expect(ability.can('update', otherDoc)).toBe(false);
+    },
+  );
 
   it('should not write when managed defaults are already present', async () => {
     (mockCouchdbService.put as jest.Mock).mockClear();

@@ -57,6 +57,14 @@ export const MANAGED_DEFAULT_RULES: DocumentRule[] = [
     subject: 'NotificationEvent',
     reason: `${SYSTEM_DEFAULT_MARKER} manage own notification events`,
   },
+  {
+    // personal settings (e.g. the user's language); like NotificationConfig,
+    // the document stores the account id it belongs to as userId
+    action: 'manage',
+    subject: 'UserSettings',
+    conditions: { userId: '${user.id}' },
+    reason: `${SYSTEM_DEFAULT_MARKER} manage own user settings`,
+  },
 ];
 
 /**
