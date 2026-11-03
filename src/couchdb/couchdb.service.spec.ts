@@ -101,6 +101,27 @@ describe('CouchdbService', () => {
     expect(result.getStatus()).toBe(HttpStatus.BAD_GATEWAY);
   });
 
+  it.each(['connect ECONNREFUSED', 'socket hang up', 'timeout exceeded'])(
+    'should map a request CouchDB did not answer (%s) to Bad Gateway',
+    async (message) => {
+      const axiosError = { message, request: {} };
+
+      const result = await responseInterceptor(axiosError).catch(
+        (err: HttpException) => err,
+      );
+
+      expect(result).toBeInstanceOf(HttpException);
+      expect(result.getStatus()).toBe(HttpStatus.BAD_GATEWAY);
+      expect(result.cause).toBe(axiosError);
+    },
+  );
+
+  it('should pass on an error of a request that was never sent', async () => {
+    const configError = new Error('Invalid URL');
+
+    await expect(responseInterceptor(configError)).rejects.toBe(configError);
+  });
+
   it('should not buffer an oversized error body of a stream request', async () => {
     const hugeBody = Readable.from(
       (function* () {
