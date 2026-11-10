@@ -24,6 +24,8 @@ const FIRST_NON_SUCCESS_STATUS = 300;
 /** the parts of a rejected axios request this service maps to an exception */
 interface AxiosErrorLike {
   message?: string;
+  /** set once the request was sent, also if no response arrived */
+  request?: unknown;
   response?: { status: number; data: unknown };
 }
 
@@ -79,11 +81,22 @@ export class CouchdbService {
    * A request that failed even though CouchDB had answered with a success
    * status (a body cut short, for example) must not keep that status: the
    * incomplete response would reach the client looking like a complete one.
+   *
+   * A request that CouchDB did not answer at all (refused, reset, timed out)
+   * is a gateway failure as well, not an internal error of this service.
    */
   private toNestException(err: AxiosErrorLike): Error {
     const response = err.response;
     if (!response) {
-      return err as Error;
+      if (!err.request) {
+        // the request was never sent, e.g. an invalid request config
+        return err as Error;
+      }
+      return new HttpException(
+        { error: 'bad_gateway', reason: 'no response from the database' },
+        HttpStatus.BAD_GATEWAY,
+        { cause: err },
+      );
     }
     if (response.status < FIRST_NON_SUCCESS_STATUS) {
       return new HttpException(
