@@ -6,5 +6,13 @@
     "local>Aam-Digital/.github//renovate/docker"
   ],
   "enabledManagers": ["npm", "nvm", "dockerfile", "github-actions"],
-  "additionalReviewers": ["Abhinegi2"]
+  "additionalReviewers": ["Abhinegi2"],
+  "packageRules": [
+    {
+      "description": "Minor, patch and digest updates merge automatically once the required checks pass; the renovate-approve app gives the required approval. A group containing a major update is not automerged. minimumReleaseAge keeps freshly published versions out for a few days.",
+      "matchUpdateTypes": ["minor", "patch", "digest"],
+      "automerge": true,
+      "minimumReleaseAge": "3 days"
+    }
+  ]
 }
